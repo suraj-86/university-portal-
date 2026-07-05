@@ -1155,40 +1155,35 @@ app.get('/api/student/:id/payments', (req, res) => {
 app.post('/api/payments', (req, res) => {
     const { fee_id, amount_paid, payment_method, transaction_reference, processed_by } = req.body;
 
-    // We start a SQL Transaction to ensure BOTH operations succeed or fail together
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction failed to initialize." });
 
-        // 1. Create a payment receipt ledger entry
         const insertPaymentSql = `
             INSERT INTO payments (fee_id, amount_paid, payment_method, transaction_reference, processed_by, payment_date)
             VALUES (?, ?, ?, ?, ?, NOW())
         `;
 
-        db.query(insertPaymentSql, [fee_id, amount_paid, payment_method, transaction_reference, processed_by || null], (err, result) => {
+        db.query(insertPaymentSql, [fee_id, amount_paid, payment_method, transaction_reference, processed_by || null], (err) => {
             if (err) {
-                return db.rollback(() => {
-                    res.status(500).json({ error: "Payment registration error. Rolled back." });
-                });
+                return db.rollback(() => res.status(500).json({ error: "Payment registration error. Rolled back." }));
             }
 
-            // 2. Update the parent fee header record to show full clearance status
-            const updateFeeSql = `
-                UPDATE fees 
-                SET paid_amount = paid_amount + ?, status = 'Paid'
-                WHERE id = ?
-            `;
-
-            db.query(updateFeeSql, [amount_paid, fee_id], (err, feeResult) => {
-                if (err) {
-                    return db.rollback(() => {
-                        res.status(500).json({ error: "Fee update error. Ledger entry rolled back." });
-                    });
+            db.query(`SELECT total_fee, paid_amount FROM fees WHERE id = ?`, [fee_id], (err, feeRows) => {
+                if (err || feeRows.length === 0) {
+                    return db.rollback(() => res.status(500).json({ error: "Fee lookup failed." }));
                 }
 
-                db.commit((err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
-                    res.json({ success: true, message: "Payment processed successfully!" });
+                const newPaid = parseFloat(feeRows[0].paid_amount) + parseFloat(amount_paid);
+                const newStatus = newPaid >= parseFloat(feeRows[0].total_fee) ? 'Paid' : 'Partial';
+
+                db.query(`UPDATE fees SET paid_amount = ?, status = ? WHERE id = ?`, [newPaid, newStatus, fee_id], (err) => {
+                    if (err) {
+                        return db.rollback(() => res.status(500).json({ error: "Fee update error. Ledger entry rolled back." }));
+                    }
+                    db.commit((err) => {
+                        if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                        res.json({ success: true, message: "Payment processed successfully!" });
+                    });
                 });
             });
         });
@@ -1207,6 +1202,67 @@ app.get('/api/admin/payments', (req, res) => {
     db.query(sql, (err, data) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(data);
+    });
+});
+
+// Assign a fee to ONE student
+app.post('/api/fees', (req, res) => {
+    const { student_id, semester, fee_type, total_fee, due_date } = req.body;
+    const sql = `
+        INSERT INTO fees (student_id, semester, fee_type, total_fee, paid_amount, due_date, status)
+        VALUES (?, ?, ?, ?, 0, ?, 'Pending')
+    `;
+    db.query(sql, [student_id, semester, fee_type, total_fee, due_date], (err, result) => {
+        if (err) {
+            if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(400).json({ error: "This fee type already exists for this student & semester." });
+            }
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ success: true, id: result.insertId });
+    });
+});
+
+// Bulk-assign a fee to every ACTIVE student in a course + semester
+app.post('/api/fees/bulk-assign', (req, res) => {
+    const { course_id, semester, fee_type, total_fee, due_date } = req.body;
+
+    const studentsSql = `SELECT student_id FROM students WHERE course_id = ? AND semester = ? AND status = 'Active'`;
+    db.query(studentsSql, [course_id, semester], (err, students) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (students.length === 0) {
+            return res.status(404).json({ error: "No active students found for that course & semester." });
+        }
+
+        const values = students.map(s => [s.student_id, semester, fee_type, total_fee, 0, due_date, 'Pending']);
+
+        const insertSql = `
+            INSERT INTO fees (student_id, semester, fee_type, total_fee, paid_amount, due_date, status)
+            VALUES ?
+            ON DUPLICATE KEY UPDATE total_fee = VALUES(total_fee), due_date = VALUES(due_date)
+        `;
+        db.query(insertSql, [values], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, assigned: students.length });
+        });
+    });
+});
+
+// Edit an existing fee record
+app.put('/api/fees/:id', (req, res) => {
+    const { total_fee, due_date, fee_type } = req.body;
+    const sql = `UPDATE fees SET total_fee = ?, due_date = ?, fee_type = ? WHERE id = ?`;
+    db.query(sql, [total_fee, due_date, fee_type, req.params.id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// Delete a fee record
+app.delete('/api/fees/:id', (req, res) => {
+    db.query(`DELETE FROM fees WHERE id = ?`, [req.params.id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
     });
 });
 
