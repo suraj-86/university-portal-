@@ -1,0 +1,15 @@
+# Ignore node_modules (Standard for Web Dev)
+node_modules/
+
+# Ignore environment variables (SENSITIVE!)
+.env
+
+# Ignore OS-generated files
+.DS_Store
+Thumbs.db
+
+# Ignore build outputs
+dist/
+build/
+*.exe
+*.log
