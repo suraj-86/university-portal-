@@ -96,3 +96,7 @@ Built with **React (Vite)** on the frontend, **Express + MySQL** on the backend.
 
 ---
 
+
+📄 License
+
+This project is licensed under the MIT License.
