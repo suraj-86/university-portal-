@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Download, CheckCircle2, Clock, Landmark, FileText, ArrowRight, Banknote } from 'lucide-react';
+import { CreditCard, Download, CheckCircle2, Clock, Landmark, FileText, ArrowRight, Banknote, ShieldCheck, Loader2 } from 'lucide-react';
+import useAuth from '../../hooks/useAuth'; 
 
-const StudentFees = ({ userId = 5 }) => { // Change default or pull from Auth Context
+const StudentFees = () => { 
+    const { user } = useAuth();
+    // Fallback to 5 if user context isn't fully set up yet, otherwise use real ID
+    const userId = user?.id || 5;    
+
     // --- STATE ---
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [dbFees, setDbFees] = useState([]);
     const [dbPayments, setDbPayments] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // Form State mapped to backend payload
+    // Payment Flow State
+    const [paymentStep, setPaymentStep] = useState(1); // 1 = Details, 2 = Confirmation, 3 = Processing
     const [selectedFeeId, setSelectedFeeId] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('Online');
@@ -17,12 +23,10 @@ const StudentFees = ({ userId = 5 }) => { // Change default or pull from Auth Co
     const fetchData = async () => {
         try {
             setLoading(true);
-            // Fetch real fees
             const feesRes = await fetch(`http://localhost:5000/api/student/${userId}/fees`);
             const feesData = await feesRes.json();
             setDbFees(feesData);
 
-            // Fetch real payments history
             const payRes = await fetch(`http://localhost:5000/api/student/${userId}/payments`);
             const payData = await payRes.json();
             setDbPayments(payData);
@@ -52,16 +56,20 @@ const StudentFees = ({ userId = 5 }) => { // Change default or pull from Auth Co
         
         const feeRecord = pendingFees.find(f => f.id.toString() === feeId);
         if (feeRecord) {
-            // Lock value to the exact unpaid total fee balance
             setPaymentAmount((feeRecord.total_fee - feeRecord.paid_amount).toString());
         } else {
             setPaymentAmount('');
         }
     };
 
-    const handleProcessPayment = async (e) => {
+    const handleProceedToGateway = (e) => {
         e.preventDefault();
-        if (!selectedFeeId || !paymentAmount) return alert("Please select a fee.");
+        if (!selectedFeeId || !paymentAmount) return;
+        setPaymentStep(2); // Move to Confirmation Step
+    };
+
+    const handleProcessPayment = async () => {
+        setPaymentStep(3); // Show processing spinner
         
         const paymentPayload = {
             fee_id: parseInt(selectedFeeId),
@@ -71,6 +79,9 @@ const StudentFees = ({ userId = 5 }) => { // Change default or pull from Auth Co
         };
         
         try {
+            // Simulate a 1.5 second network/gateway delay for realism
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
             const response = await fetch('http://localhost:5000/api/payments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -80,16 +91,23 @@ const StudentFees = ({ userId = 5 }) => { // Change default or pull from Auth Co
             
             if (data.success) {
                 alert(`Successfully paid ₹${paymentAmount} via ${paymentMethod}!`);
-                setIsPaymentModalOpen(false);
-                setSelectedFeeId('');
-                setPaymentAmount('');
-                fetchData(); // Reload stats immediately
+                closeModal();
+                fetchData(); 
             } else {
                 alert(data.error || "Payment failed to record.");
+                setPaymentStep(2); // Go back to confirm if failed
             }
         } catch (error) {
             alert("Network error processing payment.");
+            setPaymentStep(2);
         }
+    };
+
+    const closeModal = () => {
+        setIsPaymentModalOpen(false);
+        setPaymentStep(1);
+        setSelectedFeeId('');
+        setPaymentAmount('');
     };
 
     if (loading) {
@@ -222,66 +240,117 @@ const StudentFees = ({ userId = 5 }) => { // Change default or pull from Auth Co
                 </div>
             </div>
 
-            {/* Modal remains exactly the same as your structure */}
+            {/* --- MULTI-STEP PAYMENT MODAL --- */}
             {isPaymentModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <div>
-                                <h3 className="font-bold text-lg text-slate-900">Clear Dues</h3>
-                                <p className="text-xs text-slate-500 mt-0.5">Full signature balance payment required</p>
+                                <h3 className="font-bold text-lg text-slate-900">
+                                    {paymentStep === 1 ? 'Clear Dues' : paymentStep === 2 ? 'Confirm Payment' : 'Processing...'}
+                                </h3>
+                                {paymentStep === 1 && <p className="text-xs text-slate-500 mt-0.5">Select a fee and payment method</p>}
+                                {paymentStep === 2 && <p className="text-xs text-slate-500 mt-0.5">Review your transaction details</p>}
                             </div>
-                            <button onClick={() => setIsPaymentModalOpen(false)} className="text-slate-400 hover:text-slate-800 font-bold text-xl">×</button>
+                            {paymentStep !== 3 && (
+                                <button onClick={closeModal} className="text-slate-400 hover:text-slate-800 font-bold text-xl">×</button>
+                            )}
                         </div>
                         
-                        <form onSubmit={handleProcessPayment} className="p-6">
-                            <div className="mb-6">
-                                <label className="text-xs font-bold text-slate-500 uppercase block mb-2">1. Select Outstanding Fee</label>
-                                <select 
-                                    required
-                                    value={selectedFeeId}
-                                    onChange={handleFeeSelection}
-                                    className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 bg-white cursor-pointer"
-                                >
-                                    <option value="" disabled>-- Choose a pending fee --</option>
-                                    {pendingFees.map(fee => (
-                                        <option key={fee.id} value={fee.id}>
-                                            {fee.fee_type} (₹{(fee.total_fee - fee.paid_amount).toLocaleString()})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                        {/* STEP 1: FORM */}
+                        {paymentStep === 1 && (
+                            <form onSubmit={handleProceedToGateway} className="p-6">
+                                <div className="mb-6">
+                                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">1. Select Outstanding Fee</label>
+                                    <select 
+                                        required
+                                        value={selectedFeeId}
+                                        onChange={handleFeeSelection}
+                                        className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 bg-white cursor-pointer"
+                                    >
+                                        <option value="" disabled>-- Choose a pending fee --</option>
+                                        {pendingFees.map(fee => (
+                                            <option key={fee.id} value={fee.id}>
+                                                {fee.fee_type} (₹{(fee.total_fee - fee.paid_amount).toLocaleString()})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                            <div className="mb-6">
-                                <label className="text-xs font-bold text-slate-500 uppercase block mb-2">2. Amount to Pay</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 font-bold text-lg">₹</span>
-                                    <input type="number" disabled value={paymentAmount} placeholder="Select a fee above" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl font-black text-xl text-slate-500 bg-slate-100 cursor-not-allowed"/>
+                                <div className="mb-6">
+                                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">2. Amount to Pay</label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 font-bold text-lg">₹</span>
+                                        <input type="number" disabled value={paymentAmount} placeholder="Select a fee above" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl font-black text-xl text-slate-500 bg-slate-100 cursor-not-allowed"/>
+                                    </div>
+                                </div>
+
+                                <div className="mb-8">
+                                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">3. Payment Method</label>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <button type="button" onClick={() => setPaymentMethod('Online')} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${paymentMethod === 'Online' ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                                            <CreditCard size={20} className="mb-2" />
+                                            <span className="text-[10px] font-bold uppercase text-center">Online</span>
+                                        </button>
+                                        <button type="button" onClick={() => setPaymentMethod('Bank Transfer')} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${paymentMethod === 'Bank Transfer' ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                                            <Landmark size={20} className="mb-2" />
+                                            <span className="text-[10px] font-bold uppercase text-center">Bank</span>
+                                        </button>
+                                        <button type="button" onClick={() => setPaymentMethod('Cash')} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${paymentMethod === 'Cash' ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                                            <Banknote size={20} className="mb-2" />
+                                            <span className="text-[10px] font-bold uppercase text-center">Cash</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button type="submit" disabled={!selectedFeeId || !paymentAmount} className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+                                    Proceed to Checkout <ArrowRight size={16} />
+                                </button>
+                            </form>
+                        )}
+
+                        {/* STEP 2: CONFIRMATION GATEWAY */}
+                        {paymentStep === 2 && (
+                            <div className="p-6">
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 text-center mb-6">
+                                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <ShieldCheck size={24} />
+                                    </div>
+                                    <p className="text-sm font-medium text-slate-600 mb-1">Secure Payment Authorization</p>
+                                    <h2 className="text-3xl font-black text-slate-900">₹{Number(paymentAmount).toLocaleString()}</h2>
+                                    <p className="text-xs font-bold text-slate-500 uppercase mt-2">Via {paymentMethod}</p>
+                                </div>
+
+                                {paymentMethod === 'Cash' ? (
+                                    <p className="text-sm text-slate-600 text-center mb-6 bg-slate-100 p-4 rounded-xl">
+                                        By confirming, a <b>Cash Challan</b> will be generated. You must deposit the physical cash at the Accounts Office within 48 hours.
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-slate-600 text-center mb-6 bg-slate-100 p-4 rounded-xl">
+                                        You are about to initiate a secure transaction. Please do not refresh the page once the payment starts.
+                                    </p>
+                                )}
+
+                                <div className="flex gap-3">
+                                    <button onClick={() => setPaymentStep(1)} className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-xl transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button onClick={handleProcessPayment} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+                                        Confirm & Pay
+                                    </button>
                                 </div>
                             </div>
+                        )}
 
-                            <div className="mb-8">
-                                <label className="text-xs font-bold text-slate-500 uppercase block mb-2">3. Payment Method</label>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <button type="button" onClick={() => setPaymentMethod('Online')} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${paymentMethod === 'Online' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'}`}>
-                                        <CreditCard size={20} className="mb-2" />
-                                        <span className="text-[10px] font-bold uppercase text-center">Online</span>
-                                    </button>
-                                    <button type="button" onClick={() => setPaymentMethod('Bank Transfer')} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${paymentMethod === 'Bank Transfer' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'}`}>
-                                        <Landmark size={20} className="mb-2" />
-                                        <span className="text-[10px] font-bold uppercase text-center">Bank</span>
-                                    </button>
-                                    <button type="button" onClick={() => setPaymentMethod('Cash')} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${paymentMethod === 'Cash' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'}`}>
-                                        <Banknote size={20} className="mb-2" />
-                                        <span className="text-[10px] font-bold uppercase text-center">Cash</span>
-                                    </button>
-                                </div>
+                        {/* STEP 3: PROCESSING SPINNER */}
+                        {paymentStep === 3 && (
+                            <div className="p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
+                                <Loader2 size={40} className="text-blue-600 animate-spin mb-4" />
+                                <h3 className="font-bold text-lg text-slate-900">Processing Transaction...</h3>
+                                <p className="text-sm text-slate-500 mt-2">Contacting bank servers. Please do not close this window.</p>
                             </div>
+                        )}
 
-                            <button type="submit" disabled={!selectedFeeId || !paymentAmount} className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
-                                Submit Full Payment <ArrowRight size={16} />
-                            </button>
-                        </form>
                     </div>
                 </div>
             )}

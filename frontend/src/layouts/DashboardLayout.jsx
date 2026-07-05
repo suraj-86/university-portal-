@@ -40,11 +40,16 @@ const DashboardLayout = () => {
                 onClick={() => setIsSidebarOpen(false)}
             />
 
-            {/* 3. SIDEBAR */}
-            <Sidebar 
-                role={currentRole} 
-                isOpen={isSidebarOpen} 
-                onClose={() => setIsSidebarOpen(false)} 
+           {/* 3. SIDEBAR */}
+            <Sidebar
+                role={currentRole}
+                isOpen={isSidebarOpen}
+                onClose={() => {
+                    // FIX: Only auto-close the sidebar on mobile/tablet screens when a link is clicked
+                    if (window.innerWidth < 1024) {
+                        setIsSidebarOpen(false);
+                    }
+                }}
             />
 
             {/* 4. MAIN PAGE CONTENT */}

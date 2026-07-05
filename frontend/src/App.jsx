@@ -22,6 +22,8 @@ import AdminStudents from './pages/admin/AdminStudents';
 import AdminTeachers from './pages/admin/AdminTeachers';
 import AdminCourses from './pages/admin/AdminCourses';
 import AdminSubjects from './pages/admin/AdminSubjects';
+import AdminParents from './pages/admin/AdminParents';
+
 //import AdminAttendance from '../hidden for later/AdminAttendance';
 import AdminFees from './pages/admin/AdminFees';
 //import AdminMarks from '../hidden for later/AdminMarks';
@@ -34,6 +36,13 @@ import TeacherAttendance from './pages/teacher/TeacherAttendance';
 import TeacherMarks from './pages/teacher/TeacherMarks';
 import TeacherSubjects from './pages/teacher/TeacherSubjects'; // <-- Plural updated!
 import TeacherNotices from './pages/teacher/TeacherNotices';
+
+// 5. Parent Pages
+import ParentDashboard from './pages/parent/ParentDashboard';
+import ParentProfile from './pages/parent/ParentProfile'; // <-- ADD THIS LINE
+import ParentFees from './pages/parent/ParentFees';
+import ParentResults from './pages/parent/ParentResults';
+import ParentNotices from './pages/parent/ParentNotices';
 
 function App() {
   return (
@@ -66,6 +75,7 @@ function App() {
             {/* <Route path="/admin/marks" element={<AdminMarks />} /> */}
             <Route path="/admin/payments" element={<AdminPayments />} />
             <Route path="/admin/notices" element={<AdminNotices />} />
+            <Route path="/admin/parents" element={<AdminParents />} />
 
             {/* --- TEACHER ROUTES --- */}
             <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
@@ -73,6 +83,13 @@ function App() {
             <Route path="/teacher/marks" element={<TeacherMarks />} />
             <Route path="/teacher/subjects" element={<TeacherSubjects />} />
             <Route path="/teacher/notices" element={<TeacherNotices />} />
+            
+            {/* --- PARENT ROUTES --- */}
+            <Route path="/parent-dashboard" element={<ParentDashboard />} />
+            <Route path="/parent/profile" element={<ParentProfile />} /> {/* <-- ADD THIS LINE */}
+            <Route path="/parent/fees" element={<ParentFees />} />
+            <Route path="/parent/results" element={<ParentResults />} />
+            <Route path="/parent/notices" element={<ParentNotices />} />
 
           </Route>
 

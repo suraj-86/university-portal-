@@ -36,6 +36,8 @@ const Login = () => {
                 navigate('/teacher-dashboard');
             } else if (user.role === 'student') {
                 navigate('/student-dashboard');
+            } else if (user.role === 'parent') { // ADD THIS
+                navigate('/parent-dashboard');
             }
 
         } catch (error) {

@@ -17,31 +17,32 @@ const AdminStudents = () => {
     });
 
     // --- 1. THE DATA BRIDGE (Fetch Students and Courses) ---
-    const fetchData = async () => {
-        try {
-            // Fetch students
-            const studentRes = await fetch('http://localhost:5000/api/students');
-            const studentData = await studentRes.json();
-            
-            // Fetch courses to populate the select dropdown
-            const courseRes = await fetch('http://localhost:5000/api/courses');
-            const courseData = await courseRes.json();
+    // --- 1. THE DATA BRIDGE (Fetch Students and Courses) ---
+const fetchData = async () => {
+    try {
+        const studentRes = await fetch('http://localhost:5000/api/students');
+        const studentData = await studentRes.json();
+        
+        const courseRes = await fetch('http://localhost:5000/api/courses');
+        const courseData = await courseRes.json();
 
-            setStudents(studentData.map(s => ({
-                id: s.student_id,
-                roll: s.enrollment_number,
-                name: s.full_name,
-                email: s.email,
-                course: s.course_name || "N/A", // From the JOIN in your SQL
-                semester: s.semester,
-                status: s.status || "Active"
-            })));
-            
-            setCourses(courseData);
-        } catch (error) {
-            console.error("Connection failed:", error);
-        }
-    };
+        setStudents(studentData.map(s => ({
+            id: s.student_id,
+            user_id: s.user_id,         // FIX: Added for deletion
+            course_id: s.course_id,     // FIX: Added for edit form validation
+            roll: s.enrollment_number,
+            name: s.full_name,
+            email: s.email,
+            course: s.course_name || "N/A", 
+            semester: s.semester,
+            status: s.status || "Active"
+        })));
+        
+        setCourses(courseData);
+    } catch (error) {
+        console.error("Connection failed:", error);
+    }
+};
 
     useEffect(() => {
         fetchData();
@@ -83,18 +84,24 @@ const AdminStudents = () => {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm("Delete this student record?")) {
-            try {
-                const response = await fetch(`http://localhost:5000/api/students/${id}`, {
-                    method: 'DELETE',
-                });
-                if (response.ok) fetchData();
-            } catch (error) {
-                console.error("Delete failed:", error);
+    const handleDelete = async (userId) => {
+    if (window.confirm("Delete this student record?")) {
+        try {
+            // We pass the user_id directly to the backend
+            const response = await fetch(`http://localhost:5000/api/students/${userId}`, {
+                method: 'DELETE',
+            });
+            
+            if (response.ok) {
+                fetchData(); // Refresh the table
+            } else {
+                console.error("Failed to delete from server.");
             }
+        } catch (error) {
+            console.error("Delete failed:", error);
         }
-    };
+    }
+};
 
     const openEditModal = (student) => {
         setEditingStudentId(student.id);
@@ -124,9 +131,12 @@ const AdminStudents = () => {
                     <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
                         <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
-                        <Trash2 size={16} />
-                    </button>
+                    <button 
+    onClick={() => handleDelete(row.user_id)} 
+    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+>
+    <Trash2 size={16} />
+</button>
                 </div>
             )
         }

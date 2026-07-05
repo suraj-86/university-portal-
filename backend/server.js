@@ -114,9 +114,13 @@ app.post('/api/students', (req, res) => {
 
 // PUT (Update) student
 app.put('/api/students/:id', (req, res) => {
-    const { name, email, roll, semester } = req.body;
-    const sql = "UPDATE students SET full_name=?, email=?, enrollment_number=?, semester=? WHERE student_id=?";
-    db.query(sql, [name, email, roll, semester, req.params.id], (err, result) => {
+    // Add course_id to destructured req.body
+    const { name, email, roll, semester, course_id } = req.body; 
+    
+    // Add course_id=? to the SQL query
+    const sql = "UPDATE students SET full_name=?, email=?, enrollment_number=?, semester=?, course_id=? WHERE student_id=?";
+    
+    db.query(sql, [name, email, roll, semester, course_id, req.params.id], (err, result) => {
         if (err) return res.status(500).json(err);
         res.json({ success: true });
     });
@@ -124,13 +128,26 @@ app.put('/api/students/:id', (req, res) => {
 
 // DELETE student
 app.delete('/api/students/:id', (req, res) => {
-    const sql = "DELETE FROM students WHERE student_id = ?";
-    db.query(sql, [req.params.id], (err, result) => {
-        if (err) return res.status(500).json(err);
-        res.json({ success: true });
+    const userIdToDelete = req.params.id;
+    
+    // 1. Delete from the students table first (using user_id)
+    db.query('DELETE FROM students WHERE user_id = ?', [userIdToDelete], (err, studentResult) => {
+        if (err) {
+            console.error("Error deleting from students:", err);
+            return res.status(500).json({ error: "Failed to delete student profile" });
+        }
+        
+        // 2. Then delete from the main users table (using id)
+        db.query('DELETE FROM users WHERE id = ?', [userIdToDelete], (err2, userResult) => {
+            if (err2) {
+                console.error("Error deleting from users:", err2);
+                return res.status(500).json({ error: "Failed to delete user login" });
+            }
+            
+            return res.json({ success: true, message: "Student completely removed!" });
+        });
     });
 });
-
 
 // ==========================================
 // 4. TEACHER MANAGEMENT ROUTES
@@ -315,6 +332,114 @@ app.delete('/api/subjects/:id', (req, res) => {
         res.json({ success: true });
     });
 });
+
+
+// ==========================================
+// PARENT MANAGEMENT ROUTES (ADMIN)
+// ==========================================
+
+// GET all parents with their linked students and contact details
+app.get('/api/parents', (req, res) => {
+    const sql = `
+        SELECT 
+            p.parent_id as id, 
+            p.full_name as name, 
+            p.phone, 
+            p.email, 
+            u.username, 
+            GROUP_CONCAT(s.student_id) as student_ids, -- Added to support multiple wards
+            GROUP_CONCAT(s.full_name) as student_name, 
+            GROUP_CONCAT(s.enrollment_number) as roll
+        FROM parents p
+        JOIN users u ON p.user_id = u.id
+        LEFT JOIN parent_student_map psm ON p.parent_id = psm.parent_id
+        LEFT JOIN students s ON psm.student_id = s.student_id
+        GROUP BY p.parent_id
+    `;
+    db.query(sql, (err, data) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(data);
+    });
+});
+
+// POST (Add) Parent and Link to Multiple Students
+app.post('/api/parents', (req, res) => {
+    const { full_name, phone, email, username, password, student_ids } = req.body; 
+
+    db.beginTransaction((err) => {
+        if (err) return res.status(500).json({ error: "Transaction failed" });
+
+        const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'parent')";
+        db.query(userSql, [username, password], (err, userResult) => {
+            if (err) return db.rollback(() => res.status(400).json({ error: "Username already exists" }));
+            const userId = userResult.insertId;
+
+            const parentSql = "INSERT INTO parents (user_id, full_name, phone, email) VALUES (?, ?, ?, ?)";
+            db.query(parentSql, [userId, full_name, phone, email], (err, parentResult) => {
+                if (err) return db.rollback(() => res.status(500).json({ error: "Failed to create parent profile" }));
+                const parentId = parentResult.insertId;
+
+                // Map multiple students to the parent
+                const values = student_ids.map(sId => [parentId, sId]);
+                const mapSql = "INSERT INTO parent_student_map (parent_id, student_id) VALUES ?";
+                db.query(mapSql, [values], (err) => {
+                    if (err) return db.rollback(() => res.status(500).json({ error: "Failed to link students" }));
+
+                    db.commit((err) => {
+                        if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                        res.json({ success: true, message: "Parent account created and linked!" });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// PUT (Update) Parent Profile & Re-link Students
+app.put('/api/parents/:id', (req, res) => {
+    const parentId = req.params.id;
+    const { full_name, phone, email, student_ids } = req.body; 
+    
+    db.beginTransaction((err) => {
+        if (err) return res.status(500).json({ error: "Transaction failed" });
+
+        db.query("UPDATE parents SET full_name = ?, phone = ?, email = ? WHERE parent_id = ?", [full_name, phone, email, parentId], (err) => {
+            if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+            
+            // Delete old links and insert new ones for multiple wards
+            db.query("DELETE FROM parent_student_map WHERE parent_id = ?", [parentId], (err) => {
+                if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+                
+                const values = student_ids.map(sId => [parentId, sId]);
+                db.query("INSERT INTO parent_student_map (parent_id, student_id) VALUES ?", [values], (err) => {
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+                    
+                    db.commit((err) => {
+                        if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                        res.json({ success: true, message: "Parent updated successfully" });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// DELETE Parent (Cascade deletes user, profile, and mapping)
+app.delete('/api/parents/:id', (req, res) => {
+    const parentId = req.params.id;
+    
+    db.query("SELECT user_id FROM parents WHERE parent_id = ?", [parentId], (err, results) => {
+        if (err || results.length === 0) return res.status(500).json({ error: "Parent not found" });
+        
+        const userId = results[0].user_id;
+        
+        db.query("DELETE FROM users WHERE id = ?", [userId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, message: "Parent account deleted" });
+        });
+    });
+});
+
 
 // ==========================================
 // 7. CAMPUS NOTICE ROUTES
@@ -854,16 +979,15 @@ app.get('/api/student/:id/notices', (req, res) => {
     });
 });
 
-
 // ==========================================
 // 12. PARENT INTEGRATION PORTAL ROUTE
 // ==========================================
 app.get('/api/parent/:id/wards-overview', (req, res) => {
     const userId = req.params.id;
+    const requestedStudentId = req.query.student_id; // Check if frontend is asking for a specific child
 
-    // Find the student linked to this parent login id
     const childSql = `
-        SELECT s.student_id, s.full_name, s.enrollment_number, s.semester, c.course_name
+        SELECT s.student_id, s.user_id, s.full_name, s.enrollment_number, s.semester, c.course_name
         FROM students s
         JOIN courses c ON s.course_id = c.id
         JOIN parent_student_map psm ON s.student_id = psm.student_id
@@ -875,9 +999,14 @@ app.get('/api/parent/:id/wards-overview', (req, res) => {
         if (err) return res.status(500).json(err);
         if (children.length === 0) return res.json({ message: "No children linked to this parent record." });
 
-        const targetStudent = children[0]; // Assuming single student lookup for simple mapping
+        // Default to the first child, UNLESS the frontend specified a different one
+        let targetStudent = children[0];
+        if (requestedStudentId) {
+            const found = children.find(c => c.student_id == requestedStudentId);
+            if (found) targetStudent = found;
+        }
 
-        // Fetch aggregate metrics for the parent view
+        // Fetch aggregate metrics for the TARGET student
         const metricsSql = `
             SELECT 
                 (SELECT ROUND((SUM(CASE WHEN status='Present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) 
@@ -890,13 +1019,13 @@ app.get('/api/parent/:id/wards-overview', (req, res) => {
             if (err) return res.status(500).json(err);
             
             res.json({
+                allWards: children, // <-- We now send the full list of kids back to the frontend
                 childProfile: targetStudent,
                 summaryMetrics: metrics[0] || { attendanceRate: 0, totalDues: 0, classAverage: 0 }
             });
         });
     });
 });
-
 
 // ==========================================
 // STUDENT RESULTS ROUTE (Dynamic Max Scores)

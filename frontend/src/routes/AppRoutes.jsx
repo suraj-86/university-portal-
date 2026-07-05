@@ -1,18 +1,25 @@
 import { Navigate, useRoutes } from 'react-router-dom'
 import Login from '../pages/auth/Login.jsx'
+
+// Admin Pages
 import AdminDashboard from '../pages/admin/AdminDashboard.jsx'
 import AdminStudents from '../pages/admin/AdminStudents.jsx'
 import AdminTeachers from '../pages/admin/AdminTeachers.jsx'
+import AdminParents from '../pages/admin/AdminParents.jsx' // <-- Added
 import AdminCourses from '../pages/admin/AdminCourses.jsx'
 import AdminSubjects from '../pages/admin/AdminSubjects.jsx'
 import AdminFees from '../pages/admin/AdminFees.jsx'
 import AdminPayments from '../pages/admin/AdminPayments.jsx'
 import AdminNotices from '../pages/admin/AdminNotices.jsx'
+
+// Teacher Pages
 import TeacherDashboard from '../pages/teacher/TeacherDashboard.jsx'
 import TeacherSubjects from '../pages/teacher/TeacherSubjects.jsx'
 import TeacherAttendance from '../pages/teacher/TeacherAttendance.jsx'
 import TeacherMarks from '../pages/teacher/TeacherMarks.jsx'
 import TeacherNotices from '../pages/teacher/TeacherNotices.jsx'
+
+// Student Pages
 import StudentDashboard from '../pages/student/StudentDashboard.jsx'
 import StudentSubjects from '../pages/student/StudentSubjects.jsx'
 import StudentAttendance from '../pages/student/StudentAttendance.jsx'
@@ -20,6 +27,15 @@ import StudentProfile from '../pages/student/StudentProfile.jsx'
 import StudentResults from '../pages/student/StudentResults.jsx'
 import StudentFees from '../pages/student/StudentFees.jsx'
 import StudentNotices from '../pages/student/StudentNotices.jsx'
+
+// Parent Pages (NEW)
+import ParentDashboard from '../pages/parent/ParentDashboard.jsx'
+import ParentProfile from '../pages/parent/ParentProfile.jsx' // ADDED THIS LINE
+import ParentFees from '../pages/parent/ParentFees.jsx'
+import ParentResults from '../pages/parent/ParentResults.jsx'
+import ParentNotices from '../pages/parent/ParentNotices.jsx'
+
+// Layout & Core
 import NotFound from '../pages/NotFound.jsx'
 import DashboardLayout from '../layouts/DashboardLayout.jsx'
 import ProtectedRoute from './ProtectedRoute.jsx'
@@ -28,6 +44,8 @@ const AppRoutes = () => {
   const routes = [
     { path: '/', element: <Navigate to="/login" replace /> },
     { path: '/login', element: <Login /> },
+
+    // --- ADMIN ROUTES ---
     {
       path: '/admin',
       element: (
@@ -54,6 +72,16 @@ const AppRoutes = () => {
         <ProtectedRoute role="admin">
           <DashboardLayout role="admin">
             <AdminTeachers />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/admin/parents',
+      element: (
+        <ProtectedRoute role="admin">
+          <DashboardLayout role="admin">
+            <AdminParents />
           </DashboardLayout>
         </ProtectedRoute>
       ),
@@ -108,6 +136,8 @@ const AppRoutes = () => {
         </ProtectedRoute>
       ),
     },
+
+    // --- TEACHER ROUTES ---
     {
       path: '/teacher',
       element: (
@@ -158,6 +188,8 @@ const AppRoutes = () => {
         </ProtectedRoute>
       ),
     },
+
+    // --- STUDENT ROUTES ---
     {
       path: '/student',
       element: (
@@ -228,6 +260,60 @@ const AppRoutes = () => {
         </ProtectedRoute>
       ),
     },
+
+    // --- PARENT ROUTES ---
+    {
+      path: '/parent-dashboard',
+      element: (
+        <ProtectedRoute role="parent">
+          <DashboardLayout role="parent">
+            <ParentDashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/parent/fees',
+      element: (
+        <ProtectedRoute role="parent">
+          <DashboardLayout role="parent">
+            <ParentFees />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/parent/results',
+      element: (
+        <ProtectedRoute role="parent">
+          <DashboardLayout role="parent">
+            <ParentResults />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/parent/notices',
+      element: (
+        <ProtectedRoute role="parent">
+          <DashboardLayout role="parent">
+            <ParentNotices />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/parent/profile',
+      element: (
+        <ProtectedRoute role="parent">
+          <DashboardLayout role="parent">
+            <ParentProfile />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+
+    // --- CATCH-ALL ---
     { path: '*', element: <NotFound /> },
   ]
 
