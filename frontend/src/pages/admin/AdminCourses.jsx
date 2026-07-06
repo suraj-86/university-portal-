@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react'; // Added useEffect
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, GraduationCap } from 'lucide-react';
+import api from '../../services/api'; // <-- 1. Import your new service
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 
 const AdminCourses = () => {
-    const [courses, setCourses] = useState([]); // Changed to empty array
+    const [courses, setCourses] = useState([]); 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCourseId, setEditingCourseId] = useState(null);
     const [formData, setFormData] = useState({
@@ -15,9 +16,8 @@ const AdminCourses = () => {
     // 1. FETCH COURSES FROM BACKEND
     const fetchCourses = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/courses');
-            const data = await response.json();
-            setCourses(data);
+            const response = await api.get('/courses'); // <-- 2. Clean GET request
+            setCourses(response.data);
         } catch (error) {
             console.error("Error fetching courses:", error);
         }
@@ -31,7 +31,7 @@ const AdminCourses = () => {
     const handleDelete = async (id) => {
         if (window.confirm("Are you sure you want to delete this course?")) {
             try {
-                await fetch(`http://localhost:5000/api/courses/${id}`, { method: 'DELETE' });
+                await api.delete(`/courses/${id}`); // <-- 3. Clean DELETE request
                 fetchCourses();
             } catch (error) {
                 console.error("Delete error:", error);
@@ -43,28 +43,20 @@ const AdminCourses = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         
-        const url = editingCourseId 
-            ? `http://localhost:5000/api/courses/${editingCourseId}` 
-            : 'http://localhost:5000/api/courses';
-        
-        const method = editingCourseId ? 'PUT' : 'POST';
-
         try {
-            const response = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            const result = await response.json();
-
-            if (result.success) {
-                setIsModalOpen(false);
-                fetchCourses(); // Refresh table
-                setEditingCourseId(null);
+            if (editingCourseId) {
+                await api.put(`/courses/${editingCourseId}`, formData); // <-- 4. Clean PUT request
             } else {
-                alert("Error saving course: " + result.error);
+                await api.post('/courses', formData); // <-- 5. Clean POST request
             }
+            
+            setIsModalOpen(false);
+            fetchCourses(); // Refresh table
+            setEditingCourseId(null);
         } catch (error) {
+            // Axios puts server error messages in error.response.data
+            const errorMsg = error.response?.data?.error || "Failed to save course";
+            alert("Error saving course: " + errorMsg);
             console.error("Submit error:", error);
         }
     };
@@ -95,7 +87,6 @@ const AdminCourses = () => {
                     <button onClick={() => openEditModal(row)} className="p-2 text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors">
                         <Edit2 size={16} />
                     </button>
-                    {/* Added handleDelete call to your button */}
                     <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                         <Trash2 size={16} />
                     </button>

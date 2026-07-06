@@ -1,45 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom'; 
+import { useSearchParams } from 'react-router-dom';
 import { Save, Calendar, Users, History, Eye, ArrowLeft, Filter, FileText } from 'lucide-react';
+import api from '../../services/api';
 import Table from '../../components/Table';
 import Input from '../../components/FormInput';
 import Card from '../../components/Card';
-import useAuth from '../../hooks/useAuth'; 
+import useAuth from '../../hooks/useAuth';
 
 const TeacherAttendance = () => {
     const { user } = useAuth();
-    
-    // --- APP STATES ---
-    const [viewMode, setViewMode] = useState('mark'); 
+    const [viewMode, setViewMode] = useState('mark');
     const [searchParams] = useSearchParams();
     const urlSubject = searchParams.get('subject');
     const urlDate = searchParams.get('date');
 
-    // --- DATA STATES ---
     const [mySubjects, setMySubjects] = useState([]);
     const [roster, setRoster] = useState([]);
-
-    // --- 1. MARK ATTENDANCE STATE ---
     const [selectedSession, setSelectedSession] = useState(urlSubject || '');
     const [scheduleDate, setScheduleDate] = useState(urlDate || new Date().toISOString().split('T')[0]);
-    const [isSheetOpen, setIsSheetOpen] = useState(false); 
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
 
-    // --- 2. LIVE HISTORY STATE ---
     const [historyFilters, setHistoryFilters] = useState({ semester: 'All', subject: 'All', date: '' });
     const [selectedHistoryRecord, setSelectedHistoryRecord] = useState(null);
     const [attendanceHistory, setAttendanceHistory] = useState([]);
     const [historyDetailRoster, setHistoryDetailRoster] = useState([]);
 
-    // --- INITIAL FETCH: Get Teacher's Subjects ---
     useEffect(() => {
         const fetchSubjects = async () => {
             if (!user?.id) return;
             try {
-                const response = await fetch(`http://localhost:5000/api/teacher/${user.id}/assigned-subjects`);
-                const data = await response.json();
-                setMySubjects(data);
-                if (data.length > 0 && !selectedSession) {
-                    setSelectedSession(data[0].id); // Auto-select first subject
+                const response = await api.get(`/teacher/${user.id}/assigned-subjects`);
+                setMySubjects(response.data);
+                if (response.data.length > 0 && !selectedSession) {
+                    setSelectedSession(response.data[0].id);
                 }
             } catch (error) {
                 console.error("Error fetching subjects:", error);
@@ -48,46 +41,30 @@ const TeacherAttendance = () => {
         fetchSubjects();
     }, [user, selectedSession]);
 
-    // --- FETCH: Live History Summary ---
     useEffect(() => {
         if (viewMode === 'history' && user?.id) {
-            fetch(`http://localhost:5000/api/teacher/${user.id}/attendance-history`)
-                .then(res => res.json())
-                .then(data => setAttendanceHistory(data))
+            api.get(`/teacher/${user.id}/attendance-history`)
+                .then(res => setAttendanceHistory(res.data))
                 .catch(err => console.error("Error loading history:", err));
         }
     }, [viewMode, user]);
 
-    // --- LOGIC: MARKING ---
     const handleOpenSheet = async () => {
         if (!selectedSession) return alert("Please select a session first.");
-        
         try {
-            const response = await fetch(`http://localhost:5000/api/subjects/${selectedSession}/students`);
-            
-            if (!response.ok) {
-                alert(`Backend Error (${response.status}): Could not load students. Did you add the route to server.js?`);
-                return;
-            }
-
-            const data = await response.json();
-            
-            if (!Array.isArray(data)) {
-                console.error("Expected an array of students, but got:", data);
+            const response = await api.get(`/subjects/${selectedSession}/students`);
+            if (!Array.isArray(response.data)) {
                 alert("Data error: Backend did not return a valid student list.");
                 return;
             }
-            
-            if(data.length === 0) {
+            if(response.data.length === 0) {
                 alert("No students found enrolled in this subject's course.");
                 return;
             }
-            
-            setRoster(data); 
+            setRoster(response.data);
             setIsSheetOpen(true);
         } catch (error) {
-            console.error("Failed to load students:", error);
-            alert("Network error: Is your Node server running?");
+            alert(`Backend Error: Could not load students. ${error.response?.data?.error || ""}`);
         }
     };
 
@@ -96,28 +73,18 @@ const TeacherAttendance = () => {
             alert("Please open a sheet and mark attendance first!");
             return;
         }
-
         try {
-            const response = await fetch('http://localhost:5000/api/attendance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    subject_id: selectedSession,
-                    date: scheduleDate,
-                    students: roster,
-                    marked_by: user.id
-                })
+            await api.post('/attendance', {
+                subject_id: selectedSession,
+                date: scheduleDate,
+                students: roster,
+                marked_by: user.id
             });
-
-            if (response.ok) {
-                alert(`Success! Attendance for ${scheduleDate} has been saved.`);
-                setIsSheetOpen(false);
-                setRoster([]); 
-            } else {
-                alert("Failed to save attendance.");
-            }
+            alert(`Success! Attendance for ${scheduleDate} has been saved.`);
+            setIsSheetOpen(false);
+            setRoster([]);
         } catch (error) {
-            console.error("Error saving attendance:", error);
+            alert("Failed to save attendance.");
         }
     };
 
@@ -129,16 +96,13 @@ const TeacherAttendance = () => {
 
     const markAllPresent = () => setRoster(roster.map(s => ({ ...s, status: "Present" })));
 
-    // --- LOGIC: HISTORY VIEW DETAILS ---
     const handleViewSheet = async (record) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/attendance/class/${record.id}`);
-            const data = await response.json();
-            setHistoryDetailRoster(data); 
+            const response = await api.get(`/attendance/class/${record.id}`);
+            setHistoryDetailRoster(response.data);
             setSelectedHistoryRecord(record);
             setViewMode('history_detail');
         } catch (err) {
-            console.error("Error loading class details:", err);
             alert("Failed to load the specific attendance sheet.");
         }
     };
@@ -150,7 +114,6 @@ const TeacherAttendance = () => {
         return matchSem && matchSub && matchDate;
     });
 
-    // --- TABLE COLUMNS ---
     const markingColumns = [
         { header: "Enrollment No.", accessor: "roll" },
         { header: "Student Name", accessor: "name", cell: (row) => <span className="font-bold text-slate-900">{row.name}</span> },
@@ -268,7 +231,6 @@ const TeacherAttendance = () => {
                                     ))}
                                 </select>
                             </div>
-
                             <hr className="border-slate-100" />
                             <button onClick={handleOpenSheet} className="w-full bg-indigo-50 text-indigo-700 font-bold py-3 rounded-xl hover:bg-indigo-100 transition-colors text-sm flex items-center justify-center gap-2 border border-indigo-200">
                                 <FileText size={16} /> Open Attendance Sheet
@@ -307,7 +269,6 @@ const TeacherAttendance = () => {
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1"><Filter size={12}/> Semester</label>
                                 <select value={historyFilters.semester} onChange={(e) => setHistoryFilters({...historyFilters, semester: e.target.value})} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 outline-none">
                                     <option value="All">All Semesters</option>
-                                    {/* You can optionally map these dynamically from your DB in the future! */}
                                     <option value="Sem 1">Semester 1</option>
                                     <option value="Sem 2">Semester 2</option>
                                     <option value="Sem 3">Semester 3</option>

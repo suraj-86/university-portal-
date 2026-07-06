@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar as CalendarIcon, AlertCircle, Clock } from 'lucide-react';
+import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 
 const StudentAttendance = () => {
@@ -7,7 +8,6 @@ const StudentAttendance = () => {
     const [selectedSemester, setSelectedSemester] = useState(1);
     const [selectedSubject, setSelectedSubject] = useState('All');
     
-    // --- BACKEND DATA STATES ---
     const [logs, setLogs] = useState([]);
     const [subjectsFromDb, setSubjectsFromDb] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -18,12 +18,12 @@ const StudentAttendance = () => {
             const params = `?semester=${selectedSemester}`;
             
             Promise.all([
-                fetch(`http://localhost:5000/api/student/${user.id}/attendance-logs${params}`).then(res => res.json()),
-                fetch(`http://localhost:5000/api/student/${user.id}/subjects-list${params}`).then(res => res.json())
+                api.get(`/student/${user.id}/attendance-logs${params}`),
+                api.get(`/student/${user.id}/subjects-list${params}`)
             ])
-            .then(([logsData, subsData]) => {
-                setLogs(Array.isArray(logsData) ? logsData : []);
-                setSubjectsFromDb(Array.isArray(subsData) ? subsData : []);
+            .then(([logsRes, subsRes]) => {
+                setLogs(Array.isArray(logsRes.data) ? logsRes.data : []);
+                setSubjectsFromDb(Array.isArray(subsRes.data) ? subsRes.data : []);
                 setLoading(false);
             })
             .catch(err => {
@@ -33,7 +33,6 @@ const StudentAttendance = () => {
         }
     }, [user, selectedSemester]);
 
-    // --- DYNAMIC DATA PROCESSING (Replacing your hardcoded database) ---
     const attendanceData = useMemo(() => {
         const subjects = subjectsFromDb.map(sub => {
             const name = sub.subject_name;
@@ -66,7 +65,6 @@ const StudentAttendance = () => {
         };
     }, [logs, subjectsFromDb]);
 
-    // --- YOUR ORIGINAL FILTER LOGIC ---
     const displayedSubjects = selectedSubject === 'All' 
         ? attendanceData.subjects 
         : attendanceData.subjects.filter(sub => sub.name === selectedSubject);
@@ -86,7 +84,6 @@ const StudentAttendance = () => {
                     <h2 className="text-3xl font-bold text-slate-900">Attendance Details</h2>
                     <p className="text-slate-500 mt-1">Track your academic presence and subject-wise breakdown.</p>
                 </div>
-
                 <div className="flex flex-wrap items-center gap-4 border-b border-slate-200 xl:border-none pb-6 xl:pb-0">
                     <div className="flex items-center gap-3">
                         <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Semester:</label>
@@ -136,7 +133,6 @@ const StudentAttendance = () => {
                                 <div className="absolute inset-0 flex items-center justify-center font-bold text-slate-800">{calcOverall}%</div>
                             </div>
                         </div>
-
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center text-center">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Attended</p>
                             <h3 className="text-4xl font-black text-emerald-500">{calcAttended}</h3>

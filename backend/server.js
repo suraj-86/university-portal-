@@ -1,10 +1,39 @@
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs'); // Node's built-in file system module
+
+// Ensure the 'uploads' directory exists
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+
+// Set up Multer storage configuration
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        // Save files in the 'uploads' folder
+        cb(null, 'uploads/'); 
+    },
+    filename: function (req, file, cb) {
+        // Create a unique filename to prevent overwriting: timestamp-originalName
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+const upload = multer({ storage: storage });
+
+// IMPORTANT: Serve the uploads folder statically so the frontend can download them
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 1. DATABASE CONNECTION
 const db = mysql.createConnection({
@@ -24,30 +53,94 @@ db.connect((err) => {
 });
 
 // ==========================================
-// 2. LOGIN ROUTE
+// 2. LOGIN ROUTE (Secured with Bcrypt)
 // ==========================================
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     
+    // Notice we removed the password check from the SQL query and added u.password to the SELECT
     const sql = `
-        SELECT u.id, u.username, u.role, 
+        SELECT u.id, u.username, u.password, u.role, 
                COALESCE(t.full_name, s.full_name, p.full_name, u.username) AS full_name
         FROM users u
         LEFT JOIN teachers t ON u.id = t.user_id
         LEFT JOIN students s ON u.id = s.user_id
         LEFT JOIN parents p ON u.id = p.user_id
-        WHERE u.username = ? AND u.password = ?`;
+        WHERE u.username = ?`;
 
-    db.query(sql, [username, password], (err, data) => {
+    db.query(sql, [username], async (err, data) => {
         if (err) return res.status(500).json({ error: "Database error" });
+        
         if (data.length > 0) {
-            return res.json({ success: true, user: data[0] });
+            const user = data[0];
+            
+            // Compare the plain text password from the frontend with the hashed password in the DB
+            const isMatch = await bcrypt.compare(password, user.password);
+            
+            if (isMatch) {
+                // Remove the hashed password from the object before sending it to the React frontend
+                delete user.password;
+                return res.json({ success: true, user: user });
+            } else {
+                return res.status(401).json({ success: false, message: "Invalid credentials" });
+            }
         } else {
             return res.status(401).json({ success: false, message: "Invalid credentials" });
         }
     });
 });
 
+// ==========================================
+// CHANGE PASSWORD ROUTE
+// ==========================================
+app.put('/api/users/:id/change-password', async (req, res) => {
+    const userId = req.params.id;
+    const { currentPassword, newPassword } = req.body;
+
+    // 1. Fetch the user's current hashed password from the database
+    db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        if (results.length === 0) return res.status(404).json({ error: "User not found" });
+
+        const user = results[0];
+
+        // 2. Verify the current password provided by the user
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ error: "Incorrect current password" });
+        }
+
+        // 3. Hash the new password and update the database
+        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+        
+        db.query("UPDATE users SET password = ? WHERE id = ?", [hashedNewPassword, userId], (err) => {
+            if (err) return res.status(500).json({ error: "Failed to update password" });
+            res.json({ success: true, message: "Password updated successfully!" });
+        });
+    });
+});
+// ==========================================
+// CHANGE USERNAME ROUTE
+// ==========================================
+app.put('/api/users/:id/change-username', (req, res) => {
+    const userId = req.params.id;
+    const { newUsername } = req.body;
+
+    if (!newUsername || newUsername.trim() === '') {
+        return res.status(400).json({ error: "Username cannot be empty" });
+    }
+
+    db.query("UPDATE users SET username = ? WHERE id = ?", [newUsername.trim(), userId], (err) => {
+        if (err) {
+            // Check if the username is already taken (MySQL Duplicate Entry error)
+            if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(400).json({ error: "That username is already taken!" });
+            }
+            return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ success: true, message: "Username updated successfully! You will use this to log in next time." });
+    });
+});
 
 // ==========================================
 // 3. STUDENT MANAGEMENT ROUTES
@@ -67,16 +160,18 @@ app.get('/api/students', (req, res) => {
 });
 
 // POST (Add) student
-app.post('/api/students', (req, res) => {
+app.post('/api/students', async (req, res) => { // <-- Add 'async' here
     const { name, email, roll, password, semester, course_id } = req.body;
 
-    // Start a Transaction
+    // Hash the password with a salt round of 10
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction failed to start" });
 
-        // 1. Create the User Account
+        // Use the hashedPassword variable here instead of the plain password
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'student')";
-        db.query(userSql, [roll, password], (err, userResult) => {
+        db.query(userSql, [roll, hashedPassword], (err, userResult) => {
             if (err) {
                 return db.rollback(() => {
                     res.status(500).json({ error: "Username (Roll No) already exists in users table." });
@@ -163,16 +258,16 @@ app.get('/api/teachers', (req, res) => {
 });
 
 // POST (Add) teacher
-app.post('/api/teachers', (req, res) => {
+app.post('/api/teachers', async (req, res) => { // <-- Add 'async' here
     const { full_name, email, employee_id, department, qualification, designation, password } = req.body;
 
-    // Start a Transaction
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction failed" });
 
-        // 1. Create the User Account (Username = Employee ID)
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'teacher')";
-        db.query(userSql, [employee_id, password], (err, userResult) => {
+        db.query(userSql, [employee_id, hashedPassword], (err, userResult) => {
             if (err) {
                 return db.rollback(() => {
                     res.status(400).json({ error: "Employee ID (Username) already exists." });
@@ -363,14 +458,16 @@ app.get('/api/parents', (req, res) => {
 });
 
 // POST (Add) Parent and Link to Multiple Students
-app.post('/api/parents', (req, res) => {
+app.post('/api/parents', async (req, res) => { // <-- Add 'async' here
     const { full_name, phone, email, username, password, student_ids } = req.body; 
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction failed" });
 
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'parent')";
-        db.query(userSql, [username, password], (err, userResult) => {
+        db.query(userSql, [username, hashedPassword], (err, userResult) => {      
             if (err) return db.rollback(() => res.status(400).json({ error: "Username already exists" }));
             const userId = userResult.insertId;
 
@@ -442,12 +539,11 @@ app.delete('/api/parents/:id', (req, res) => {
 
 
 // ==========================================
-// 7. CAMPUS NOTICE ROUTES
+// 7. CAMPUS NOTICE ROUTES (With File Upload)
 // ==========================================
 
 // GET all notices (ordered by date)
 app.get('/api/notices', (req, res) => {
-    // Select date as 'date' to match your frontend accessor
     const sql = "SELECT id, title, content, target_role, priority, attachment_url, DATE_FORMAT(created_at, '%Y-%m-%d') as date FROM notices ORDER BY created_at DESC";
     db.query(sql, (err, data) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -456,13 +552,17 @@ app.get('/api/notices', (req, res) => {
 });
 
 // POST (Create) new notice
-app.post('/api/notices', (req, res) => {
-    const { title, content, target_role, priority, attachment_url, posted_by } = req.body;
+// Added upload.single('attachment') middleware
+app.post('/api/notices', upload.single('attachment'), (req, res) => {
+    const { title, content, target_role, priority, posted_by } = req.body;
     
-    // Validate that posted_by is present before querying
     if (!posted_by) {
         return res.status(400).json({ error: "Admin ID (posted_by) is required." });
     }
+
+    // If a physical file was uploaded, save its local path.
+    // If not, check if a text link was provided. Otherwise, set to null.
+    const attachment_url = req.file ? `/uploads/${req.file.filename}` : (req.body.attachment_url || null);
 
     const sql = "INSERT INTO notices (title, content, target_role, priority, attachment_url, posted_by) VALUES (?, ?, ?, ?, ?, ?)";
     
@@ -476,8 +576,14 @@ app.post('/api/notices', (req, res) => {
 });
 
 // PUT (Update) existing notice
-app.put('/api/notices/:id', (req, res) => {
-    const { title, content, target_role, priority, attachment_url } = req.body;
+// Added upload.single('attachment') middleware
+app.put('/api/notices/:id', upload.single('attachment'), (req, res) => {
+    const { title, content, target_role, priority } = req.body;
+    
+    // If a NEW file is uploaded during edit, use the new file path.
+    // If no new file is uploaded, keep whatever the frontend sent back.
+    const attachment_url = req.file ? `/uploads/${req.file.filename}` : req.body.attachment_url;
+
     const sql = "UPDATE notices SET title=?, content=?, target_role=?, priority=?, attachment_url=? WHERE id=?";
     
     db.query(sql, [title, content, target_role, priority, attachment_url, req.params.id], (err, result) => {
@@ -488,6 +594,7 @@ app.put('/api/notices/:id', (req, res) => {
 
 // DELETE notice
 app.delete('/api/notices/:id', (req, res) => {
+    // Note: To be completely efficient, you could also use fs.unlink() here to delete the physical file from the 'uploads' folder when a notice is deleted, but standard database deletion is fine for now!
     const sql = "DELETE FROM notices WHERE id = ?";
     db.query(sql, [req.params.id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });

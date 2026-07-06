@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Calendar, FileText, Download, X, Megaphone, User, Clock, ChevronRight } from 'lucide-react';
+import api from '../../services/api';
 import Card from '../../components/Card';
 import Modal from '../../components/Modal';
 import useAuth from '../../hooks/useAuth';
@@ -14,10 +15,9 @@ const StudentNotices = () => {
 
     useEffect(() => {
         if (user?.id) {
-            fetch(`http://localhost:5000/api/student/${user.id}/notices`)
-                .then(res => res.json())
-                .then(data => {
-                    setNotices(Array.isArray(data) ? data : []);
+            api.get(`/student/${user.id}/notices`)
+                .then(res => {
+                    setNotices(Array.isArray(res.data) ? res.data : []);
                     setLoading(false);
                 })
                 .catch(err => {
@@ -31,7 +31,7 @@ const StudentNotices = () => {
         return notices
             .filter(n => {
                 const matchesSearch = n.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                    (n.content && n.content.toLowerCase().includes(searchTerm.toLowerCase()));
+                                     (n.content && n.content.toLowerCase().includes(searchTerm.toLowerCase()));
                 if (filterType === 'All') return matchesSearch;
                 if (filterType === 'Teacher') return n.author_role === 'teacher' && matchesSearch;
                 if (filterType === 'Admin') return n.author_role === 'admin' && matchesSearch;
@@ -40,11 +40,15 @@ const StudentNotices = () => {
             .sort((a, b) => (a.priority === 'High' ? -1 : 1));
     }, [filterType, searchTerm, notices]);
 
-    // Download Logic
     const handleDownload = (e, fileName) => {
         e.stopPropagation(); 
         if (!fileName) return;
-        window.open(`http://localhost:5000/uploads/${fileName}`, '_blank');
+        
+        const fullUrl = fileName.startsWith('/') 
+            ? `http://localhost:5000${fileName}` 
+            : `http://localhost:5000/uploads/${fileName}`;
+            
+        window.open(fullUrl, '_blank');
     };
 
     return (
@@ -66,7 +70,6 @@ const StudentNotices = () => {
                 </div>
             </header>
 
-            {/* Filter Tabs */}
             <div className="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
                 {['All', 'Teacher', 'Admin'].map(type => (
                     <button 
@@ -81,7 +84,6 @@ const StudentNotices = () => {
                 ))}
             </div>
 
-            {/* Horizontal Full Width List */}
             <div className="space-y-3">
                 {loading ? (
                     <div className="py-20 text-center animate-pulse font-bold text-slate-300 uppercase text-[10px] tracking-widest">Loading Board...</div>
@@ -91,10 +93,8 @@ const StudentNotices = () => {
                         onClick={() => setViewingNotice(notice)}
                         className="bg-white hover:bg-slate-50 border border-slate-100 rounded-[24px] p-5 flex flex-col lg:flex-row lg:items-center gap-6 transition-all cursor-pointer group relative overflow-hidden"
                     >
-                        {/* Priority Accent */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${notice.priority === 'High' ? 'bg-rose-500' : 'bg-blue-500'}`}></div>
-
-                        {/* Title & Body Area */}
+                        
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${notice.author_role === 'teacher' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
@@ -112,7 +112,6 @@ const StudentNotices = () => {
                             </p>
                         </div>
 
-                        {/* FULL ATTACHMENT BOX ON THE NOTICE BOX */}
                         {notice.attachment_url && (
                             <div 
                                 onClick={(e) => handleDownload(e, notice.attachment_url)}
@@ -123,13 +122,12 @@ const StudentNotices = () => {
                                 </div>
                                 <div className="min-w-0 pr-4">
                                     <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">Attachment</p>
-                                    <p className="text-xs font-bold text-slate-600 truncate max-w-[120px]">{notice.attachment_url}</p>
+                                    <p className="text-xs font-bold text-slate-600 truncate max-w-[120px]">{notice.attachment_url.replace('/uploads/', '')}</p>
                                 </div>
                                 <Download size={16} className="text-slate-300 group-hover/file:text-blue-600" />
                             </div>
                         )}
 
-                        {/* Author & Action Area */}
                         <div className="flex items-center justify-between lg:justify-end gap-6 lg:border-l lg:border-slate-100 lg:pl-6 shrink-0">
                             {notice.author_role !== 'admin' && (
                                 <div className="flex items-center gap-2">
@@ -152,7 +150,6 @@ const StudentNotices = () => {
                 )}
             </div>
 
-             {/* --- PREVIEW MODAL (Similar to Admin/Teacher) --- */}
             {viewingNotice && (
                 <Modal 
                     isOpen={!!viewingNotice} 
@@ -160,7 +157,6 @@ const StudentNotices = () => {
                     title="Notice Preview"
                 >
                     <div className="flex flex-col h-full max-h-[80vh]">
-                        {/* PINNED HEADER */}
                         <div className="shrink-0 pb-4 border-b border-slate-100">
                             <div className="flex items-center justify-between mb-2">
                                 <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${viewingNotice.priority === 'High' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>
@@ -177,8 +173,7 @@ const StudentNotices = () => {
                                 </p>
                             )}
                         </div>
-
-                        {/* SCROLLABLE CONTENT */}
+                        
                         <div className="flex-1 overflow-y-auto py-6 my-2 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner">
                             <div className="px-6">
                                 <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap break-words font-medium">
@@ -186,8 +181,7 @@ const StudentNotices = () => {
                                 </p>
                             </div>
                         </div>
-
-                        {/* PINNED BOTTOM */}
+                        
                         <div className="shrink-0 pt-4 space-y-4">
                             {viewingNotice.attachment_url && (
                                 <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between shadow-sm">
@@ -197,10 +191,13 @@ const StudentNotices = () => {
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Attachment</p>
-                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{viewingNotice.attachment_url}</p>
+                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
                                         </div>
                                     </div>
-                                    <button className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">
+                                    <button 
+                                        onClick={(e) => handleDownload(e, viewingNotice.attachment_url)}
+                                        className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+                                    >
                                         <Download size={18} />
                                     </button>
                                 </div>

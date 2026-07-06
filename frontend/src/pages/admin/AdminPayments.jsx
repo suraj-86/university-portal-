@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '../../services/api';
 
 const AdminPayments = () => {
     const [payments, setPayments] = useState([]);
@@ -9,9 +10,8 @@ const AdminPayments = () => {
     useEffect(() => {
         const fetchPayments = async () => {
             try {
-                const res = await fetch('http://localhost:5000/api/admin/payments');
-                const data = await res.json();
-                setPayments(data);
+                const res = await api.get('/admin/payments');
+                setPayments(res.data);
             } catch (error) {
                 console.error("Error building transactions ledger:", error);
             } finally {
@@ -23,7 +23,7 @@ const AdminPayments = () => {
 
     const filteredPayments = payments.filter(payment => {
         const matchesSearch = payment.transaction_reference.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              payment.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              payment.student_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                               payment.enrollment.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesMethod = methodFilter === 'All' || payment.payment_method === methodFilter;
         return matchesSearch && matchesMethod;
@@ -58,7 +58,6 @@ const AdminPayments = () => {
                         <option value="Cash">Cash</option>
                     </select>
                 </div>
-
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>

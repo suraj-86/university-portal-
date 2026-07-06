@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Users, Search, CalendarPlus } from 'lucide-react';
+import api from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import Modal from '../../components/Modal';
 import FormInput from '../../components/FormInput';
@@ -7,25 +8,19 @@ import useAuth from '../../hooks/useAuth';
 
 const TeacherSubjects = () => {
     const { user } = useAuth();
-
-    // --- 1. STATE LOGIC ---
     const [searchTerm, setSearchTerm] = useState('');
     const [assignedSubjects, setAssignedSubjects] = useState([]);
-      
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedSubject, setSelectedSubject] = useState(null);
     const [scheduleForm, setScheduleForm] = useState({ date: '', startTime: '', endTime: '', room: '' });
 
-    // --- FETCH LIVE DATA ---
     useEffect(() => {
         const fetchSubjects = async () => {
             if (!user?.id) return;
             try {
-                const response = await fetch(`http://localhost:5000/api/teacher/${user.id}/assigned-subjects`);
-                const data = await response.json();
+                const response = await api.get(`/teacher/${user.id}/assigned-subjects`);
                 
-                // Map the dynamic 'enrolled_count' from our new SQL query
-                const formattedData = data.map(sub => ({
+                const formattedData = response.data.map(sub => ({
                     id: sub.id,
                     code: sub.subject_code,
                     name: sub.subject_name,
@@ -33,7 +28,7 @@ const TeacherSubjects = () => {
                     semester: sub.semester,
                     type: sub.type || 'Theory',
                     credits: sub.credits || 4,
-                    enrolled_students: sub.enrolled_count // NOW DYNAMIC
+                    enrolled_students: sub.enrolled_count 
                 }));
                 
                 setAssignedSubjects(formattedData);
@@ -44,7 +39,6 @@ const TeacherSubjects = () => {
         fetchSubjects();
     }, [user]);
 
-    // Calculate Total Unique Students across all assigned subjects
     const totalStudents = assignedSubjects.reduce((acc, curr) => acc + curr.enrolled_students, 0);
 
     const filteredSubjects = assignedSubjects.filter(subject => 
@@ -52,13 +46,9 @@ const TeacherSubjects = () => {
         subject.course.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // --- 2. HANDLERS ---
     const handleOpenModal = (subject) => {
         setSelectedSubject(subject);
-        
-        // FIX: Gets local timezone date in YYYY-MM-DD format
-        const today = new Date().toLocaleDateString('en-CA'); 
-        
+        const today = new Date().toLocaleDateString('en-CA');          
         setScheduleForm({ date: today, startTime: '', endTime: '', room: '' });
         setIsModalOpen(true);
     };
@@ -69,37 +59,24 @@ const TeacherSubjects = () => {
         setScheduleForm({ date: '', startTime: '', endTime: '', room: '' });
     };
 
-    // The fixed handler that saves the schedule to the database!
     const handleScheduleSubmit = async (e) => {
         e.preventDefault();
         
         try {
-            const response = await fetch('http://localhost:5000/api/teacher/schedule-class', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: user.id, // Passes your login ID safely to the backend
-                    subjectId: selectedSubject.id,
-                    date: scheduleForm.date,
-                    startTime: scheduleForm.startTime,
-                    endTime: scheduleForm.endTime,
-                    room: scheduleForm.room
-                })
+            await api.post('/teacher/schedule-class', {
+                userId: user.id, 
+                subjectId: selectedSubject.id,
+                date: scheduleForm.date,
+                startTime: scheduleForm.startTime,
+                endTime: scheduleForm.endTime,
+                room: scheduleForm.room
             });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                alert(`Successfully scheduled ${selectedSubject.name}!`);
-                handleCloseModal(); // Closes modal and resets form
-            } else {
-                alert(`Error: ${data.error}`);
-            }
+            alert(`Successfully scheduled ${selectedSubject.name}!`);
+            handleCloseModal(); 
         } catch (error) {
+            const errorMsg = error.response?.data?.error || "Network error occurred.";
+            alert(`Error: ${errorMsg}`);
             console.error("Scheduling error:", error);
-            alert("Network error occurred while trying to schedule the class.");
         }
     };
 
@@ -110,18 +87,9 @@ const TeacherSubjects = () => {
                 <p className="text-slate-500 mt-1">Manage your assigned curriculum and schedule daily classes.</p>
             </header>
 
-            {/* TOP MACRO METRICS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatsWidget 
-                    title="ASSIGNED SUBJECTS" 
-                    value={assignedSubjects.length} 
-                    icon={<BookOpen size={24} />} 
-                />
-                <StatsWidget 
-                    title="TOTAL STUDENTS" 
-                    value={totalStudents}
-                    icon={<Users size={24} />} 
-                />
+                <StatsWidget title="ASSIGNED SUBJECTS" value={assignedSubjects.length} icon={<BookOpen size={24} />} />
+                <StatsWidget title="TOTAL STUDENTS" value={totalStudents} icon={<Users size={24} />} />
             </div>
 
             <div className="mb-6 relative w-full md:w-96">
@@ -160,7 +128,7 @@ const TeacherSubjects = () => {
                                     {subject.course} • Sem {subject.semester} • {subject.credits} Credits
                                 </p>
                             </div>
-
+                            
                             <div className="p-6 grow flex justify-center text-sm font-medium text-slate-600">
                                 <div className="w-full bg-slate-50 rounded-2xl p-4 border border-slate-100 text-center flex flex-col items-center justify-center">
                                     <Users size={24} className="text-slate-400 mb-2" />
@@ -170,7 +138,7 @@ const TeacherSubjects = () => {
                                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Students Enrolled</div>
                                 </div>
                             </div>
-
+                            
                             <div className="p-4 border-t border-slate-100 bg-white">
                                 <button 
                                     onClick={() => handleOpenModal(subject)}
@@ -185,26 +153,14 @@ const TeacherSubjects = () => {
             </div>
 
             {isModalOpen && (
-                <Modal 
-                    isOpen={isModalOpen} 
-                    onClose={handleCloseModal} 
-                    title="Schedule Class" 
-                    subtitle={selectedSubject?.name}
-                >
+                <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Schedule Class" subtitle={selectedSubject?.name}>
                     <form onSubmit={handleScheduleSubmit} className="flex flex-col gap-5">
-                        <FormInput 
-                            label="Date" 
-                            type="date" 
-                            required 
-                            value={scheduleForm.date} 
-                            onChange={(e) => setScheduleForm({...scheduleForm, date: e.target.value})} 
-                        />
+                        <FormInput label="Date" type="date" required value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm, date: e.target.value})} />
                         <div className="grid grid-cols-2 gap-4">
                             <FormInput label="Start Time" type="time" required value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm, startTime: e.target.value})} />
                             <FormInput label="End Time" type="time" required value={scheduleForm.endTime} onChange={(e) => setScheduleForm({...scheduleForm, endTime: e.target.value})} />
                         </div>
                         <FormInput label="Room / Venue" type="text" required placeholder="e.g. Lab 4" value={scheduleForm.room} onChange={(e) => setScheduleForm({...scheduleForm, room: e.target.value})} />
-
                         <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 active:scale-95 flex items-center justify-center gap-2">
                             <CalendarPlus size={18} /> Confirm Schedule
                         </button>

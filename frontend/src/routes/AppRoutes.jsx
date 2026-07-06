@@ -11,6 +11,7 @@ import AdminSubjects from '../pages/admin/AdminSubjects.jsx'
 import AdminFees from '../pages/admin/AdminFees.jsx'
 import AdminPayments from '../pages/admin/AdminPayments.jsx'
 import AdminNotices from '../pages/admin/AdminNotices.jsx'
+import AdminSettings from '../pages/admin/AdminSettings.jsx';
 
 // Teacher Pages
 import TeacherDashboard from '../pages/teacher/TeacherDashboard.jsx'
@@ -18,6 +19,7 @@ import TeacherSubjects from '../pages/teacher/TeacherSubjects.jsx'
 import TeacherAttendance from '../pages/teacher/TeacherAttendance.jsx'
 import TeacherMarks from '../pages/teacher/TeacherMarks.jsx'
 import TeacherNotices from '../pages/teacher/TeacherNotices.jsx'
+import TeacherSettings from '../pages/teacher/TeacherSettings.jsx';
 
 // Student Pages
 import StudentDashboard from '../pages/student/StudentDashboard.jsx'
@@ -27,6 +29,7 @@ import StudentProfile from '../pages/student/StudentProfile.jsx'
 import StudentResults from '../pages/student/StudentResults.jsx'
 import StudentFees from '../pages/student/StudentFees.jsx'
 import StudentNotices from '../pages/student/StudentNotices.jsx'
+import StudentSettings from '../pages/student/StudentSettings.jsx';
 
 // Parent Pages (NEW)
 import ParentDashboard from '../pages/parent/ParentDashboard.jsx'
@@ -34,6 +37,7 @@ import ParentProfile from '../pages/parent/ParentProfile.jsx' // ADDED THIS LINE
 import ParentFees from '../pages/parent/ParentFees.jsx'
 import ParentResults from '../pages/parent/ParentResults.jsx'
 import ParentNotices from '../pages/parent/ParentNotices.jsx'
+import ParentSettings from '../pages/parent/ParentSettings.jsx';
 
 // Layout & Core
 import NotFound from '../pages/NotFound.jsx'
@@ -117,6 +121,16 @@ const AppRoutes = () => {
       ),
     },
     {
+      path: '/admin/settings',
+      element: (
+        <ProtectedRoute role="admin">
+          <DashboardLayout role="admin">
+            <AdminSettings />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
       path: '/admin/payments',
       element: (
         <ProtectedRoute role="admin">
@@ -184,6 +198,16 @@ const AppRoutes = () => {
         <ProtectedRoute role="teacher">
           <DashboardLayout role="teacher">
             <TeacherNotices />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/teacher/settings',
+      element: (
+        <ProtectedRoute role="teacher">
+          <DashboardLayout role="teacher">
+            <TeacherSettings />
           </DashboardLayout>
         </ProtectedRoute>
       ),
@@ -260,6 +284,16 @@ const AppRoutes = () => {
         </ProtectedRoute>
       ),
     },
+    {
+      path: '/student/settings',
+      element: (
+        <ProtectedRoute role="student">
+          <DashboardLayout role="student">
+            <StudentSettings />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
 
     // --- PARENT ROUTES ---
     {
@@ -308,6 +342,16 @@ const AppRoutes = () => {
         <ProtectedRoute role="parent">
           <DashboardLayout role="parent">
             <ParentProfile />
+          </DashboardLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/parent/settings',
+      element: (
+        <ProtectedRoute role="parent">
+          <DashboardLayout role="parent">
+            <ParentSettings />
           </DashboardLayout>
         </ProtectedRoute>
       ),

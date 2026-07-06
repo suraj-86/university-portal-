@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, DollarSign, Award, BookOpen, Clock, Bell, FileText, Calendar, CheckCircle2, Users } from 'lucide-react';
+import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import StatsWidget from '../../components/StatsWidget';
 import Card from '../../components/Card';
@@ -10,10 +11,8 @@ const ParentDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
     
-    // NEW: Track the currently selected child
     const [selectedWardId, setSelectedWardId] = useState('');
     const [allWards, setAllWards] = useState([]);
-
     const [wardSummary, setWardSummary] = useState(null);
     const [wardDetails, setWardDetails] = useState({
         fees: [], payments: [], results: {}, classes: [], notices: []
@@ -25,36 +24,33 @@ const ParentDashboard = () => {
             setLoading(true);
             
             try {
-                // Pass the selectedWardId if it exists to switch children
                 const url = selectedWardId 
-                    ? `http://localhost:5000/api/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
-                    : `http://localhost:5000/api/parent/${user.id}/wards-overview`;
-
-                const summaryRes = await fetch(url);
-                const summaryData = await summaryRes.json();
+                    ? `/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
+                    : `/parent/${user.id}/wards-overview`;
                 
-                if (summaryRes.ok && summaryData.childProfile) {
+                const summaryRes = await api.get(url);
+                const summaryData = summaryRes.data;
+                
+                if (summaryData.childProfile) {
                     setWardSummary(summaryData);
-                    setAllWards(summaryData.allWards); // Store the list of all their kids
+                    setAllWards(summaryData.allWards); 
                     
-                    // Set the dropdown to the active child if not already set
                     if (!selectedWardId) setSelectedWardId(summaryData.childProfile.student_id);
                     
                     const childUserId = summaryData.childProfile.user_id;
-
                     const [feesRes, paymentsRes, resultsRes, dashboardRes] = await Promise.all([
-                        fetch(`http://localhost:5000/api/student/${childUserId}/fees`),
-                        fetch(`http://localhost:5000/api/student/${childUserId}/payments`),
-                        fetch(`http://localhost:5000/api/student/${childUserId}/results`),
-                        fetch(`http://localhost:5000/api/student/${childUserId}/custom-dashboard`)
+                        api.get(`/student/${childUserId}/fees`),
+                        api.get(`/student/${childUserId}/payments`),
+                        api.get(`/student/${childUserId}/results`),
+                        api.get(`/student/${childUserId}/custom-dashboard`)
                     ]);
 
                     setWardDetails({
-                        fees: await feesRes.json() || [],
-                        payments: await paymentsRes.json() || [],
-                        results: await resultsRes.json() || {},
-                        classes: (await dashboardRes.json()).upcoming_classes || [],
-                        notices: (await dashboardRes.json()).notices || []
+                        fees: feesRes.data || [],
+                        payments: paymentsRes.data || [],
+                        results: resultsRes.data || {},
+                        classes: dashboardRes.data.upcoming_classes || [],
+                        notices: dashboardRes.data.notices || []
                     });
                 }
             } catch (error) {
@@ -64,7 +60,7 @@ const ParentDashboard = () => {
             }
         };
         fetchAllData();
-    }, [user, selectedWardId]); // Trigger re-fetch when selectedWardId changes
+    }, [user, selectedWardId]); 
 
     if (loading && !wardSummary) {
         return <div className="p-10 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Loading Ward Information...</div>;
@@ -77,7 +73,6 @@ const ParentDashboard = () => {
     const { childProfile, summaryMetrics } = wardSummary;
     const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
-    // ... (Keep your feeColumns, paymentColumns, resultColumns exactly as they were) ...
     const feeColumns = [
         { header: "Fee Type", accessor: "fee_type", cell: (row) => <span className="font-bold text-slate-900">{row.fee_type} <span className="text-xs text-slate-400 block">Sem {row.semester}</span></span> },
         { header: "Total / Paid", accessor: "amount", cell: (row) => <span className="font-bold text-slate-700">{formatCurrency(row.total_fee)} / <span className="text-emerald-600">{formatCurrency(row.paid_amount)}</span></span> },
@@ -109,7 +104,6 @@ const ParentDashboard = () => {
                     <p className="text-slate-500 mt-1 font-medium">Academic & Financial overview for your ward.</p>
                 </div>
                 
-                {/* WARD SELECTOR DROPDOWN */}
                 {allWards.length > 1 && (
                     <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm">
                         <Users size={18} className="text-indigo-600" />
@@ -131,7 +125,6 @@ const ParentDashboard = () => {
                 )}
             </header>
 
-            {/* Profile Summary Card */}
             <Card className="mb-8 p-6 flex flex-col md:flex-row items-center gap-6 border-indigo-100 bg-indigo-50/30 transition-all">
                 <div className="w-20 h-20 bg-indigo-600 text-white rounded-full flex items-center justify-center text-3xl font-bold shadow-md shrink-0">
                     {childProfile.full_name.charAt(0)}
@@ -139,7 +132,7 @@ const ParentDashboard = () => {
                 <div>
                     <h3 className="text-2xl font-bold text-slate-900">{childProfile.full_name}</h3>
                     <p className="text-indigo-600 font-bold uppercase tracking-widest text-xs mt-1">
-                        {childProfile.course_name} — Semester {childProfile.semester}
+                        {childProfile.course_name} • Semester {childProfile.semester}
                     </p>
                     <p className="text-slate-500 font-medium text-sm mt-1">
                         Enrollment Number: {childProfile.enrollment_number}
@@ -147,7 +140,6 @@ const ParentDashboard = () => {
                 </div>
             </Card>
 
-            {/* Navigation Tabs */}
             <div className="flex overflow-x-auto gap-2 mb-8 pb-2">
                 {[
                     { id: 'overview', label: 'Overview', icon: <Activity size={16} /> },
@@ -167,7 +159,6 @@ const ParentDashboard = () => {
                 ))}
             </div>
 
-            {/* TAB CONTENT: OVERVIEW */}
             {activeTab === 'overview' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-300">
                     <StatsWidget title="ATTENDANCE RATE" value={`${summaryMetrics.attendanceRate || 0}%`} icon={<Calendar size={24} className="text-emerald-600" />} />
@@ -176,7 +167,6 @@ const ParentDashboard = () => {
                 </div>
             )}
 
-            {/* TAB CONTENT: ACADEMICS & SCHEDULE */}
             {activeTab === 'academics' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-300">
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -205,7 +195,6 @@ const ParentDashboard = () => {
                 </div>
             )}
 
-            {/* TAB CONTENT: FINANCIALS */}
             {activeTab === 'financials' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-300">
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -224,7 +213,6 @@ const ParentDashboard = () => {
                 </div>
             )}
 
-            {/* TAB CONTENT: NOTICES */}
             {activeTab === 'notices' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6 animate-in fade-in duration-300">
                     <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-6"><Bell size={18} className="text-indigo-600"/> Campus Notices</h3>

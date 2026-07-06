@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, CheckCircle2, Users } from 'lucide-react';
+import api from '../../services/api'; // Added import
 import useAuth from '../../hooks/useAuth';
 import Table from '../../components/Table';
 
@@ -8,7 +9,6 @@ const ParentFees = () => {
     const [fees, setFees] = useState([]);
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(true);
-
     const [selectedWardId, setSelectedWardId] = useState('');
     const [allWards, setAllWards] = useState([]);
 
@@ -18,23 +18,23 @@ const ParentFees = () => {
             setLoading(true);
             try {
                 const url = selectedWardId 
-                    ? `http://localhost:5000/api/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
-                    : `http://localhost:5000/api/parent/${user.id}/wards-overview`;
-
-                const summaryRes = await fetch(url);
-                const summaryData = await summaryRes.json();
+                    ? `/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
+                    : `/parent/${user.id}/wards-overview`;
+                
+                const summaryRes = await api.get(url); // Changed to api.get
+                const summaryData = summaryRes.data;
                 
                 if (summaryData.childProfile) {
                     setAllWards(summaryData.allWards || []);
                     if (!selectedWardId) setSelectedWardId(summaryData.childProfile.student_id);
-
+                    
                     const childUserId = summaryData.childProfile.user_id;
                     const [feesRes, paymentsRes] = await Promise.all([
-                        fetch(`http://localhost:5000/api/student/${childUserId}/fees`),
-                        fetch(`http://localhost:5000/api/student/${childUserId}/payments`)
+                        api.get(`/student/${childUserId}/fees`), // Changed to api.get
+                        api.get(`/student/${childUserId}/payments`) // Changed to api.get
                     ]);
-                    setFees(await feesRes.json());
-                    setPayments(await paymentsRes.json());
+                    setFees(feesRes.data);
+                    setPayments(paymentsRes.data);
                 }
             } catch (error) {
                 console.error("Error fetching financials:", error);

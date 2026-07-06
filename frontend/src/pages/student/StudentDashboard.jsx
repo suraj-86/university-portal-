@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Clock, Bell, Calendar, FileText, ChevronRight } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import api from '../../services/api';
 
 const StudentDashboard = () => {
     const [loading, setLoading] = useState(true);
@@ -10,25 +11,17 @@ const StudentDashboard = () => {
     useEffect(() => {
         const fetchDashboard = async () => {
             try {
-                // Get the logged-in user from localStorage (fallback to ID 1)
                 const user = JSON.parse(localStorage.getItem('user'));
                 const userId = user ? user.id : 1; 
 
-                const response = await fetch(`http://localhost:5000/api/student/${userId}/custom-dashboard`);
-                const data = await response.json();
-
-                if (response.ok) {
-                    setDashboardData(data);
-                } else {
-                    console.error("Dashboard Error:", data.error);
-                }
+                const response = await api.get(`/student/${userId}/custom-dashboard`);
+                setDashboardData(response.data);
             } catch (error) {
                 console.error("Network error:", error);
             } finally {
                 setLoading(false);
             }
         };
-
         fetchDashboard();
     }, []);
 
@@ -40,17 +33,12 @@ const StudentDashboard = () => {
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
-            
-            {/* Header */}
             <header className="mb-10">
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight">Welcome, {profile.full_name.split(' ')[0]} 👋</h2>
                 <p className="text-slate-500 mt-1 font-medium">Here is your academic overview for today.</p>
             </header>
 
-            {/* ROW 1: Profile & Upcoming Classes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                
-                {/* Profile Widget */}
                 <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 flex flex-col items-center text-center overflow-hidden">
                     <div className="w-full h-24 bg-gradient-to-r from-indigo-500 to-blue-500"></div>
                     <div className="w-20 h-20 bg-white text-indigo-600 rounded-full flex items-center justify-center text-2xl font-black mb-4 border-4 border-white shadow-md -mt-10">
@@ -71,7 +59,6 @@ const StudentDashboard = () => {
                     </div>
                 </div>
 
-                {/* Upcoming Classes Widget */}
                 <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 p-8 lg:col-span-2 flex flex-col">
                     <div className="flex justify-between items-start mb-8">
                         <div>
@@ -84,7 +71,6 @@ const StudentDashboard = () => {
                             {upcoming_classes.length} Sessions
                         </span>
                     </div>
-
                     <div className="flex flex-col gap-4 flex-1 justify-center">
                         {upcoming_classes.length > 0 ? (
                             upcoming_classes.map((cls, index) => (
@@ -117,10 +103,7 @@ const StudentDashboard = () => {
                 </div>
             </div>
 
-            {/* ROW 2: Performance Graph & Notices */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                
-                {/* Performance Graph Widget */}
                 <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200 flex flex-col lg:col-span-2">
                     <div className="flex justify-between items-start mb-8">
                         <div>
@@ -145,7 +128,6 @@ const StudentDashboard = () => {
                     </div>
                 </div>
 
-                {/* Campus Notices */}
                 <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200 flex flex-col">
                     <div className="flex justify-between items-center mb-8">
                         <h3 className="text-xl font-black text-slate-900">Campus Board</h3>
@@ -153,7 +135,6 @@ const StudentDashboard = () => {
                             <Bell size={18} />
                         </div>
                     </div>
-
                     <div className="flex flex-col gap-4 flex-1">
                         {notices.length > 0 ? notices.map((notice) => (
                             <div key={notice.id} className={`flex items-start gap-4 p-4 rounded-2xl border ${notice.bg} ${notice.border} transition-all hover:scale-[1.02] cursor-pointer`}>
@@ -180,7 +161,6 @@ const StudentDashboard = () => {
                         View All <ChevronRight size={14} />
                     </Link>
                 </div>
-
             </div>
         </div>
     );

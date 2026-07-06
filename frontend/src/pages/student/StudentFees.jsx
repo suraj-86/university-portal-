@@ -1,35 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Download, CheckCircle2, Clock, Landmark, FileText, ArrowRight, Banknote, ShieldCheck, Loader2 } from 'lucide-react';
-import useAuth from '../../hooks/useAuth'; 
+import api from '../../services/api';
+import useAuth from '../../hooks/useAuth';
 
-const StudentFees = () => { 
+const StudentFees = () => {
     const { user } = useAuth();
-    // Fallback to 5 if user context isn't fully set up yet, otherwise use real ID
-    const userId = user?.id || 5;    
-
-    // --- STATE ---
+    const userId = user?.id || 5;
+    
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [dbFees, setDbFees] = useState([]);
     const [dbPayments, setDbPayments] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // Payment Flow State
-    const [paymentStep, setPaymentStep] = useState(1); // 1 = Details, 2 = Confirmation, 3 = Processing
+    const [paymentStep, setPaymentStep] = useState(1); 
     const [selectedFeeId, setSelectedFeeId] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('Online');
 
-    // --- FETCH LIVE DATA ---
     const fetchData = async () => {
         try {
             setLoading(true);
-            const feesRes = await fetch(`http://localhost:5000/api/student/${userId}/fees`);
-            const feesData = await feesRes.json();
-            setDbFees(feesData);
-
-            const payRes = await fetch(`http://localhost:5000/api/student/${userId}/payments`);
-            const payData = await payRes.json();
-            setDbPayments(payData);
+            const [feesRes, payRes] = await Promise.all([
+                api.get(`/student/${userId}/fees`),
+                api.get(`/student/${userId}/payments`)
+            ]);
+            setDbFees(feesRes.data);
+            setDbPayments(payRes.data);
         } catch (error) {
             console.error("Error fetching fee records:", error);
         } finally {
@@ -41,15 +37,12 @@ const StudentFees = () => {
         fetchData();
     }, [userId]);
 
-    // --- DERIVED STATS ---
     const overallTotal = dbFees.reduce((sum, fee) => sum + Number(fee.total_fee), 0);
     const overallPaid = dbFees.reduce((sum, fee) => sum + Number(fee.paid_amount), 0);
     const overallDue = overallTotal - overallPaid;
     const percentCleared = overallTotal > 0 ? Math.round((overallPaid / overallTotal) * 100) : 0;
-
     const pendingFees = dbFees.filter(fee => fee.status !== 'Paid');
 
-    // --- HANDLERS ---
     const handleFeeSelection = (e) => {
         const feeId = e.target.value;
         setSelectedFeeId(feeId);
@@ -65,11 +58,11 @@ const StudentFees = () => {
     const handleProceedToGateway = (e) => {
         e.preventDefault();
         if (!selectedFeeId || !paymentAmount) return;
-        setPaymentStep(2); // Move to Confirmation Step
+        setPaymentStep(2); 
     };
 
     const handleProcessPayment = async () => {
-        setPaymentStep(3); // Show processing spinner
+        setPaymentStep(3); 
         
         const paymentPayload = {
             fee_id: parseInt(selectedFeeId),
@@ -79,27 +72,15 @@ const StudentFees = () => {
         };
         
         try {
-            // Simulate a 1.5 second network/gateway delay for realism
             await new Promise(resolve => setTimeout(resolve, 1500));
-
-            const response = await fetch('http://localhost:5000/api/payments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(paymentPayload)
-            });
-            const data = await response.json();
+            await api.post('/payments', paymentPayload);
             
-            if (data.success) {
-                alert(`Successfully paid ₹${paymentAmount} via ${paymentMethod}!`);
-                closeModal();
-                fetchData(); 
-            } else {
-                alert(data.error || "Payment failed to record.");
-                setPaymentStep(2); // Go back to confirm if failed
-            }
+            alert(`Successfully paid ₹${paymentAmount} via ${paymentMethod}!`);
+            closeModal();
+            fetchData(); 
         } catch (error) {
-            alert("Network error processing payment.");
-            setPaymentStep(2);
+            alert(error.response?.data?.error || "Network error processing payment.");
+            setPaymentStep(2); 
         }
     };
 
@@ -131,7 +112,6 @@ const StudentFees = () => {
                 )}
             </header>
 
-            {/* --- MACRO STATS --- */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div className="flex justify-between items-start mb-4">
@@ -147,7 +127,6 @@ const StudentFees = () => {
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Outstanding</p>
                     <h3 className="text-3xl font-black text-slate-900">₹{overallDue.toLocaleString()}</h3>
                 </div>
-
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
                         <CheckCircle2 size={20} />
@@ -155,7 +134,6 @@ const StudentFees = () => {
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Paid</p>
                     <h3 className="text-3xl font-black text-slate-900">₹{overallPaid.toLocaleString()}</h3>
                 </div>
-
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                     <div>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Semester Fee</p>
@@ -173,9 +151,7 @@ const StudentFees = () => {
                 </div>
             </div>
 
-            {/* --- DETAILED VIEW --- */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Left: Fee Ledger */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                         <div className="flex items-center gap-3">
@@ -208,7 +184,6 @@ const StudentFees = () => {
                     </div>
                 </div>
 
-                {/* Right: History */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                     <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                         <h3 className="font-bold text-slate-900">Transaction History</h3>
@@ -240,7 +215,6 @@ const StudentFees = () => {
                 </div>
             </div>
 
-            {/* --- MULTI-STEP PAYMENT MODAL --- */}
             {isPaymentModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200">
@@ -253,11 +227,10 @@ const StudentFees = () => {
                                 {paymentStep === 2 && <p className="text-xs text-slate-500 mt-0.5">Review your transaction details</p>}
                             </div>
                             {paymentStep !== 3 && (
-                                <button onClick={closeModal} className="text-slate-400 hover:text-slate-800 font-bold text-xl">×</button>
+                                <button onClick={closeModal} className="text-slate-400 hover:text-slate-800 font-bold text-xl">✕</button>
                             )}
                         </div>
                         
-                        {/* STEP 1: FORM */}
                         {paymentStep === 1 && (
                             <form onSubmit={handleProceedToGateway} className="p-6">
                                 <div className="mb-6">
@@ -276,7 +249,6 @@ const StudentFees = () => {
                                         ))}
                                     </select>
                                 </div>
-
                                 <div className="mb-6">
                                     <label className="text-xs font-bold text-slate-500 uppercase block mb-2">2. Amount to Pay</label>
                                     <div className="relative">
@@ -284,7 +256,6 @@ const StudentFees = () => {
                                         <input type="number" disabled value={paymentAmount} placeholder="Select a fee above" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl font-black text-xl text-slate-500 bg-slate-100 cursor-not-allowed"/>
                                     </div>
                                 </div>
-
                                 <div className="mb-8">
                                     <label className="text-xs font-bold text-slate-500 uppercase block mb-2">3. Payment Method</label>
                                     <div className="grid grid-cols-3 gap-3">
@@ -302,14 +273,12 @@ const StudentFees = () => {
                                         </button>
                                     </div>
                                 </div>
-
                                 <button type="submit" disabled={!selectedFeeId || !paymentAmount} className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
                                     Proceed to Checkout <ArrowRight size={16} />
                                 </button>
                             </form>
                         )}
-
-                        {/* STEP 2: CONFIRMATION GATEWAY */}
+                        
                         {paymentStep === 2 && (
                             <div className="p-6">
                                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 text-center mb-6">
@@ -320,7 +289,6 @@ const StudentFees = () => {
                                     <h2 className="text-3xl font-black text-slate-900">₹{Number(paymentAmount).toLocaleString()}</h2>
                                     <p className="text-xs font-bold text-slate-500 uppercase mt-2">Via {paymentMethod}</p>
                                 </div>
-
                                 {paymentMethod === 'Cash' ? (
                                     <p className="text-sm text-slate-600 text-center mb-6 bg-slate-100 p-4 rounded-xl">
                                         By confirming, a <b>Cash Challan</b> will be generated. You must deposit the physical cash at the Accounts Office within 48 hours.
@@ -330,7 +298,6 @@ const StudentFees = () => {
                                         You are about to initiate a secure transaction. Please do not refresh the page once the payment starts.
                                     </p>
                                 )}
-
                                 <div className="flex gap-3">
                                     <button onClick={() => setPaymentStep(1)} className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-xl transition-colors">
                                         Cancel
@@ -341,8 +308,7 @@ const StudentFees = () => {
                                 </div>
                             </div>
                         )}
-
-                        {/* STEP 3: PROCESSING SPINNER */}
+                        
                         {paymentStep === 3 && (
                             <div className="p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
                                 <Loader2 size={40} className="text-blue-600 animate-spin mb-4" />
@@ -350,7 +316,6 @@ const StudentFees = () => {
                                 <p className="text-sm text-slate-500 mt-2">Contacting bank servers. Please do not close this window.</p>
                             </div>
                         )}
-
                     </div>
                 </div>
             )}

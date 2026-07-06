@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Users, User } from 'lucide-react';
+import api from '../../services/api';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 
@@ -11,25 +12,18 @@ const AdminFees = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [courseFilter, setCourseFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
-
-    // Assign/Edit modal state
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingFeeId, setEditingFeeId] = useState(null);
-    const [assignMode, setAssignMode] = useState('single'); // 'single' | 'bulk'
+    const [assignMode, setAssignMode] = useState('single');
     const [formData, setFormData] = useState({
-        student_id: '',
-        course_id: '',
-        semester: '',
-        fee_type: 'Tuition',
-        total_fee: '',
-        due_date: ''
+        student_id: '', course_id: '', semester: '', fee_type: 'Tuition', total_fee: '', due_date: ''
     });
 
     const fetchAdminFees = async () => {
         try {
-            const res = await fetch('http://localhost:5000/api/admin/fees');
-            const data = await res.json();
-            setFeeRecords(data);
+            const res = await api.get('/admin/fees');
+            setFeeRecords(res.data);
         } catch (error) {
             console.error("Error fetching admin metrics:", error);
         } finally {
@@ -40,11 +34,11 @@ const AdminFees = () => {
     const fetchDropdownData = async () => {
         try {
             const [courseRes, studentRes] = await Promise.all([
-                fetch('http://localhost:5000/api/courses'),
-                fetch('http://localhost:5000/api/students')
+                api.get('/courses'),
+                api.get('/students')
             ]);
-            setCourses(await courseRes.json());
-            setStudents(await studentRes.json());
+            setCourses(courseRes.data);
+            setStudents(studentRes.data);
         } catch (error) {
             console.error("Error fetching dropdown data:", error);
         }
@@ -55,14 +49,13 @@ const AdminFees = () => {
         fetchDropdownData();
     }, []);
 
-    // Macro Stats calculation from live rows
     const totalExpected = feeRecords.reduce((sum, r) => sum + Number(r.total_fee), 0);
     const totalCollected = feeRecords.reduce((sum, r) => sum + Number(r.paid_amount), 0);
     const outstandingDues = totalExpected - totalCollected;
     const collectionRate = totalExpected > 0 ? Math.round((totalCollected / totalExpected) * 100) : 0;
 
     const filteredRecords = feeRecords.filter(record => {
-        const matchesSearch = record.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        const matchesSearch = record.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                               record.enrollment.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCourse = courseFilter === 'All' || record.course === courseFilter;
         const matchesStatus = statusFilter === 'All' || record.status === statusFilter;
@@ -73,7 +66,6 @@ const AdminFees = () => {
         return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
     };
 
-    // --- OPEN MODAL HELPERS ---
     const openAssignModal = () => {
         setEditingFeeId(null);
         setAssignMode('single');
@@ -94,67 +86,47 @@ const AdminFees = () => {
         setIsModalOpen(true);
     };
 
-    // --- SUBMIT: create (single or bulk) OR update ---
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-
         try {
             if (editingFeeId) {
-                const res = await fetch(`http://localhost:5000/api/fees/${editingFeeId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        total_fee: formData.total_fee,
-                        due_date: formData.due_date,
-                        fee_type: formData.fee_type
-                    })
+                await api.put(`/fees/${editingFeeId}`, {
+                    total_fee: formData.total_fee,
+                    due_date: formData.due_date,
+                    fee_type: formData.fee_type
                 });
-                const result = await res.json();
-                if (!res.ok) return alert("Error: " + result.error);
             } else if (assignMode === 'single') {
-                const res = await fetch('http://localhost:5000/api/fees', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        student_id: formData.student_id,
-                        semester: formData.semester,
-                        fee_type: formData.fee_type,
-                        total_fee: formData.total_fee,
-                        due_date: formData.due_date
-                    })
+                await api.post('/fees', {
+                    student_id: formData.student_id,
+                    semester: formData.semester,
+                    fee_type: formData.fee_type,
+                    total_fee: formData.total_fee,
+                    due_date: formData.due_date
                 });
-                const result = await res.json();
-                if (!res.ok) return alert("Error: " + result.error);
             } else {
-                const res = await fetch('http://localhost:5000/api/fees/bulk-assign', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        course_id: formData.course_id,
-                        semester: formData.semester,
-                        fee_type: formData.fee_type,
-                        total_fee: formData.total_fee,
-                        due_date: formData.due_date
-                    })
+                const res = await api.post('/fees/bulk-assign', {
+                    course_id: formData.course_id,
+                    semester: formData.semester,
+                    fee_type: formData.fee_type,
+                    total_fee: formData.total_fee,
+                    due_date: formData.due_date
                 });
-                const result = await res.json();
-                if (!res.ok) return alert("Error: " + result.error);
-                alert(`Fee assigned to ${result.assigned} students.`);
+                alert(`Fee assigned to ${res.data.assigned} students.`);
             }
-
             setIsModalOpen(false);
             fetchAdminFees();
         } catch (error) {
+            const errorMsg = error.response?.data?.error || "Network error while saving the fee.";
+            alert("Error: " + errorMsg);
             console.error("Submit error:", error);
-            alert("Network error while saving the fee.");
         }
     };
 
     const handleDelete = async (id) => {
         if (!window.confirm("Delete this fee record? This cannot be undone.")) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/fees/${id}`, { method: 'DELETE' });
-            if (res.ok) fetchAdminFees();
+            await api.delete(`/fees/${id}`);
+            fetchAdminFees();
         } catch (error) {
             console.error("Delete error:", error);
         }
@@ -169,15 +141,11 @@ const AdminFees = () => {
                     <h2 className="text-3xl font-bold text-slate-900">Fee Management</h2>
                     <p className="text-slate-500 mt-1">Track student dues, record payments, and manage invoices live.</p>
                 </div>
-                <button
-                    onClick={openAssignModal}
-                    className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
-                >
+                <button onClick={openAssignModal} className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap">
                     <Plus size={18} /> Assign Fee
                 </button>
             </header>
 
-            {/* Macro Statistics Bar */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                     <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total Expected</p>
@@ -199,16 +167,9 @@ const AdminFees = () => {
                 </div>
             </div>
 
-            {/* Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-4 justify-between bg-slate-50/50">
-                    <input
-                        type="text"
-                        placeholder="Search Name or Enrollment..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-4 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 text-sm bg-white"
-                    />
+                    <input type="text" placeholder="Search Name or Enrollment..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-4 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 text-sm bg-white" />
                     <div className="flex gap-4">
                         <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="py-2 px-3 border border-slate-200 rounded-xl text-sm">
                             <option value="All">All Courses</option>
@@ -222,7 +183,6 @@ const AdminFees = () => {
                         </select>
                     </div>
                 </div>
-
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -248,7 +208,7 @@ const AdminFees = () => {
                                     <td className="p-4 font-bold">
                                         {formatCurrency(record.total_fee)} / <span className="text-emerald-600">{formatCurrency(record.paid_amount)}</span>
                                     </td>
-                                    <td className="p-4 text-slate-500">{record.due_date ? new Date(record.due_date).toLocaleDateString('en-IN') : '—'}</td>
+                                    <td className="p-4 text-slate-500">{record.due_date ? new Date(record.due_date).toLocaleDateString('en-IN') : ' '}</td>
                                     <td className="p-4">
                                         <span className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase
                                             ${record.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
@@ -278,48 +238,23 @@ const AdminFees = () => {
                 </div>
             </div>
 
-            {/* Assign / Edit Modal */}
-            <Modal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title={editingFeeId ? 'Edit Fee Record' : 'Assign New Fee'}
-            >
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingFeeId ? 'Edit Fee Record' : 'Assign New Fee'}>
                 <form onSubmit={handleFormSubmit} className="space-y-6">
-
-                    {/* Mode toggle — only when creating, not editing */}
                     {!editingFeeId && (
                         <div className="flex gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setAssignMode('single')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border font-bold text-sm transition-all ${
-                                    assignMode === 'single' ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-slate-200 text-slate-500'
-                                }`}
-                            >
+                            <button type="button" onClick={() => setAssignMode('single')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border font-bold text-sm transition-all ${assignMode === 'single' ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-slate-200 text-slate-500'}`}>
                                 <User size={16} /> Single Student
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => setAssignMode('bulk')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border font-bold text-sm transition-all ${
-                                    assignMode === 'bulk' ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-slate-200 text-slate-500'
-                                }`}
-                            >
+                            <button type="button" onClick={() => setAssignMode('bulk')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border font-bold text-sm transition-all ${assignMode === 'bulk' ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-slate-200 text-slate-500'}`}>
                                 <Users size={16} /> Bulk by Course + Semester
                             </button>
                         </div>
                     )}
-
-                    {/* Single student picker */}
+                    
                     {!editingFeeId && assignMode === 'single' && (
                         <div className="space-y-1">
                             <span className="mb-2 block text-sm font-medium text-slate-700">Student</span>
-                            <select
-                                required
-                                value={formData.student_id}
-                                onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none"
-                            >
+                            <select required value={formData.student_id} onChange={(e) => setFormData({ ...formData, student_id: e.target.value })} className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none">
                                 <option value="">-- Select Student --</option>
                                 {students.map(s => (
                                     <option key={s.student_id} value={s.student_id}>
@@ -330,20 +265,14 @@ const AdminFees = () => {
                         </div>
                     )}
 
-                    {/* Bulk course picker */}
                     {!editingFeeId && assignMode === 'bulk' && (
                         <div className="space-y-1">
                             <span className="mb-2 block text-sm font-medium text-slate-700">Course</span>
-                            <select
-                                required
-                                value={formData.course_id}
-                                onChange={(e) => setFormData({ ...formData, course_id: e.target.value })}
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none"
-                            >
+                            <select required value={formData.course_id} onChange={(e) => setFormData({ ...formData, course_id: e.target.value })} className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none">
                                 <option value="">-- Select Course --</option>
                                 {courses.map(c => <option key={c.id} value={c.id}>{c.course_name}</option>)}
                             </select>
-                            <p className="text-[11px] text-slate-400 mt-1">This fee will be assigned to every Active student in this course &amp; semester.</p>
+                            <p className="text-[11px] text-slate-400 mt-1">This fee will be assigned to every Active student in this course & semester.</p>
                         </div>
                     )}
 
@@ -351,12 +280,7 @@ const AdminFees = () => {
                         {!editingFeeId && (
                             <div className="space-y-1">
                                 <span className="mb-2 block text-sm font-medium text-slate-700">Semester</span>
-                                <select
-                                    required
-                                    value={formData.semester}
-                                    onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
-                                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none"
-                                >
+                                <select required value={formData.semester} onChange={(e) => setFormData({ ...formData, semester: e.target.value })} className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none">
                                     <option value="">Select Sem</option>
                                     {Array.from({ length: 8 }, (_, i) => i + 1).map(n => (
                                         <option key={n} value={n}>Semester {n}</option>
@@ -364,15 +288,9 @@ const AdminFees = () => {
                                 </select>
                             </div>
                         )}
-
                         <div className="space-y-1">
                             <span className="mb-2 block text-sm font-medium text-slate-700">Fee Type</span>
-                            <select
-                                required
-                                value={formData.fee_type}
-                                onChange={(e) => setFormData({ ...formData, fee_type: e.target.value })}
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none"
-                            >
+                            <select required value={formData.fee_type} onChange={(e) => setFormData({ ...formData, fee_type: e.target.value })} className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none">
                                 <option value="Tuition">Tuition</option>
                                 <option value="Hostel">Hostel</option>
                                 <option value="Library Fine">Library Fine</option>
@@ -382,21 +300,8 @@ const AdminFees = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                            label="Total Fee Amount (₹)"
-                            type="number"
-                            required
-                            value={formData.total_fee}
-                            onChange={(e) => setFormData({ ...formData, total_fee: e.target.value })}
-                            placeholder="e.g. 45000"
-                        />
-                        <Input
-                            label="Due Date"
-                            type="date"
-                            required
-                            value={formData.due_date}
-                            onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                        />
+                        <Input label="Total Fee Amount (₹)" type="number" required value={formData.total_fee} onChange={(e) => setFormData({ ...formData, total_fee: e.target.value })} placeholder="e.g. 45000" />
+                        <Input label="Due Date" type="date" required value={formData.due_date} onChange={(e) => setFormData({ ...formData, due_date: e.target.value })} />
                     </div>
 
                     <button type="submit" className="w-full bg-cyan-600 text-white font-bold py-4 rounded-2xl hover:bg-cyan-700 shadow-lg transition-all active:scale-95">

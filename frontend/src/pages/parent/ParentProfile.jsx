@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { User, Users } from 'lucide-react';
+import api from '../../services/api'; // Added import
 import useAuth from '../../hooks/useAuth';
 
 const ParentProfile = () => {
     const { user } = useAuth();
     const [studentData, setStudentData] = useState(null);
     const [loading, setLoading] = useState(true);
-    
     const [selectedWardId, setSelectedWardId] = useState('');
     const [allWards, setAllWards] = useState([]);
 
@@ -16,23 +16,19 @@ const ParentProfile = () => {
             setLoading(true);
             try {
                 const url = selectedWardId 
-                    ? `http://localhost:5000/api/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
-                    : `http://localhost:5000/api/parent/${user.id}/wards-overview`;
-
-                const summaryRes = await fetch(url);
-                const summaryData = await summaryRes.json();
+                    ? `/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
+                    : `/parent/${user.id}/wards-overview`;
+                
+                const summaryRes = await api.get(url); // Changed to api.get
+                const summaryData = summaryRes.data;
                 
                 if (summaryData.childProfile) {
                     setAllWards(summaryData.allWards || []);
                     if (!selectedWardId) setSelectedWardId(summaryData.childProfile.student_id);
-
-                    const childUserId = summaryData.childProfile.user_id;
-                    const profileRes = await fetch(`http://localhost:5000/api/student/${childUserId}/profile`);
-                    const profileData = await profileRes.json();
                     
-                    if (profileRes.ok) {
-                        setStudentData(profileData);
-                    }
+                    const childUserId = summaryData.childProfile.user_id;
+                    const profileRes = await api.get(`/student/${childUserId}/profile`); // Changed to api.get
+                    setStudentData(profileRes.data);
                 }
             } catch (error) {
                 console.error("Error fetching ward profile:", error);

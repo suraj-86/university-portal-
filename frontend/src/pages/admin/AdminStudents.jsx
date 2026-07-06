@@ -1,107 +1,84 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, ShieldCheck, Search } from 'lucide-react'; // Added Search icon
+import { Plus, Edit2, Trash2, ShieldCheck, Search } from 'lucide-react';
+import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 
 const AdminStudents = () => {
     const [students, setStudents] = useState([]);
-    const [courses, setCourses] = useState([]); // State for dynamic course list
-    const [searchTerm, setSearchTerm] = useState(''); // Added search state
+    const [courses, setCourses] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingStudentId, setEditingStudentId] = useState(null);
     
-    // Updated formData to include course_id
     const [formData, setFormData] = useState({
         name: '', email: '', roll: '', course_id: '', semester: 1, password: ''
     });
 
-    // --- 1. THE DATA BRIDGE (Fetch Students and Courses) ---
-    // --- 1. THE DATA BRIDGE (Fetch Students and Courses) ---
-const fetchData = async () => {
-    try {
-        const studentRes = await fetch('http://localhost:5000/api/students');
-        const studentData = await studentRes.json();
-        
-        const courseRes = await fetch('http://localhost:5000/api/courses');
-        const courseData = await courseRes.json();
-
-        setStudents(studentData.map(s => ({
-            id: s.student_id,
-            user_id: s.user_id,         // FIX: Added for deletion
-            course_id: s.course_id,     // FIX: Added for edit form validation
-            roll: s.enrollment_number,
-            name: s.full_name,
-            email: s.email,
-            course: s.course_name || "N/A", 
-            semester: s.semester,
-            status: s.status || "Active"
-        })));
-        
-        setCourses(courseData);
-    } catch (error) {
-        console.error("Connection failed:", error);
-    }
-};
+    const fetchData = async () => {
+        try {
+            const [studentRes, courseRes] = await Promise.all([
+                api.get('/students'),
+                api.get('/courses')
+            ]);
+            
+            setStudents(studentRes.data.map(s => ({
+                id: s.student_id,
+                user_id: s.user_id,
+                course_id: s.course_id,
+                roll: s.enrollment_number,
+                name: s.full_name,
+                email: s.email,
+                course: s.course_name || "N/A", 
+                semester: s.semester,
+                status: s.status || "Active"
+            })));
+            
+            setCourses(courseRes.data);
+        } catch (error) {
+            console.error("Connection failed:", error);
+        }
+    };
 
     useEffect(() => {
         fetchData();
     }, []);
 
-    // --- NEW SEARCH FILTER LOGIC ---
-    // Filters students based on name or enrollment number (roll)
     const filteredStudents = students.filter(s => 
         s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         s.roll.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // --- 2. ACTIONS (Submit & Delete) ---
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        const url = editingStudentId 
-            ? `http://localhost:5000/api/students/${editingStudentId}` 
-            : 'http://localhost:5000/api/students';
-        
-        const method = editingStudentId ? 'PUT' : 'POST';
-
         try {
-            const response = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
-            });
-
-            if (response.ok) {
-                setIsModalOpen(false);
-                fetchData(); // Refresh data
-                setEditingStudentId(null);
+            if (editingStudentId) {
+                await api.put(`/students/${editingStudentId}`, formData);
             } else {
-                const result = await response.json();
-                alert("Error: " + result.error);
+                await api.post('/students', formData);
             }
+            
+            setIsModalOpen(false);
+            fetchData();
+            setEditingStudentId(null);
         } catch (error) {
+            const errorMsg = error.response?.data?.error || "Failed to submit form";
+            alert("Error: " + errorMsg);
             console.error("Submit failed:", error);
         }
     };
 
     const handleDelete = async (userId) => {
-    if (window.confirm("Delete this student record?")) {
-        try {
-            // We pass the user_id directly to the backend
-            const response = await fetch(`http://localhost:5000/api/students/${userId}`, {
-                method: 'DELETE',
-            });
-            
-            if (response.ok) {
-                fetchData(); // Refresh the table
-            } else {
-                console.error("Failed to delete from server.");
+        if (window.confirm("Delete this student record?")) {
+            try {
+                await api.delete(`/students/${userId}`);
+                fetchData();
+            } catch (error) {
+                console.error("Delete failed:", error);
             }
-        } catch (error) {
-            console.error("Delete failed:", error);
         }
-    }
-};
+    };
 
     const openEditModal = (student) => {
         setEditingStudentId(student.id);
@@ -131,12 +108,9 @@ const fetchData = async () => {
                     <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
                         <Edit2 size={16} />
                     </button>
-                    <button 
-    onClick={() => handleDelete(row.user_id)} 
-    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
->
-    <Trash2 size={16} />
-</button>
+                    <button onClick={() => handleDelete(row.user_id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                        <Trash2 size={16} />
+                    </button>
                 </div>
             )
         }
@@ -149,8 +123,7 @@ const fetchData = async () => {
                     <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Student Directory</h2>
                     <p className="text-slate-500 mt-1 font-medium">Manage enrollments and academic records.</p>
                 </div>
-
-                {/* --- SEARCH BAR UI --- */}
+                
                 <div className="relative w-full md:w-80">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input 
@@ -161,7 +134,6 @@ const fetchData = async () => {
                         className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-200 outline-none shadow-sm transition-all"
                     />
                 </div>
-
                 <button 
                     onClick={() => { 
                         setEditingStudentId(null); 
@@ -174,7 +146,6 @@ const fetchData = async () => {
                 </button>
             </header>
 
-            {/* Use filteredStudents instead of students */}
             <Table columns={columns} data={filteredStudents} pageSize={5} />
 
             <Modal 
@@ -188,7 +159,6 @@ const fetchData = async () => {
                         <Input label="Enrollment No." value={formData.roll} onChange={(e) => setFormData({...formData, roll: e.target.value})} placeholder="ENR2026" required />
                         <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="suraj@email.com" required />
                         
-                        {/* DYNAMIC SELECT BOX */}
                         <div className="space-y-1">
                             <span className="mb-2 block text-sm font-medium text-slate-700">Assign Course</span>
                             <select 

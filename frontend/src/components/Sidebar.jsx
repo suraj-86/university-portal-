@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users2, BookOpen, CalendarCheck, BarChart3,
-  ClipboardList, FileText, Award, User, DollarSign, Bell
+  ClipboardList, FileText, Award, User, DollarSign, Bell,Settings
 } from 'lucide-react';
 
 const menuConfig = {
@@ -16,6 +16,8 @@ const menuConfig = {
     { name: 'Payments', path: '/admin/payments', icon: <BarChart3 size={20} /> },
     { name: 'Notices', path: '/admin/notices', icon: <Bell size={20} /> },
     { name: 'Parents', path: '/admin/parents', icon: <Users2 size={20} /> },
+    { name: 'Settings', path: '/admin/settings', icon: <Settings size={20} /> }
+    
   ],
   teacher: [
     { name: 'Dashboard', path: '/teacher-dashboard', icon: <LayoutDashboard size={20} /> },
@@ -23,6 +25,7 @@ const menuConfig = {
     { name: 'Attendance', path: '/teacher/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Marks Entry', path: '/teacher/marks', icon: <ClipboardList size={20} /> },
     { name: 'Notices', path: '/teacher/notices', icon: <Bell size={20} /> },
+    { name: 'Settings', path: '/teacher/settings', icon: <Settings size={20} /> } // <-- ADDED
   ],
   student: [
     { name: 'Dashboard', path: '/student-dashboard', icon: <LayoutDashboard size={20} /> },
@@ -32,13 +35,15 @@ const menuConfig = {
     { name: 'Results', path: '/student/results', icon: <Award size={20} /> },
     { name: 'Fees', path: '/student/fees', icon: <DollarSign size={20} /> },
     { name: 'Notices', path: '/student/notices', icon: <Bell size={20} /> },
+    { name: 'Settings', path: '/student/settings', icon: <Settings size={20} /> } // <-- ADDED
   ],
   parent: [
     { name: 'Dashboard', path: '/parent-dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Ward Profile', path: '/parent/profile', icon: <User size={20} /> }, // ADDED THIS LINE
     { name: 'Fees & Payments', path: '/parent/fees', icon: <DollarSign size={20} /> },
     { name: 'Academic Results', path: '/parent/results', icon: <Award size={20} /> },
-    { name: 'Campus Notices', path: '/parent/notices', icon: <Bell size={20} /> }
+    { name: 'Campus Notices', path: '/parent/notices', icon: <Bell size={20} /> },
+    { name: 'Settings', path: '/parent/settings', icon: <Settings size={20} /> } // <-- ADDED
   ],
 };
 

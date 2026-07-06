@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, ShieldCheck, Search, Users, Edit2, Trash2 } from 'lucide-react';
+import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
@@ -11,17 +12,18 @@ const AdminParents = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingParentId, setEditingParentId] = useState(null);
     
-    // Updated to use student_ids as an array[cite: 3]
     const [formData, setFormData] = useState({
         full_name: '', phone: '', email: '', username: '', password: '', student_ids: []
     });
 
     const fetchData = async () => {
         try {
-            const parentRes = await fetch('http://localhost:5000/api/parents');
-            setParents(await parentRes.json());
-            const studentRes = await fetch('http://localhost:5000/api/students');
-            setStudents(await studentRes.json());
+            const [parentRes, studentRes] = await Promise.all([
+                api.get('/parents'),
+                api.get('/students')
+            ]);
+            setParents(parentRes.data);
+            setStudents(studentRes.data);
         } catch (error) {
             console.error("Fetch error:", error);
         }
@@ -36,26 +38,18 @@ const AdminParents = () => {
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        const url = editingParentId 
-            ? `http://localhost:5000/api/parents/${editingParentId}`
-            : 'http://localhost:5000/api/parents';
-        const method = editingParentId ? 'PUT' : 'POST';
-
         try {
-            const response = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            if (response.ok) {
-                setIsModalOpen(false);
-                setEditingParentId(null);
-                fetchData();
+            if (editingParentId) {
+                await api.put(`/parents/${editingParentId}`, formData);
             } else {
-                const result = await response.json();
-                alert("Error: " + result.error);
+                await api.post('/parents', formData);
             }
+            setIsModalOpen(false);
+            setEditingParentId(null);
+            fetchData();
         } catch (error) {
+            const errorMsg = error.response?.data?.error || "Submission failed";
+            alert("Error: " + errorMsg);
             console.error("Submit failed:", error);
         }
     };
@@ -68,16 +62,19 @@ const AdminParents = () => {
             email: parent.email || '', 
             username: parent.username,
             password: '', 
-            // In a production app, you'd fetch linked IDs here[cite: 3]
-            student_ids: parent.student_id ? [parent.student_id] : [] 
+            student_ids: parent.student_ids ? parent.student_ids.split(',').map(Number) : []
         });
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id) => {
         if (window.confirm("Are you sure you want to delete this parent account?")) {
-            const response = await fetch(`http://localhost:5000/api/parents/${id}`, { method: 'DELETE' });
-            if (response.ok) fetchData();
+            try {
+                await api.delete(`/parents/${id}`);
+                fetchData();
+            } catch (error) {
+                console.error("Delete failed:", error);
+            }
         }
     };
 
@@ -139,8 +136,7 @@ const AdminParents = () => {
                         <Input label="Phone" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                         <Input label="Email" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
                     </div>
-
-                    {/* Multi-Select Ward Checkbox List[cite: 3] */}
+                    
                     <div className="space-y-2">
                         <span className="block text-sm font-medium text-slate-700">Link Wards (Select Multiple)</span>
                         <div className="max-h-40 overflow-y-auto border border-slate-300 rounded-2xl p-2 bg-white">

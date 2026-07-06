@@ -1,33 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Award, FileText, Download, TrendingUp, CheckCircle, GraduationCap } from 'lucide-react';
+import api from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import Table from '../../components/Table';
 
 const StudentResults = () => {
-    // --- STATE LOGIC ---
     const [allResults, setAllResults] = useState(null);
     const [selectedSemester, setSelectedSemester] = useState(1);
     const [loading, setLoading] = useState(true);
 
-    // --- FETCH DATA FROM BACKEND ---
     useEffect(() => {
         const fetchResults = async () => {
             try {
                 const user = JSON.parse(localStorage.getItem('user'));
-                const userId = user ? user.id : 1; // Fallback to 1 for testing
-
-                const response = await fetch(`http://localhost:5000/api/student/${userId}/results`);
-                const data = await response.json();
-
-                if (response.ok) {
-                    setAllResults(data);
-                    // Automatically select the highest semester they have marks for
-                    const availableSemesters = Object.keys(data).map(Number);
-                    if (availableSemesters.length > 0) {
-                        setSelectedSemester(Math.max(...availableSemesters));
-                    }
-                } else {
-                    console.error("Error fetching results:", data.error);
+                const userId = user ? user.id : 1; 
+                
+                const response = await api.get(`/student/${userId}/results`);
+                setAllResults(response.data);
+                
+                const availableSemesters = Object.keys(response.data).map(Number);
+                if (availableSemesters.length > 0) {
+                    setSelectedSemester(Math.max(...availableSemesters));
                 }
             } catch (error) {
                 console.error("Network error:", error);
@@ -35,20 +28,16 @@ const StudentResults = () => {
                 setLoading(false);
             }
         };
-
         fetchResults();
     }, []);
 
-    // Get the results for the currently clicked tab
     const currentResults = allResults && allResults[selectedSemester] ? allResults[selectedSemester] : [];
 
-    // --- AUTO-CALCULATIONS ---
     const stats = useMemo(() => {
         if (!currentResults.length) return { avgPercent: "0.0", gpa: "0.0", totalCredits: 0 };
         
         let totalAchieved = 0;
         let totalPossible = 0;
-
         currentResults.forEach(curr => {
             totalAchieved += curr.total;
             totalPossible += curr.totalMax;
@@ -60,7 +49,6 @@ const StudentResults = () => {
         return { avgPercent, gpa, totalCredits: currentResults.reduce((acc, curr) => acc + curr.credits, 0) };
     }, [currentResults]);
 
-    // --- TABLE COLUMNS ---
     const columns = [
         { 
             header: "Subject Detail", 
@@ -135,12 +123,10 @@ const StudentResults = () => {
         );
     }
 
-    // Get array of available semesters from our fetched data
     const availableSemesters = allResults ? Object.keys(allResults).map(Number).sort() : [];
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
-            {/* Header Area */}
             <header className="mb-10 flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6">
                 <div className="space-y-4">
                     <div>
@@ -148,7 +134,6 @@ const StudentResults = () => {
                         <p className="text-slate-500 font-medium mt-1">Detailed performance tracking across semesters.</p>
                     </div>
                     
-                    {/* Dynamic Semester Selection Tabs */}
                     {availableSemesters.length > 0 ? (
                         <div className="flex bg-white rounded-2xl p-1.5 border border-slate-200 shadow-sm w-fit overflow-x-auto">
                             {availableSemesters.map((sem) => (
@@ -165,7 +150,6 @@ const StudentResults = () => {
                         </div>
                     ) : null}
                 </div>
-
                 <button 
                     onClick={() => alert(`Downloading Marksheet for Sem ${selectedSemester}...`)}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-8 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 text-sm w-full xl:w-auto"
@@ -182,7 +166,6 @@ const StudentResults = () => {
                 </div>
             ) : (
                 <>
-                    {/* Performance Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                         <StatsWidget title="SEMESTER GPA" value={stats.gpa} trend="Current Standings" icon={<GraduationCap size={24} />} />
                         <StatsWidget title="PERCENTAGE" value={`${stats.avgPercent}%`} trend="Overall weighted" icon={<TrendingUp size={24} />} />
@@ -190,7 +173,6 @@ const StudentResults = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Scorecard Table */}
                         <div className="lg:col-span-2 space-y-6">
                             <div className="flex items-center justify-between px-2">
                                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Scorecard Ledger</h3>

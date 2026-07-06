@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, Users, Bell, Megaphone, FileText, CheckSquare, Activity, Clock, MapPin } from 'lucide-react';
+import api from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import useAuth from '../../hooks/useAuth';
 
@@ -11,18 +12,14 @@ const TeacherDashboard = () => {
         teacherName: '',
         stats: { totalSubjects: 0, totalStudents: 0, classesConducted: 0 },
         notices: [],
-        scheduledClasses: [] // Array holding daily_classes
+        scheduledClasses: []
     });
 
     useEffect(() => {
         if (user?.id) {
-            fetch(`http://localhost:5000/api/teacher/${user.id}/dashboard`)
+            api.get(`/teacher/${user.id}/dashboard`)
                 .then(res => {
-                    if (!res.ok) throw new Error("Failed to fetch dashboard data");
-                    return res.json();
-                })
-                .then(data => {
-                    setDashboardData(data);
+                    setDashboardData(res.data);
                     setLoading(false);
                 })
                 .catch(err => {
@@ -48,19 +45,9 @@ const TeacherDashboard = () => {
                 </div>
             ) : (
                 <div className="animate-in fade-in duration-500">
-                    
-                    {/* --- TOP ROW: Stats & Quick Actions --- */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <StatsWidget 
-                            title="ASSIGNED SUBJECTS" 
-                            value={dashboardData.stats.totalSubjects} 
-                            icon={<BookOpen size={24} />} 
-                        />
-                        <StatsWidget 
-                            title="TOTAL STUDENTS" 
-                            value={dashboardData.stats.totalStudents} 
-                            icon={<Users size={24} />} 
-                        />
+                        <StatsWidget title="ASSIGNED SUBJECTS" value={dashboardData.stats.totalSubjects} icon={<BookOpen size={24} />} />
+                        <StatsWidget title="TOTAL STUDENTS" value={dashboardData.stats.totalStudents} icon={<Users size={24} />} />
                         
                         <div className="bg-white rounded-[24px] border border-slate-200 p-5 flex flex-col justify-center shadow-sm">
                             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Quick Actions</h3>
@@ -82,8 +69,6 @@ const TeacherDashboard = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        
-                        {/* --- LEFT COLUMN: Big Scheduled Classes Panel --- */}
                         <div className="lg:col-span-2">
                             <div className="flex justify-between items-end px-1 mb-4">
                                 <div>
@@ -101,19 +86,14 @@ const TeacherDashboard = () => {
                                         {dashboardData.scheduledClasses.map((cls, idx) => (
                                             <div key={idx} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors group">
                                                 <div className="flex items-center gap-5">
-                                                    
-                                                    {/* Upgraded Time Block */}
                                                     <div className="w-16 h-16 bg-white text-indigo-600 rounded-2xl flex flex-col items-center justify-center font-black border border-slate-200 group-hover:border-indigo-200 shadow-sm transition-colors shrink-0">
                                                         <span className="text-sm">{cls.start_time.split(' ')[0]}</span>
                                                         <span className="text-[10px] text-slate-400 group-hover:text-indigo-400">{cls.start_time.split(' ')[1]}</span>
                                                     </div>
-
                                                     <div>
                                                         <h4 className="font-bold text-slate-900 text-lg">
                                                             {cls.subject_name} <span className="text-sm text-slate-400 font-medium">({cls.subject_code})</span>
                                                         </h4>
-                                                        
-                                                        {/* Location and Course Details */}
                                                         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                                                             <div className="flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
                                                                 <MapPin size={12} className="text-indigo-500"/> Room {cls.room_number}
@@ -144,7 +124,6 @@ const TeacherDashboard = () => {
                             </div>
                         </div>
 
-                        {/* --- RIGHT COLUMN: Announcements --- */}
                         <div className="lg:col-span-1">
                             <div className="flex justify-between items-end px-1 mb-4">
                                 <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Recent Updates</h3>
@@ -180,7 +159,6 @@ const TeacherDashboard = () => {
                                 )}
                             </div>
                         </div>
-
                     </div>
                 </div>
             )}

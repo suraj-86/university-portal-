@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Award, Users } from 'lucide-react';
+import api from '../../services/api'; // Added import
 import useAuth from '../../hooks/useAuth';
 import Table from '../../components/Table';
 
@@ -7,7 +8,6 @@ const ParentResults = () => {
     const { user } = useAuth();
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
-
     const [selectedWardId, setSelectedWardId] = useState('');
     const [allWards, setAllWards] = useState([]);
 
@@ -17,22 +17,21 @@ const ParentResults = () => {
             setLoading(true);
             try {
                 const url = selectedWardId 
-                    ? `http://localhost:5000/api/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
-                    : `http://localhost:5000/api/parent/${user.id}/wards-overview`;
-
-                const summaryRes = await fetch(url);
-                const summaryData = await summaryRes.json();
+                    ? `/parent/${user.id}/wards-overview?student_id=${selectedWardId}`
+                    : `/parent/${user.id}/wards-overview`;
+                
+                const summaryRes = await api.get(url); // Changed to api.get
+                const summaryData = summaryRes.data;
                 
                 if (summaryData.childProfile) {
                     setAllWards(summaryData.allWards || []);
                     if (!selectedWardId) setSelectedWardId(summaryData.childProfile.student_id);
-
-                    const childUserId = summaryData.childProfile.user_id;
-                    const res = await fetch(`http://localhost:5000/api/student/${childUserId}/results`);
-                    const data = await res.json();
                     
-                    const flattened = Object.keys(data).flatMap(sem => 
-                        data[sem].map(r => ({ ...r, semester: sem }))
+                    const childUserId = summaryData.childProfile.user_id;
+                    const res = await api.get(`/student/${childUserId}/results`); // Changed to api.get
+                    
+                    const flattened = Object.keys(res.data).flatMap(sem => 
+                        res.data[sem].map(r => ({ ...r, semester: sem }))
                     );
                     setResults(flattened);
                 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, UserCheck, BookOpen } from 'lucide-react';
+import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
@@ -16,20 +17,19 @@ const AdminSubjects = () => {
         subject_type: 'Core', credits: 3, teacher_id: '' 
     });
 
-    // Helper: Find max semesters for the selected course[cite: 3]
     const selectedCourse = courses.find(c => c.id === parseInt(formData.course_id));
     const maxSemesters = selectedCourse ? selectedCourse.total_semesters : 8;
 
     const fetchData = async () => {
         try {
             const [subRes, courseRes, teacherRes] = await Promise.all([
-                fetch('http://localhost:5000/api/subjects'),
-                fetch('http://localhost:5000/api/courses'),
-                fetch('http://localhost:5000/api/teachers')
+                api.get('/subjects'),
+                api.get('/courses'),
+                api.get('/teachers')
             ]);
-            setSubjects(await subRes.json());
-            setCourses(await courseRes.json());
-            setTeachers(await teacherRes.json());
+            setSubjects(subRes.data);
+            setCourses(courseRes.data);
+            setTeachers(teacherRes.data);
         } catch (error) {
             console.error("Fetch error:", error);
         }
@@ -38,38 +38,26 @@ const AdminSubjects = () => {
     useEffect(() => { fetchData(); }, []);
 
     const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Ensure editingSubId is actually set
-    const url = editingSubId 
-        ? `http://localhost:5000/api/subjects/${editingSubId}` 
-        : 'http://localhost:5000/api/subjects';
-    
-    const method = editingSubId ? 'PUT' : 'POST';
-
-    try {
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-        });
-        const result = await response.json();
-
-        if (result.success) {
+        e.preventDefault();
+        try {
+            if (editingSubId) {
+                await api.put(`/subjects/${editingSubId}`, formData);
+            } else {
+                await api.post('/subjects', formData);
+            }
+            
             setIsModalOpen(false);
-            fetchData(); // Refresh the table[cite: 5]
-            setEditingSubId(null); // Reset the ID
-        } else {
-            alert("Update failed: " + result.error);
+            fetchData();
+            setEditingSubId(null);
+        } catch (error) {
+            const errorMsg = error.response?.data?.error || "Failed to update subject";
+            alert("Update failed: " + errorMsg);
+            console.error("Network error:", error);
         }
-    } catch (error) {
-        console.error("Network error:", error);
-    }
-};
+    };
 
     const openEditModal = (sub) => {
         setEditingSubId(sub.id);
-        // Map data back to form. Important: teacher_id comes from your SQL JOIN[cite: 5]
         setFormData({ 
             subject_code: sub.subject_code,
             subject_name: sub.subject_name,
@@ -82,6 +70,17 @@ const AdminSubjects = () => {
         setIsModalOpen(true);
     };
 
+    const handleDelete = async (id) => {
+        if (window.confirm("Delete subject?")) {
+            try {
+                await api.delete(`/subjects/${id}`);
+                fetchData();
+            } catch (error) {
+                console.error("Delete error:", error);
+            }
+        }
+    };
+
     const columns = [
         { header: "Code", accessor: "subject_code" },
         { 
@@ -90,7 +89,7 @@ const AdminSubjects = () => {
             cell: (row) => (
                 <div>
                     <div className="font-bold text-slate-900">{row.subject_name}</div>
-                    <div className="text-[10px] text-slate-500 uppercase">{row.course_name} • Sem {row.semester}</div>
+                    <div className="text-[10px] text-slate-500 uppercase">{row.course_name}   Sem {row.semester}</div>
                 </div>
             )
         },
@@ -110,13 +109,6 @@ const AdminSubjects = () => {
             )
         }
     ];
-
-    const handleDelete = async (id) => {
-        if (window.confirm("Delete subject?")) {
-            await fetch(`http://localhost:5000/api/subjects/${id}`, { method: 'DELETE' });
-            fetchData();
-        }
-    };
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 min-h-screen">
@@ -144,8 +136,6 @@ const AdminSubjects = () => {
                                 {courses.map(c => <option key={c.id} value={c.id}>{c.course_name}</option>)}
                             </select>
                         </div>
-
-                        {/* DYNAMIC SEMESTER DROPDOWN[cite: 3] */}
                         <div className="space-y-1">
                             <label className="text-sm font-medium text-slate-700">Semester</label>
                             <select required value={formData.semester} onChange={(e) => setFormData({...formData, semester: e.target.value})} className="w-full rounded-2xl border border-slate-300 p-3 text-sm">

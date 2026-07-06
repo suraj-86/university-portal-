@@ -1,65 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { Book, Save, FileText, History, ArrowLeft, UploadCloud, Eye, Edit3 } from 'lucide-react';
+import api from '../../services/api';
 import Table from '../../components/Table';
 import Card from '../../components/Card';
-import FormInput from '../../components/FormInput';
 import Modal from '../../components/Modal';
 import useAuth from '../../hooks/useAuth';
 
 const TeacherMarks = () => {
     const { user } = useAuth();
-    const [viewMode, setViewMode] = useState('entry'); // 'entry' or 'ledger'
+    const [viewMode, setViewMode] = useState('entry'); 
 
-    // ==========================================
-    // VIEW 1: ENTER MARKS STATE & DATA
-    // ==========================================
     const [myClasses, setMyClasses] = useState([]);
-    const [selectedSemester, setSelectedSemester] = useState('All'); // New Semester Filter
+    const [selectedSemester, setSelectedSemester] = useState('All');
     const [selectedClass, setSelectedClass] = useState('');
     const [assessmentType, setAssessmentType] = useState('Assignment');
-    const [maxScore, setMaxScore] = useState(10); // Default to 10 for Assignment
+    const [maxScore, setMaxScore] = useState(10); 
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [roster, setRoster] = useState([]);
 
-    // ==========================================
-    // VIEW 2: GRADEBOOK LEDGER STATE & DATA
-    // ==========================================
-    const [ledgerSemester, setLedgerSemester] = useState('All'); // New Semester Filter
+    const [ledgerSemester, setLedgerSemester] = useState('All'); 
     const [ledgerFilter, setLedgerFilter] = useState('All');
     const [pastAssessments, setPastAssessments] = useState([]);
 
-    // Modal State for Viewing Past Records
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [selectedLedgerRecord, setSelectedLedgerRecord] = useState(null);
     const [viewOnlyRoster, setViewOnlyRoster] = useState([]);
 
-    // --- FETCH INITIAL DATA ---
     useEffect(() => {
         if (user?.id) {
-            // Get Assigned Subjects
-            fetch(`http://localhost:5000/api/teacher/${user.id}/assigned-subjects`)
-                .then(res => res.json())
-                .then(data => setMyClasses(data))
+            api.get(`/teacher/${user.id}/assigned-subjects`)
+                .then(res => setMyClasses(res.data))
                 .catch(err => console.error(err));
-            
-            // Get Ledger History
             fetchLedger();
         }
     }, [user]);
 
     const fetchLedger = () => {
         if (user?.id) {
-            fetch(`http://localhost:5000/api/teacher/${user.id}/marks-ledger`)
-                .then(res => res.json())
-                .then(data => setPastAssessments(data))
+            api.get(`/teacher/${user.id}/marks-ledger`)
+                .then(res => setPastAssessments(res.data))
                 .catch(err => console.error(err));
         }
     };
 
-    // --- HANDLERS: ENTRY MODE ---
     const handleSemesterChange = (e) => {
         setSelectedSemester(e.target.value);
-        setSelectedClass(''); // Reset subject when semester changes
+        setSelectedClass(''); 
         setIsSheetOpen(false);
     };
 
@@ -68,7 +54,6 @@ const TeacherMarks = () => {
         setIsSheetOpen(false); 
     };
 
-    // Automatically enforce Max Scores based on selection
     const handleAssessmentChange = (e) => {
         const type = e.target.value;
         setAssessmentType(type);
@@ -84,14 +69,13 @@ const TeacherMarks = () => {
         if (!selectedClass) return alert("Please select a Target Batch / Subject first!");
         
         try {
-            const rosterRes = await fetch(`http://localhost:5000/api/subjects/${selectedClass}/students`);
-            if(!rosterRes.ok) return alert("Failed to fetch students. Database error.");
-            const rosterData = await rosterRes.json();
+            const rosterRes = await api.get(`/subjects/${selectedClass}/students`);
+            const rosterData = rosterRes.data;
             
             if(rosterData.length === 0) return alert("No students enrolled in this course yet!");
 
-            const marksRes = await fetch(`http://localhost:5000/api/marks/details?subject_id=${selectedClass}&exam_type=${assessmentType}`);
-            const marksData = await marksRes.json();
+            const marksRes = await api.get(`/marks/details?subject_id=${selectedClass}&exam_type=${assessmentType}`);
+            const marksData = marksRes.data;
 
             const mergedRoster = rosterData.map(student => {
                 const uniqueId = student.student_id || student.id;
@@ -100,7 +84,7 @@ const TeacherMarks = () => {
                 
                 return {
                     ...student,
-                    id: uniqueId,        
+                    id: uniqueId,
                     enrollment: rollNo,  
                     score: existingMark ? existingMark.score : ''
                 };
@@ -113,7 +97,6 @@ const TeacherMarks = () => {
             setRoster(mergedRoster);
             setIsSheetOpen(true);
         } catch (error) {
-            console.error("Error opening sheet:", error);
             alert("Network Error while opening sheet.");
         }
     };
@@ -121,7 +104,6 @@ const TeacherMarks = () => {
     const handleScoreChange = (studentId, value) => {
         const numValue = value === '' ? '' : Number(value);
         if (numValue > maxScore) return; 
-
         setRoster(roster.map(student => 
             student.id === studentId ? { ...student, score: numValue } : student
         ));
@@ -140,38 +122,27 @@ const TeacherMarks = () => {
 
     const handleSaveMarks = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/marks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    subject_id: selectedClass,
-                    exam_type: assessmentType,
-                    max_score: maxScore,
-                    marks: roster,
-                    uploaded_by_user_id: user.id
-                })
+            await api.post('/marks', {
+                subject_id: selectedClass,
+                exam_type: assessmentType,
+                max_score: maxScore,
+                marks: roster,
+                uploaded_by_user_id: user.id
             });
-
-            if (response.ok) {
-                alert("Success! Marks have been securely saved to the database.");
-                setIsSheetOpen(false);
-                setRoster([]);
-                fetchLedger(); 
-                setViewMode('ledger'); 
-            } else {
-                alert("Failed to publish marks to database.");
-            }
+            alert("Success! Marks have been securely saved to the database.");
+            setIsSheetOpen(false);
+            setRoster([]);
+            fetchLedger(); 
+            setViewMode('ledger'); 
         } catch (error) {
-            console.error("Error saving marks:", error);
+            alert("Failed to publish marks to database.");
         }
     };
 
-    // --- HANDLERS: LEDGER ACTIONS ---
     const handleViewRecord = async (record) => {
         try {
-            const res = await fetch(`http://localhost:5000/api/marks/details?subject_id=${record.classId}&exam_type=${record.type}`);
-            const data = await res.json();
-            setViewOnlyRoster(data);
+            const res = await api.get(`/marks/details?subject_id=${record.classId}&exam_type=${record.type}`);
+            setViewOnlyRoster(res.data);
             setSelectedLedgerRecord(record);
             setIsViewModalOpen(true);
         } catch (error) {
@@ -188,10 +159,6 @@ const TeacherMarks = () => {
         setTimeout(() => handleOpenSheet(), 100);
     };
 
-    // ==========================================
-    // TABLE COLUMNS CONFIGURATION
-    // ==========================================
-    
     const rosterColumns = [
         { header: "Roll", accessor: "enrollment", cell: (row) => <span className="font-bold text-slate-500">{row.enrollment}</span> },
         { 
@@ -232,6 +199,13 @@ const TeacherMarks = () => {
                 );
             }
         }
+    ];
+
+    const viewOnlyColumns = [
+        { header: "Roll", accessor: "enrollment", cell: (row) => <span className="font-bold text-slate-500">{row.enrollment}</span> },
+        { header: "Student Name", accessor: "name", cell: (row) => <span className="font-bold text-slate-900">{row.name}</span> },
+        { header: "Score", accessor: "score", cell: (row) => <span className="font-bold text-indigo-600">{row.score} / {selectedLedgerRecord?.max}</span> },
+        { header: "Grade", accessor: "grade", cell: (row) => <span className="font-black text-slate-700">{calculateGrade(row.score, selectedLedgerRecord?.max)}</span> }
     ];
 
     const ledgerColumns = [
@@ -289,12 +263,10 @@ const TeacherMarks = () => {
         }
     ];
 
-    // Filter classes based on selected semester
     const filteredClasses = selectedSemester === 'All' 
         ? myClasses 
         : myClasses.filter(cls => cls.semester.toString() === selectedSemester);
 
-    // Filter ledger based on semester AND subject
     const filteredLedger = pastAssessments.filter(item => {
         const matchesSemester = ledgerSemester === 'All' || item.semester?.toString() === ledgerSemester;
         const matchesSubject = ledgerFilter === 'All' || item.subject.includes(ledgerFilter);
@@ -337,9 +309,6 @@ const TeacherMarks = () => {
                 </div>
             </header>
 
-            {/* =========================================
-                VIEW 1: ENTRY MODE
-            ========================================= */}
             {viewMode === 'entry' && (
                 <div className="animate-in fade-in duration-300">
                     <Card className="mb-8">
@@ -349,7 +318,6 @@ const TeacherMarks = () => {
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            {/* Semester Dropdown */}
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Semester</label>
                                 <select 
@@ -363,8 +331,6 @@ const TeacherMarks = () => {
                                     ))}
                                 </select>
                             </div>
-
-                            {/* Dynamic Subject Dropdown */}
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Target Batch / Subject</label>
                                 <select 
@@ -379,7 +345,6 @@ const TeacherMarks = () => {
                                 </select>
                             </div>
                             
-                            {/* Filtered Assessment Types */}
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Assessment Type</label>
                                 <select 
@@ -393,8 +358,6 @@ const TeacherMarks = () => {
                                     <option value="End Sem">End Semester Exam</option>
                                 </select>
                             </div>
-
-                            {/* Locked Max Score Field */}
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Max Score</label>
                                 <input 
@@ -405,7 +368,6 @@ const TeacherMarks = () => {
                                 />
                             </div>
                         </div>
-
                         <div className="mt-6 pt-6 border-t border-slate-100">
                             <button 
                                 onClick={handleOpenSheet} 
@@ -427,7 +389,6 @@ const TeacherMarks = () => {
                                     {assessmentType} (Max: {maxScore})
                                 </span>
                             </div>
-
                             <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
                                 <Table columns={rosterColumns} data={roster} pageSize={100} />
                             </div>
@@ -441,9 +402,6 @@ const TeacherMarks = () => {
                 </div>
             )}
 
-            {/* =========================================
-                VIEW 2: GRADEBOOK LEDGER (HISTORY)
-            ========================================= */}
             {viewMode === 'ledger' && (
                 <div className="animate-in fade-in duration-300">
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -462,7 +420,6 @@ const TeacherMarks = () => {
                                     ))}
                                 </select>
                             </div>
-
                             <div className="flex items-center gap-3 w-full sm:w-auto">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subject:</label>
                                 <select 
@@ -487,7 +444,6 @@ const TeacherMarks = () => {
                 </div>
             )}
 
-            {/* Modal for Viewing Past Submitted Grades */}
             {isViewModalOpen && (
                 <Modal 
                     isOpen={isViewModalOpen} 
@@ -500,7 +456,6 @@ const TeacherMarks = () => {
                     </div>
                 </Modal>
             )}
-
         </div>
     );
 };

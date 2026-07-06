@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 
 const StudentSubject = () => {
@@ -13,13 +13,13 @@ const StudentSubject = () => {
             const fetchSubjects = async () => {
                 try {
                     setLoading(true);
-                    setSubjectsData(null); 
+                    setSubjectsData(null);
                     
-                    const response = await axios.get(`http://localhost:5000/api/student/${user.id}/subjects?semester=${selectedSemester}`);
+                    const response = await api.get(`/student/${user.id}/subjects?semester=${selectedSemester}`);
                     setSubjectsData(response.data);
-                    setLoading(false);
                 } catch (err) {
                     console.error("Error fetching subjects:", err);
+                } finally {
                     setLoading(false);
                 }
             };
@@ -85,7 +85,6 @@ const StudentSubject = () => {
                                         <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-black uppercase tracking-wider">
                                             {subject.code}
                                         </span>
-                                        {/* Removed the 'type' badge as it's not in your DB */}
                                     </div>
                                     <h3 className="text-xl font-bold text-slate-900 leading-tight mb-2 group-hover:text-blue-600 transition-colors">
                                         {subject.name}
@@ -95,7 +94,7 @@ const StudentSubject = () => {
                                     </p>
                                 </div>
                             </div>
-
+                            
                             <div className="p-6 grow bg-slate-50/30">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-black text-sm shrink-0">
@@ -107,12 +106,6 @@ const StudentSubject = () => {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* <div className="p-4 border-t border-slate-100 bg-white">
-                                <button className="w-full py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all">
-                                    View Syllabus
-                                </button>
-                            </div> */}
                         </div>
                     ))}
                 </div>

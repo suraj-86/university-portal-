@@ -2,11 +2,17 @@ import React from 'react';
 import { FileText, Download } from 'lucide-react';
 
 const AttachmentBadge = ({ fileUrl, fileName, color = "indigo" }) => {
+    
     const handleDownload = (e) => {
         e.stopPropagation();
-        if (!fileUrl) return alert("No attachment path found.");
-        // Simulated download trigger
-        window.open(fileUrl, '_blank');
+        if (!fileUrl && !fileName) return alert("No attachment path found.");
+        
+        const path = fileUrl || fileName;
+        const fullUrl = path.startsWith('/') 
+            ? `http://localhost:5000${path}` 
+            : `http://localhost:5000/uploads/${path}`;
+            
+        window.open(fullUrl, '_blank');
     };
 
     const colorClasses = {
@@ -21,7 +27,7 @@ const AttachmentBadge = ({ fileUrl, fileName, color = "indigo" }) => {
             className={`flex items-center gap-2 text-[10px] font-bold ${colorClasses[color]} w-fit px-3 py-1.5 rounded-lg border transition-all cursor-pointer group`}
         >
             <FileText size={12} className="group-hover:scale-110 transition-transform" />
-            <span>{fileName}</span>
+            <span>{fileName ? fileName.replace('/uploads/', '') : fileUrl.replace('/uploads/', '')}</span>
             <Download size={10} className="ml-1 opacity-50" />
         </button>
     );

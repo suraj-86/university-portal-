@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, KeyRound, Search } from 'lucide-react'; // Added Search icon
+import { Plus, Edit2, Trash2, KeyRound, Search } from 'lucide-react';
+import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 
 const AdminTeachers = () => {
     const [teachers, setTeachers] = useState([]);
-    const [departments, setDepartments] = useState([]); // To store unique departments from courses
-    const [searchTerm, setSearchTerm] = useState(''); // Added search state
+    const [departments, setDepartments] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTeacherId, setEditingTeacherId] = useState(null);
     const [formData, setFormData] = useState({
@@ -15,19 +16,15 @@ const AdminTeachers = () => {
         qualification: '', designation: 'Assistant Professor', password: ''
     });
 
-    // 1. FETCH DATA (Teachers and unique Departments from Courses)
     const fetchData = async () => {
         try {
             const [teacherRes, courseRes] = await Promise.all([
-                fetch('http://localhost:5000/api/teachers'),
-                fetch('http://localhost:5000/api/courses')
+                api.get('/teachers'),
+                api.get('/courses')
             ]);
-            const teacherData = await teacherRes.json();
-            const courseData = await courseRes.json();
-
-            setTeachers(teacherData);
-            // Get unique departments from the courses table
-            const uniqueDepts = [...new Set(courseData.map(c => c.department))];
+            
+            setTeachers(teacherRes.data);
+            const uniqueDepts = [...new Set(courseRes.data.map(c => c.department))];
             setDepartments(uniqueDepts);
         } catch (error) {
             console.error("Fetch error:", error);
@@ -36,53 +33,44 @@ const AdminTeachers = () => {
 
     useEffect(() => { fetchData(); }, []);
 
-    // --- NEW SEARCH FILTER LOGIC ---
-    // Filters teachers based on full_name or employee_id
     const filteredTeachers = teachers.filter(t => 
         t.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         t.employee_id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // 2. OPEN EDIT MODAL (Fixed: Populates form and ID)
     const openEditModal = (teacher) => {
         setEditingTeacherId(teacher.teacher_id);
-        setFormData({ ...teacher, password: '' }); // Password blank for security during edit
+        setFormData({ ...teacher, password: '' });
         setIsModalOpen(true);
     };
 
-    // 3. HANDLE SUBMIT (Fixed: Handles both POST and PUT)
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        const url = editingTeacherId 
-            ? `http://localhost:5000/api/teachers/${editingTeacherId}` 
-            : 'http://localhost:5000/api/teachers';
-        const method = editingTeacherId ? 'PUT' : 'POST';
-
         try {
-            const response = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            const result = await response.json();
-
-            if (result.success) {
-                setIsModalOpen(false);
-                fetchData();
-                setEditingTeacherId(null);
-                setFormData({ full_name: '', email: '', employee_id: '', department: '', qualification: '', designation: 'Assistant Professor', password: '' });
+            if (editingTeacherId) {
+                await api.put(`/teachers/${editingTeacherId}`, formData);
             } else {
-                alert("Error: " + result.error);
+                await api.post('/teachers', formData);
             }
+            setIsModalOpen(false);
+            fetchData();
+            setEditingTeacherId(null);
+            setFormData({ full_name: '', email: '', employee_id: '', department: '', qualification: '', designation: 'Assistant Professor', password: '' });
         } catch (error) {
+            const errorMsg = error.response?.data?.error || "Failed to submit form";
+            alert("Error: " + errorMsg);
             console.error("Submit error:", error);
         }
     };
 
     const handleDelete = async (id) => {
         if (window.confirm("Remove this faculty member?")) {
-            await fetch(`http://localhost:5000/api/teachers/${id}`, { method: 'DELETE' });
-            fetchData();
+            try {
+                await api.delete(`/teachers/${id}`);
+                fetchData();
+            } catch (error) {
+                console.error("Delete error:", error);
+            }
         }
     };
 
@@ -123,8 +111,7 @@ const AdminTeachers = () => {
                     <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Faculty Management</h2>
                     <p className="text-slate-500 mt-1">Manage teaching staff and department assignments.</p>
                 </div>
-
-                {/* --- SEARCH BAR UI --- */}
+                
                 <div className="relative w-full md:w-80">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input 
@@ -135,7 +122,6 @@ const AdminTeachers = () => {
                         className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-indigo-200 outline-none shadow-sm transition-all"
                     />
                 </div>
-
                 <button 
                     onClick={() => { setEditingTeacherId(null); setFormData({full_name:'', email:'', employee_id:'', department:'', qualification:'', designation:'Assistant Professor', password:''}); setIsModalOpen(true); }}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
@@ -144,7 +130,6 @@ const AdminTeachers = () => {
                 </button>
             </header>
 
-            {/* Pass filteredTeachers to the Table */}
             <Table columns={columns} data={filteredTeachers} pageSize={5} />
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingTeacherId ? 'Edit Faculty Record' : 'Register New Faculty'}>
@@ -154,7 +139,6 @@ const AdminTeachers = () => {
                         <Input label="Employee ID" value={formData.employee_id} onChange={(e) => setFormData({...formData, employee_id: e.target.value})} required />
                         <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
                         
-                        {/* DYNAMIC DEPARTMENT SELECT */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Department</label>
                             <select 
