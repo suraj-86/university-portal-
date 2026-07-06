@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, Users, User } from 'lucide-react';
 import api from '../../services/api';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
+import toast from 'react-hot-toast';
 
 const AdminFees = () => {
     const [feeRecords, setFeeRecords] = useState([]);
@@ -117,7 +118,7 @@ const AdminFees = () => {
             fetchAdminFees();
         } catch (error) {
             const errorMsg = error.response?.data?.error || "Network error while saving the fee.";
-            alert("Error: " + errorMsg);
+            toast.error("Error: " + errorMsg);
             console.error("Submit error:", error);
         }
     };

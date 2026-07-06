@@ -4,6 +4,7 @@ import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
+import toast from 'react-hot-toast';
 
 const AdminSubjects = () => {
     const [subjects, setSubjects] = useState([]);
@@ -51,7 +52,7 @@ const AdminSubjects = () => {
             setEditingSubId(null);
         } catch (error) {
             const errorMsg = error.response?.data?.error || "Failed to update subject";
-            alert("Update failed: " + errorMsg);
+            toast.error("Update failed: " + errorMsg);
             console.error("Network error:", error);
         }
     };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, User, Users, Camera } from 'lucide-react';
 import api from '../../services/api';
 import Modal from '../../components/Modal'; 
+import toast from 'react-hot-toast';
 
 const StudentProfile = () => {
     const [studentData, setStudentData] = useState(null);
@@ -51,9 +52,9 @@ const StudentProfile = () => {
                 }
             });
             setIsModalOpen(false);
-            alert("Database records updated successfully!");
+            toast.success("Database records updated successfully!");
         } catch (error) {
-            alert("Failed to update: " + (error.response?.data?.error || "Unknown error"));
+            toast.error("Failed to update: " + (error.response?.data?.error || "Unknown error"));
         }
     };
 

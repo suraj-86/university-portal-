@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import AttachmentBadge from '../../components/attachment';
 import useAuth from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 const AdminNotices = () => {
     const { user } = useAuth();
@@ -37,7 +38,7 @@ const AdminNotices = () => {
         
         const adminId = user?.id; 
         if (!adminId) {
-            alert("Session expired. Please log in again.");
+            toast.error("Session expired. Please log in again.");
             return;
         }
 
@@ -68,7 +69,7 @@ const AdminNotices = () => {
             fetchNotices(); 
         } catch (error) {
             const errorMsg = error.response?.data?.error || "Failed to save notice";
-            alert("Error: " + errorMsg);
+            toast.error("Error: " + errorMsg);
             console.error("Submission failed:", error);
         }
     };

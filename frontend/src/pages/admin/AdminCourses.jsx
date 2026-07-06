@@ -4,6 +4,7 @@ import api from '../../services/api'; // <-- 1. Import your new service
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
+import toast from 'react-hot-toast';
 
 const AdminCourses = () => {
     const [courses, setCourses] = useState([]); 
@@ -56,7 +57,7 @@ const AdminCourses = () => {
         } catch (error) {
             // Axios puts server error messages in error.response.data
             const errorMsg = error.response?.data?.error || "Failed to save course";
-            alert("Error saving course: " + errorMsg);
+            toast.error("Error saving course: " + errorMsg);
             console.error("Submit error:", error);
         }
     };

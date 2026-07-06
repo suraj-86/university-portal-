@@ -6,6 +6,7 @@ import Table from '../../components/Table';
 import Input from '../../components/FormInput';
 import Card from '../../components/Card';
 import useAuth from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 const TeacherAttendance = () => {
     const { user } = useAuth();
@@ -50,27 +51,27 @@ const TeacherAttendance = () => {
     }, [viewMode, user]);
 
     const handleOpenSheet = async () => {
-        if (!selectedSession) return alert("Please select a session first.");
+        if (!selectedSession) return toast.error("Please select a session first.");
         try {
             const response = await api.get(`/subjects/${selectedSession}/students`);
             if (!Array.isArray(response.data)) {
-                alert("Data error: Backend did not return a valid student list.");
+                toast.error("Data error: did not return a valid student list.");
                 return;
             }
             if(response.data.length === 0) {
-                alert("No students found enrolled in this subject's course.");
+                toast.error("No students found enrolled in this subject's course.");
                 return;
             }
             setRoster(response.data);
             setIsSheetOpen(true);
         } catch (error) {
-            alert(`Backend Error: Could not load students. ${error.response?.data?.error || ""}`);
+            toast.error(`Could not load students. ${error.response?.data?.error || ""}`);
         }
     };
 
     const handleSave = async () => {
         if (!isSheetOpen || roster.length === 0) {
-            alert("Please open a sheet and mark attendance first!");
+            toast.error("Please open a sheet and mark attendance first!");
             return;
         }
         try {
@@ -80,11 +81,11 @@ const TeacherAttendance = () => {
                 students: roster,
                 marked_by: user.id
             });
-            alert(`Success! Attendance for ${scheduleDate} has been saved.`);
+            toast.success(`Success! Attendance for ${scheduleDate} has been saved.`);
             setIsSheetOpen(false);
             setRoster([]);
         } catch (error) {
-            alert("Failed to save attendance.");
+            toast.error("Failed to save attendance.");
         }
     };
 
@@ -103,7 +104,7 @@ const TeacherAttendance = () => {
             setSelectedHistoryRecord(record);
             setViewMode('history_detail');
         } catch (err) {
-            alert("Failed to load the specific attendance sheet.");
+            toast.error("Failed to load the specific attendance sheet.");
         }
     };
 

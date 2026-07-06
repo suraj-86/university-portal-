@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CreditCard, Download, CheckCircle2, Clock, Landmark, FileText, ArrowRight, Banknote, ShieldCheck, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 const StudentFees = () => {
     const { user } = useAuth();
@@ -75,11 +76,11 @@ const StudentFees = () => {
             await new Promise(resolve => setTimeout(resolve, 1500));
             await api.post('/payments', paymentPayload);
             
-            alert(`Successfully paid ₹${paymentAmount} via ${paymentMethod}!`);
+            toast.success(`Successfully paid ₹${paymentAmount} via ${paymentMethod}!`);
             closeModal();
             fetchData(); 
         } catch (error) {
-            alert(error.response?.data?.error || "Network error processing payment.");
+            toast.error(error.response?.data?.error || "Network error processing payment.");
             setPaymentStep(2); 
         }
     };

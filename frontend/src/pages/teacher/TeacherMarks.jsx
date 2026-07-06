@@ -5,6 +5,7 @@ import Table from '../../components/Table';
 import Card from '../../components/Card';
 import Modal from '../../components/Modal';
 import useAuth from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 const TeacherMarks = () => {
     const { user } = useAuth();
@@ -66,13 +67,13 @@ const TeacherMarks = () => {
     };
 
     const handleOpenSheet = async () => {
-        if (!selectedClass) return alert("Please select a Target Batch / Subject first!");
+        if (!selectedClass) return toast.error("Please select a Target Batch / Subject first!");
         
         try {
             const rosterRes = await api.get(`/subjects/${selectedClass}/students`);
             const rosterData = rosterRes.data;
             
-            if(rosterData.length === 0) return alert("No students enrolled in this course yet!");
+            if(rosterData.length === 0) return toast.error("No students enrolled in this course yet!");
 
             const marksRes = await api.get(`/marks/details?subject_id=${selectedClass}&exam_type=${assessmentType}`);
             const marksData = marksRes.data;
@@ -97,7 +98,7 @@ const TeacherMarks = () => {
             setRoster(mergedRoster);
             setIsSheetOpen(true);
         } catch (error) {
-            alert("Network Error while opening sheet.");
+            toast.error("Network Error while opening sheet.");
         }
     };
 
@@ -129,13 +130,13 @@ const TeacherMarks = () => {
                 marks: roster,
                 uploaded_by_user_id: user.id
             });
-            alert("Success! Marks have been securely saved to the database.");
+            toast.success("Success! Marks have been securely saved to the database.");
             setIsSheetOpen(false);
             setRoster([]);
             fetchLedger(); 
             setViewMode('ledger'); 
         } catch (error) {
-            alert("Failed to publish marks to database.");
+            toast.error("Failed to publish marks to database.");
         }
     };
 
@@ -146,7 +147,7 @@ const TeacherMarks = () => {
             setSelectedLedgerRecord(record);
             setIsViewModalOpen(true);
         } catch (error) {
-            alert("Failed to load records.");
+            toast.error("Failed to load records.");
         }
     };
 

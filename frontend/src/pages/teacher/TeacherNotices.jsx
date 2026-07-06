@@ -5,6 +5,7 @@ import Card from '../../components/Card';
 import Modal from '../../components/Modal';
 import FormInput from '../../components/FormInput';
 import useAuth from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 const TeacherNotices = () => {
     const { user } = useAuth();
@@ -43,7 +44,7 @@ const TeacherNotices = () => {
 
     const handleSendNotice = async (e) => {
         e.preventDefault();
-        if (!targetClass) return alert("Please select a target class/batch!");
+        if (!targetClass) return toast.error("Please select a target class/batch!");
         
         const submitData = new FormData();
         submitData.append('title', noticeTitle);
@@ -59,10 +60,10 @@ const TeacherNotices = () => {
         try {
             await api.post('/notices', submitData);
             setNoticeTitle(''); setNoticeContent(''); setTargetClass(''); setAttachment(null);
-            alert("Notification sent successfully!");
+            toast.success("Notification sent successfully!");
             fetchData();
         } catch (error) {
-            alert("Broadcast failed.");
+            toast.error("Broadcast failed.");
             console.error(error);
         }
     };
@@ -91,7 +92,7 @@ const TeacherNotices = () => {
         try {
             await api.put(`/notices/${editingNotice.id}`, submitData);
             setIsModalOpen(false);
-            alert("Notice updated!");
+            toast.success("Notice updated!");
             fetchData();
         } catch (error) {
             console.error("Update error:", error);

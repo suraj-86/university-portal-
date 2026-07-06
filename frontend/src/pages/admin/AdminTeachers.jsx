@@ -4,6 +4,7 @@ import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
+import toast from 'react-hot-toast';
 
 const AdminTeachers = () => {
     const [teachers, setTeachers] = useState([]);
@@ -58,7 +59,7 @@ const AdminTeachers = () => {
             setFormData({ full_name: '', email: '', employee_id: '', department: '', qualification: '', designation: 'Assistant Professor', password: '' });
         } catch (error) {
             const errorMsg = error.response?.data?.error || "Failed to submit form";
-            alert("Error: " + errorMsg);
+            toast.error("Error: " + errorMsg);
             console.error("Submit error:", error);
         }
     };

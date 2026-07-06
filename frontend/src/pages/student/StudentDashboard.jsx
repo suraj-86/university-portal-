@@ -62,9 +62,9 @@ const StudentDashboard = () => {
                 <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 p-8 lg:col-span-2 flex flex-col">
                     <div className="flex justify-between items-start mb-8">
                         <div>
-                            <h3 className="text-xl font-black text-slate-900">Today's Schedule</h3>
+                            <h3 className="text-xl font-black text-slate-900">Upcoming Classes</h3>
                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">
-                                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                Next scheduled sessions
                             </p>
                         </div>
                         <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-indigo-100">
@@ -76,16 +76,18 @@ const StudentDashboard = () => {
                             upcoming_classes.map((cls, index) => (
                                 <div key={cls.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors gap-4 sm:gap-0 group">
                                     <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border
+                                        <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shrink-0 shadow-sm border
                                             ${index === 0 ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white border-slate-200 text-slate-400 group-hover:text-indigo-500 transition-colors'}`}>
-                                            <Clock size={20} />
+                                            <Clock size={18} />
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2 mb-0.5">
                                                 <h4 className="font-black text-slate-900">{cls.subject}</h4>
                                                 {index === 0 && <span className="flex h-2 w-2 relative"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>}
                                             </div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{cls.time} • {cls.faculty}</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                {cls.class_date_label ? `${cls.class_date_label} • ` : ''}{cls.time} • {cls.faculty}
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 text-slate-600 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
@@ -96,7 +98,7 @@ const StudentDashboard = () => {
                             ))
                         ) : (
                             <div className="text-center p-6 text-slate-500 font-bold bg-slate-50 rounded-2xl border border-slate-200">
-                                No classes scheduled for today. Enjoy your day off!
+                                No upcoming classes scheduled.
                             </div>
                         )}
                     </div>

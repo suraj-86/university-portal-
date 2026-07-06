@@ -3,6 +3,7 @@ import { Award, FileText, Download, TrendingUp, CheckCircle, GraduationCap } fro
 import api from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import Table from '../../components/Table';
+import toast from 'react-hot-toast';
 
 const StudentResults = () => {
     const [allResults, setAllResults] = useState(null);
@@ -151,7 +152,7 @@ const StudentResults = () => {
                     ) : null}
                 </div>
                 <button 
-                    onClick={() => alert(`Downloading Marksheet for Sem ${selectedSemester}...`)}
+                    onClick={() => toast(`Downloading Marksheet for Sem ${selectedSemester}...`)}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-8 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 text-sm w-full xl:w-auto"
                 >
                     <Download size={18} /> Download Semester {selectedSemester} PDF

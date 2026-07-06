@@ -5,6 +5,39 @@ import StatsWidget from '../../components/StatsWidget';
 import Modal from '../../components/Modal';
 import FormInput from '../../components/FormInput';
 import useAuth from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
+
+// --- AM/PM TIME HELPERS ---
+const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12
+const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')); // 00,05,...55
+
+// Converts 12-hour parts (hour, minute, AM/PM) into a 24-hour "HH:MM" string for the backend
+const to24Hour = (hour12, minute, period) => {
+    let h = parseInt(hour12, 10);
+    if (period === 'AM') {
+        if (h === 12) h = 0;
+    } else {
+        if (h !== 12) h += 12;
+    }
+    return `${String(h).padStart(2, '0')}:${minute}`;
+};
+
+// Converts a 24-hour "HH:MM" string into 12-hour parts (useful if pre-filling an edit form later)
+const to12Hour = (time24) => {
+    if (!time24) return { hour: '9', minute: '00', period: 'AM' };
+    let [h, m] = time24.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    let hour12 = h % 12;
+    if (hour12 === 0) hour12 = 12;
+    return { hour: String(hour12), minute: String(m).padStart(2, '0'), period };
+};
+
+const DEFAULT_SCHEDULE_FORM = {
+    date: '',
+    startHour: '9', startMinute: '00', startPeriod: 'AM',
+    endHour: '10', endMinute: '00', endPeriod: 'AM',
+    room: ''
+};
 
 const TeacherSubjects = () => {
     const { user } = useAuth();
@@ -12,7 +45,7 @@ const TeacherSubjects = () => {
     const [assignedSubjects, setAssignedSubjects] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedSubject, setSelectedSubject] = useState(null);
-    const [scheduleForm, setScheduleForm] = useState({ date: '', startTime: '', endTime: '', room: '' });
+    const [scheduleForm, setScheduleForm] = useState(DEFAULT_SCHEDULE_FORM);
 
     useEffect(() => {
         const fetchSubjects = async () => {
@@ -49,33 +82,36 @@ const TeacherSubjects = () => {
     const handleOpenModal = (subject) => {
         setSelectedSubject(subject);
         const today = new Date().toLocaleDateString('en-CA');          
-        setScheduleForm({ date: today, startTime: '', endTime: '', room: '' });
+        setScheduleForm({ ...DEFAULT_SCHEDULE_FORM, date: today });
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setSelectedSubject(null);
-        setScheduleForm({ date: '', startTime: '', endTime: '', room: '' });
+        setScheduleForm(DEFAULT_SCHEDULE_FORM);
     };
 
     const handleScheduleSubmit = async (e) => {
         e.preventDefault();
+
+        const startTime24 = to24Hour(scheduleForm.startHour, scheduleForm.startMinute, scheduleForm.startPeriod);
+        const endTime24 = to24Hour(scheduleForm.endHour, scheduleForm.endMinute, scheduleForm.endPeriod);
         
         try {
             await api.post('/teacher/schedule-class', {
                 userId: user.id, 
                 subjectId: selectedSubject.id,
                 date: scheduleForm.date,
-                startTime: scheduleForm.startTime,
-                endTime: scheduleForm.endTime,
+                startTime: startTime24,
+                endTime: endTime24,
                 room: scheduleForm.room
             });
-            alert(`Successfully scheduled ${selectedSubject.name}!`);
+            toast.success(`Successfully scheduled ${selectedSubject.name}!`);
             handleCloseModal(); 
         } catch (error) {
             const errorMsg = error.response?.data?.error || "Network error occurred.";
-            alert(`Error: ${errorMsg}`);
+            toast.error(`Error: ${errorMsg}`);
             console.error("Scheduling error:", error);
         }
     };
@@ -156,10 +192,65 @@ const TeacherSubjects = () => {
                 <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Schedule Class" subtitle={selectedSubject?.name}>
                     <form onSubmit={handleScheduleSubmit} className="flex flex-col gap-5">
                         <FormInput label="Date" type="date" required value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm, date: e.target.value})} />
+
                         <div className="grid grid-cols-2 gap-4">
-                            <FormInput label="Start Time" type="time" required value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm, startTime: e.target.value})} />
-                            <FormInput label="End Time" type="time" required value={scheduleForm.endTime} onChange={(e) => setScheduleForm({...scheduleForm, endTime: e.target.value})} />
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Start Time</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={scheduleForm.startHour}
+                                        onChange={(e) => setScheduleForm({...scheduleForm, startHour: e.target.value})}
+                                        className="w-1/3 rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    >
+                                        {HOURS_12.map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                    <select
+                                        value={scheduleForm.startMinute}
+                                        onChange={(e) => setScheduleForm({...scheduleForm, startMinute: e.target.value})}
+                                        className="w-1/3 rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    >
+                                        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    <select
+                                        value={scheduleForm.startPeriod}
+                                        onChange={(e) => setScheduleForm({...scheduleForm, startPeriod: e.target.value})}
+                                        className="w-1/3 rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    >
+                                        <option value="AM">AM</option>
+                                        <option value="PM">PM</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">End Time</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={scheduleForm.endHour}
+                                        onChange={(e) => setScheduleForm({...scheduleForm, endHour: e.target.value})}
+                                        className="w-1/3 rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    >
+                                        {HOURS_12.map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                    <select
+                                        value={scheduleForm.endMinute}
+                                        onChange={(e) => setScheduleForm({...scheduleForm, endMinute: e.target.value})}
+                                        className="w-1/3 rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    >
+                                        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    <select
+                                        value={scheduleForm.endPeriod}
+                                        onChange={(e) => setScheduleForm({...scheduleForm, endPeriod: e.target.value})}
+                                        className="w-1/3 rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    >
+                                        <option value="AM">AM</option>
+                                        <option value="PM">PM</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
+
                         <FormInput label="Room / Venue" type="text" required placeholder="e.g. Lab 4" value={scheduleForm.room} onChange={(e) => setScheduleForm({...scheduleForm, room: e.target.value})} />
                         <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 active:scale-95 flex items-center justify-center gap-2">
                             <CalendarPlus size={18} /> Confirm Schedule

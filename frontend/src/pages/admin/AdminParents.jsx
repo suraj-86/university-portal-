@@ -4,6 +4,7 @@ import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
+import toast from 'react-hot-toast';
 
 const AdminParents = () => {
     const [parents, setParents] = useState([]);
@@ -49,7 +50,7 @@ const AdminParents = () => {
             fetchData();
         } catch (error) {
             const errorMsg = error.response?.data?.error || "Submission failed";
-            alert("Error: " + errorMsg);
+            toast.error("Error: " + errorMsg);
             console.error("Submit failed:", error);
         }
     };
