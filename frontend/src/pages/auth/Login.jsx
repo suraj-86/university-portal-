@@ -23,8 +23,7 @@ const Login = () => {
             
             const { user } = response.data;
             
-            login('session-token-active', user);
-
+        login(user);
             if (user.role === 'admin') {
                 navigate('/admin-dashboard');
             } else if (user.role === 'teacher') {

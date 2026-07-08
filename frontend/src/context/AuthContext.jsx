@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import api from '../services/api'; // <-- Make sure to import your api instance
 
 export const AuthContext = createContext(null);
 
@@ -8,36 +9,38 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const initializeAuth = () => {
-            // Check if user data exists in local storage
             const savedUser = localStorage.getItem('user');
-
             if (savedUser) {
-                // Parse the string back into a JavaScript object
                 setUser(JSON.parse(savedUser));
             }
             setLoading(false);
         };
-
         initializeAuth();
     }, []);
 
-    // Global Login Function
-    const login = (token, userObj) => {
-    // userObj should contain the 'id' from the SELECT query in server.js[cite: 2]
-    const userData = { ...userObj, token }; 
-    localStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData);
-};
+    // Global Login Function (Now only takes the user object)
+    const login = (userObj) => {
+        localStorage.setItem('user', JSON.stringify(userObj)); // We still save the user details for the UI
+        setUser(userObj);
+    };
 
     // Global Logout Function
-    const logout = () => {
-        localStorage.removeItem('user');
-        setUser(null);
+    const logout = async () => {
+        try {
+            // Call the backend to destroy the secure cookie
+            await api.post('/logout'); 
+        } catch (error) {
+            console.error("Failed to clear cookie on backend", error);
+        } finally {
+            // Clear the UI state regardless
+            localStorage.removeItem('user');
+            setUser(null);
+        }
     };
 
     return (
         <AuthContext.Provider value={{ user, login, logout, loading }}>
-            {!loading && children} 
+            {!loading && children}
         </AuthContext.Provider>
     );
 };

@@ -1,30 +1,41 @@
+require('dotenv').config();
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken'); // Added for JWT authentication[cite: 7]
+const cookieParser = require('cookie-parser'); // Added for secure cookies[cite: 7]
 
 const app = express();
-app.use(cors());
+
+// 1. Update CORS to strictly allow your frontend URL and accept credentials (cookies)[cite: 7]
+app.use(cors({
+    origin: 'http://localhost:5173', // Must match your React app's URL exactly
+    credentials: true // Required to send and receive HTTP-Only cookies
+}));
+
 app.use(express.json());
+app.use(cookieParser()); // Enable cookie parsing[cite: 7]
+
+// 2. Define a secret key for signing tokens (In production, move this to a .env file)
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_college_key_2026'; 
 
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs'); // Node's built-in file system module
+const fs = require('fs');
 
-// Ensure the 'uploads' directory exists
+// Ensure the 'uploads' directory exists[cite: 7]
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
-// Set up Multer storage configuration
+// Set up Multer storage configuration[cite: 7]
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        // Save files in the 'uploads' folder
         cb(null, 'uploads/'); 
     },
     filename: function (req, file, cb) {
-        // Create a unique filename to prevent overwriting: timestamp-originalName
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, uniqueSuffix + '-' + file.originalname);
     }
@@ -32,16 +43,18 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// IMPORTANT: Serve the uploads folder statically so the frontend can download them
+// Serve the uploads folder statically[cite: 7]
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 1. DATABASE CONNECTION
+// ==========================================
+// DATABASE CONNECTION[cite: 7]
+// ==========================================
 const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '', // Your MySQL password
-    database: 'college_ms',
-    port: 3307    // Change to 3307 if your XAMPP uses that port
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD, 
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT    
 });
 
 db.connect((err) => {
@@ -53,12 +66,39 @@ db.connect((err) => {
 });
 
 // ==========================================
-// 2. LOGIN ROUTE (Secured with Bcrypt)
+// SECURITY MIDDLEWARE (RBAC)
 // ==========================================
+const verifyRole = (allowedRoles) => {
+    return (req, res, next) => {
+        const token = req.cookies.token;
+
+        if (!token) {
+            return res.status(401).json({ error: "Access Denied: No session token provided. Please log in." });
+        }
+
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            req.user = decoded; 
+
+            if (!allowedRoles.includes(req.user.role)) {
+                return res.status(403).json({ error: "Forbidden: You do not have permission to perform this action." });
+            }
+
+            next(); 
+        } catch (err) {
+            return res.status(401).json({ error: "Invalid or Expired Session. Please log in again." });
+        }
+    };
+};
+
+// ==========================================
+// AUTHENTICATION ROUTES[cite: 7]
+// ==========================================
+
+// LOGIN ROUTE (Secured with Bcrypt & JWT)
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     
-    // Notice we removed the password check from the SQL query and added u.password to the SELECT
     const sql = `
         SELECT u.id, u.username, u.password, u.role, 
                COALESCE(t.full_name, s.full_name, p.full_name, u.username) AS full_name
@@ -73,12 +113,24 @@ app.post('/api/login', (req, res) => {
         
         if (data.length > 0) {
             const user = data[0];
-            
-            // Compare the plain text password from the frontend with the hashed password in the DB
             const isMatch = await bcrypt.compare(password, user.password);
             
             if (isMatch) {
-                // Remove the hashed password from the object before sending it to the React frontend
+                // Generate JWT
+                const tokenPayload = {
+                    id: user.id,
+                    role: user.role
+                };
+                const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '8h' });
+
+                // Send HTTP-Only Cookie
+                res.cookie('token', token, {
+                    httpOnly: true,      
+                    secure: process.env.NODE_ENV === 'production',       
+                    sameSite: 'strict',  
+                    maxAge: 8 * 60 * 60 * 1000 
+                });
+
                 delete user.password;
                 return res.json({ success: true, user: user });
             } else {
@@ -90,27 +142,35 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// ==========================================
+// LOGOUT ROUTE
+app.post('/api/logout', (req, res) => {
+    res.clearCookie('token', {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production' 
+    });
+    res.json({ success: true, message: "Logged out successfully" });
+});
+
 // CHANGE PASSWORD ROUTE
-// ==========================================
-app.put('/api/users/:id/change-password', async (req, res) => {
+app.put('/api/users/:id/change-password', verifyRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
     const userId = req.params.id;
+    
+    // Security check: Users can only change their own password
+    if (req.user.id !== parseInt(userId) && req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+
     const { currentPassword, newPassword } = req.body;
 
-    // 1. Fetch the user's current hashed password from the database
     db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
         if (err) return res.status(500).json({ error: "Database error" });
         if (results.length === 0) return res.status(404).json({ error: "User not found" });
 
         const user = results[0];
-
-        // 2. Verify the current password provided by the user
         const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: "Incorrect current password" });
-        }
+        if (!isMatch) return res.status(401).json({ error: "Incorrect current password" });
 
-        // 3. Hash the new password and update the database
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
         
         db.query("UPDATE users SET password = ? WHERE id = ?", [hashedNewPassword, userId], (err) => {
@@ -119,11 +179,15 @@ app.put('/api/users/:id/change-password', async (req, res) => {
         });
     });
 });
-// ==========================================
+
 // CHANGE USERNAME ROUTE
-// ==========================================
-app.put('/api/users/:id/change-username', (req, res) => {
+app.put('/api/users/:id/change-username', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
     const userId = req.params.id;
+    
+    if (req.user.id !== parseInt(userId) && req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+
     const { newUsername } = req.body;
 
     if (!newUsername || newUsername.trim() === '') {
@@ -132,22 +196,32 @@ app.put('/api/users/:id/change-username', (req, res) => {
 
     db.query("UPDATE users SET username = ? WHERE id = ?", [newUsername.trim(), userId], (err) => {
         if (err) {
-            // Check if the username is already taken (MySQL Duplicate Entry error)
-            if (err.code === 'ER_DUP_ENTRY') {
-                return res.status(400).json({ error: "That username is already taken!" });
-            }
+            if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "That username is already taken!" });
             return res.status(500).json({ error: "Database error" });
         }
         res.json({ success: true, message: "Username updated successfully! You will use this to log in next time." });
     });
 });
 
+const deleteFile = (filePath) => {
+    // filePath usually looks like "/uploads/1715421234-file.pdf"
+    // We need to resolve it to the full local path
+    const fullPath = path.join(__dirname, filePath);
+    
+    fs.unlink(fullPath, (err) => {
+        if (err) {
+            console.error(`❌ Error deleting file at ${fullPath}:`, err.message);
+        } else {
+            console.log(`✅ File deleted successfully: ${fullPath}`);
+        }
+    });
+};
+
 // ==========================================
-// 3. STUDENT MANAGEMENT ROUTES
+// STUDENT MANAGEMENT ROUTES[cite: 7]
 // ==========================================
 
-// GET all students
-app.get('/api/students', (req, res) => {
+app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
     const sql = `
         SELECT students.*, courses.course_name 
         FROM students 
@@ -159,28 +233,20 @@ app.get('/api/students', (req, res) => {
     });
 });
 
-// POST (Add) student
-app.post('/api/students', async (req, res) => { // <-- Add 'async' here
+app.post('/api/students', verifyRole(['admin']), async (req, res) => { 
     const { name, email, roll, password, semester, course_id } = req.body;
-
-    // Hash the password with a salt round of 10
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction failed to start" });
 
-        // Use the hashedPassword variable here instead of the plain password
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'student')";
         db.query(userSql, [roll, hashedPassword], (err, userResult) => {
             if (err) {
-                return db.rollback(() => {
-                    res.status(500).json({ error: "Username (Roll No) already exists in users table." });
-                });
+                return db.rollback(() => res.status(500).json({ error: "Username (Roll No) already exists in users table." }));
             }
 
             const userId = userResult.insertId;
-
-            // 2. Try to Create the Student Profile
             const studentSql = `
                 INSERT INTO students (user_id, course_id, enrollment_number, full_name, email, semester, admission_date, status) 
                 VALUES (?, ?, ?, ?, ?, ?, CURDATE(), 'Active')
@@ -188,17 +254,11 @@ app.post('/api/students', async (req, res) => { // <-- Add 'async' here
             
             db.query(studentSql, [userId, course_id, roll, name, email, semester || 1], (err, result) => {
                 if (err) {
-                    // IF THIS FAILS (e.g. duplicate email), DELETE THE USER RECORD AUTOMATICALLY
-                    return db.rollback(() => {
-                        res.status(400).json({ error: "Email already exists in students table. Both entries rolled back." });
-                    });
+                    return db.rollback(() => res.status(400).json({ error: "Email already exists in students table. Both entries rolled back." }));
                 }
 
-                // If everything is perfect, save the changes permanently
                 db.commit((err) => {
-                    if (err) {
-                        return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
-                    }
+                    if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
                     res.json({ success: true });
                 });
             });
@@ -206,13 +266,8 @@ app.post('/api/students', async (req, res) => { // <-- Add 'async' here
     });
 });
 
-
-// PUT (Update) student
-app.put('/api/students/:id', (req, res) => {
-    // Add course_id to destructured req.body
+app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
     const { name, email, roll, semester, course_id } = req.body; 
-    
-    // Add course_id=? to the SQL query
     const sql = "UPDATE students SET full_name=?, email=?, enrollment_number=?, semester=?, course_id=? WHERE student_id=?";
     
     db.query(sql, [name, email, roll, semester, course_id, req.params.id], (err, result) => {
@@ -221,35 +276,24 @@ app.put('/api/students/:id', (req, res) => {
     });
 });
 
-// DELETE student
-app.delete('/api/students/:id', (req, res) => {
+app.delete('/api/students/:id', verifyRole(['admin']), (req, res) => {
     const userIdToDelete = req.params.id;
     
-    // 1. Delete from the students table first (using user_id)
     db.query('DELETE FROM students WHERE user_id = ?', [userIdToDelete], (err, studentResult) => {
-        if (err) {
-            console.error("Error deleting from students:", err);
-            return res.status(500).json({ error: "Failed to delete student profile" });
-        }
+        if (err) return res.status(500).json({ error: "Failed to delete student profile" });
         
-        // 2. Then delete from the main users table (using id)
         db.query('DELETE FROM users WHERE id = ?', [userIdToDelete], (err2, userResult) => {
-            if (err2) {
-                console.error("Error deleting from users:", err2);
-                return res.status(500).json({ error: "Failed to delete user login" });
-            }
-            
+            if (err2) return res.status(500).json({ error: "Failed to delete user login" });
             return res.json({ success: true, message: "Student completely removed!" });
         });
     });
 });
 
 // ==========================================
-// 4. TEACHER MANAGEMENT ROUTES
+// TEACHER MANAGEMENT ROUTES[cite: 7]
 // ==========================================
 
-// GET all teachers
-app.get('/api/teachers', (req, res) => {
+app.get('/api/teachers', verifyRole(['admin']), (req, res) => {
     const sql = "SELECT * FROM teachers";
     db.query(sql, (err, data) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -257,10 +301,8 @@ app.get('/api/teachers', (req, res) => {
     });
 });
 
-// POST (Add) teacher
-app.post('/api/teachers', async (req, res) => { // <-- Add 'async' here
+app.post('/api/teachers', verifyRole(['admin']), async (req, res) => { 
     const { full_name, email, employee_id, department, qualification, designation, password } = req.body;
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
@@ -268,29 +310,17 @@ app.post('/api/teachers', async (req, res) => { // <-- Add 'async' here
 
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'teacher')";
         db.query(userSql, [employee_id, hashedPassword], (err, userResult) => {
-            if (err) {
-                return db.rollback(() => {
-                    res.status(400).json({ error: "Employee ID (Username) already exists." });
-                });
-            }
+            if (err) return db.rollback(() => res.status(400).json({ error: "Employee ID (Username) already exists." }));
 
             const userId = userResult.insertId;
-
-            // 2. Create the Teacher Profile
             const teacherSql = `
                 INSERT INTO teachers (user_id, employee_id, full_name, email, department, qualification, designation, joining_date) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE())
             `;
             
             db.query(teacherSql, [userId, employee_id, full_name, email, department, qualification, designation], (err, result) => {
-                if (err) {
-                    // IF EMAIL IS DUPLICATE: Undo the User creation
-                    return db.rollback(() => {
-                        res.status(400).json({ error: "Email already exists in teacher records. Transaction rolled back." });
-                    });
-                }
+                if (err) return db.rollback(() => res.status(400).json({ error: "Email already exists in teacher records. Transaction rolled back." }));
 
-                // If both are successful, commit the changes permanently
                 db.commit((err) => {
                     if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
                     res.json({ success: true, message: "Faculty registered successfully" });
@@ -300,7 +330,7 @@ app.post('/api/teachers', async (req, res) => { // <-- Add 'async' here
     });
 });
 
-app.put('/api/teachers/:id', (req, res) => {
+app.put('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
     const { full_name, email, employee_id, department, qualification, designation } = req.body;
     const sql = "UPDATE teachers SET full_name=?, email=?, employee_id=?, department=?, qualification=?, designation=? WHERE teacher_id=?";
     db.query(sql, [full_name, email, employee_id, department, qualification, designation, req.params.id], (err, result) => {
@@ -309,8 +339,7 @@ app.put('/api/teachers/:id', (req, res) => {
     });
 });
 
-// DELETE teacher
-app.delete('/api/teachers/:id', (req, res) => {
+app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
     const sql = "DELETE FROM teachers WHERE teacher_id = ?";
     db.query(sql, [req.params.id], (err, result) => {
         if (err) return res.status(500).json(err);
@@ -319,11 +348,10 @@ app.delete('/api/teachers/:id', (req, res) => {
 });
 
 // ==========================================
-// 5. COURSE MANAGEMENT ROUTES
+// COURSE MANAGEMENT ROUTES[cite: 7]
 // ==========================================
 
-// GET all courses
-app.get('/api/courses', (req, res) => {
+app.get('/api/courses', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
     const sql = "SELECT * FROM courses";
     db.query(sql, (err, data) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -331,8 +359,7 @@ app.get('/api/courses', (req, res) => {
     });
 });
 
-// POST (Add) new course
-app.post('/api/courses', (req, res) => {
+app.post('/api/courses', verifyRole(['admin']), (req, res) => {
     const { course_code, course_name, department, duration_years, total_semesters } = req.body;
     const sql = "INSERT INTO courses (course_code, course_name, department, duration_years, total_semesters) VALUES (?, ?, ?, ?, ?)";
     
@@ -342,8 +369,7 @@ app.post('/api/courses', (req, res) => {
     });
 });
 
-// PUT (Update) course
-app.put('/api/courses/:id', (req, res) => {
+app.put('/api/courses/:id', verifyRole(['admin']), (req, res) => {
     const { course_code, course_name, department, duration_years, total_semesters } = req.body;
     const sql = "UPDATE courses SET course_code=?, course_name=?, department=?, duration_years=?, total_semesters=? WHERE id=?";
     
@@ -353,8 +379,7 @@ app.put('/api/courses/:id', (req, res) => {
     });
 });
 
-// DELETE course
-app.delete('/api/courses/:id', (req, res) => {
+app.delete('/api/courses/:id', verifyRole(['admin']), (req, res) => {
     const sql = "DELETE FROM courses WHERE id = ?";
     db.query(sql, [req.params.id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -363,11 +388,10 @@ app.delete('/api/courses/:id', (req, res) => {
 });
 
 // ==========================================
-// 6. SUBJECT MANAGEMENT ROUTES
+// SUBJECT MANAGEMENT ROUTES[cite: 7]
 // ==========================================
 
-// GET all subjects with Course and Teacher names
-app.get('/api/subjects', (req, res) => {
+app.get('/api/subjects', verifyRole(['admin', 'teacher']), (req, res) => {
     const sql = `
         SELECT subjects.*, courses.course_name, teachers.full_name as teacher_name 
         FROM subjects 
@@ -381,8 +405,7 @@ app.get('/api/subjects', (req, res) => {
     });
 });
 
-// POST (Add) new subject
-app.post('/api/subjects', (req, res) => {
+app.post('/api/subjects', verifyRole(['admin']), (req, res) => {
     const { course_id, semester, subject_code, subject_name, subject_type, credits } = req.body;
     const sql = "INSERT INTO subjects (course_id, semester, subject_code, subject_name, subject_type, credits) VALUES (?, ?, ?, ?, ?, ?)";
     
@@ -392,20 +415,17 @@ app.post('/api/subjects', (req, res) => {
     });
 });
 
-app.put('/api/subjects/:id', (req, res) => {
+app.put('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     const subjectId = req.params.id;
     const { subject_code, subject_name, course_id, semester, subject_type, credits, teacher_id } = req.body;
 
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction Error" });
 
-        // 1. Update the subject details
         const subSql = "UPDATE subjects SET course_id=?, semester=?, subject_code=?, subject_name=?, subject_type=?, credits=? WHERE id=?";
         db.query(subSql, [course_id, semester, subject_code, subject_name, subject_type, credits, subjectId], (err) => {
             if (err) return db.rollback(() => res.status(500).json(err));
 
-            // 2. Update the teacher assignment
-            // We use REPLACE INTO so it inserts if new, or updates if it exists
             const assignSql = "REPLACE INTO teacher_assignments (teacher_id, subject_id, academic_year) VALUES (?, ?, '2026-2027')";
             db.query(assignSql, [teacher_id, subjectId], (err) => {
                 if (err) return db.rollback(() => res.status(500).json(err));
@@ -419,8 +439,7 @@ app.put('/api/subjects/:id', (req, res) => {
     });
 });
 
-// DELETE subject
-app.delete('/api/subjects/:id', (req, res) => {
+app.delete('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     const sql = "DELETE FROM subjects WHERE id = ?";
     db.query(sql, [req.params.id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -428,13 +447,11 @@ app.delete('/api/subjects/:id', (req, res) => {
     });
 });
 
-
 // ==========================================
-// PARENT MANAGEMENT ROUTES (ADMIN)
+// PARENT MANAGEMENT ROUTES (ADMIN)[cite: 7]
 // ==========================================
 
-// GET all parents with their linked students and contact details
-app.get('/api/parents', (req, res) => {
+app.get('/api/parents', verifyRole(['admin']), (req, res) => {
     const sql = `
         SELECT 
             p.parent_id as id, 
@@ -442,7 +459,7 @@ app.get('/api/parents', (req, res) => {
             p.phone, 
             p.email, 
             u.username, 
-            GROUP_CONCAT(s.student_id) as student_ids, -- Added to support multiple wards
+            GROUP_CONCAT(s.student_id) as student_ids, 
             GROUP_CONCAT(s.full_name) as student_name, 
             GROUP_CONCAT(s.enrollment_number) as roll
         FROM parents p
@@ -457,10 +474,8 @@ app.get('/api/parents', (req, res) => {
     });
 });
 
-// POST (Add) Parent and Link to Multiple Students
-app.post('/api/parents', async (req, res) => { // <-- Add 'async' here
+app.post('/api/parents', verifyRole(['admin']), async (req, res) => { 
     const { full_name, phone, email, username, password, student_ids } = req.body; 
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
@@ -476,7 +491,6 @@ app.post('/api/parents', async (req, res) => { // <-- Add 'async' here
                 if (err) return db.rollback(() => res.status(500).json({ error: "Failed to create parent profile" }));
                 const parentId = parentResult.insertId;
 
-                // Map multiple students to the parent
                 const values = student_ids.map(sId => [parentId, sId]);
                 const mapSql = "INSERT INTO parent_student_map (parent_id, student_id) VALUES ?";
                 db.query(mapSql, [values], (err) => {
@@ -492,8 +506,7 @@ app.post('/api/parents', async (req, res) => { // <-- Add 'async' here
     });
 });
 
-// PUT (Update) Parent Profile & Re-link Students
-app.put('/api/parents/:id', (req, res) => {
+app.put('/api/parents/:id', verifyRole(['admin']), (req, res) => {
     const parentId = req.params.id;
     const { full_name, phone, email, student_ids } = req.body; 
     
@@ -503,7 +516,6 @@ app.put('/api/parents/:id', (req, res) => {
         db.query("UPDATE parents SET full_name = ?, phone = ?, email = ? WHERE parent_id = ?", [full_name, phone, email, parentId], (err) => {
             if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
             
-            // Delete old links and insert new ones for multiple wards
             db.query("DELETE FROM parent_student_map WHERE parent_id = ?", [parentId], (err) => {
                 if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                 
@@ -521,8 +533,7 @@ app.put('/api/parents/:id', (req, res) => {
     });
 });
 
-// DELETE Parent (Cascade deletes user, profile, and mapping)
-app.delete('/api/parents/:id', (req, res) => {
+app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
     const parentId = req.params.id;
     
     db.query("SELECT user_id FROM parents WHERE parent_id = ?", [parentId], (err, results) => {
@@ -537,13 +548,11 @@ app.delete('/api/parents/:id', (req, res) => {
     });
 });
 
-
 // ==========================================
-// 7. CAMPUS NOTICE ROUTES (With File Upload)
+// CAMPUS NOTICE ROUTES[cite: 7]
 // ==========================================
 
-// GET all notices (ordered by date)
-app.get('/api/notices', (req, res) => {
+app.get('/api/notices', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
     const sql = "SELECT id, title, content, target_role, priority, attachment_url, DATE_FORMAT(created_at, '%Y-%m-%d') as date FROM notices ORDER BY created_at DESC";
     db.query(sql, (err, data) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -551,17 +560,13 @@ app.get('/api/notices', (req, res) => {
     });
 });
 
-// POST (Create) new notice
-// Added upload.single('attachment') middleware
-app.post('/api/notices', upload.single('attachment'), (req, res) => {
+app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
     const { title, content, target_role, priority, posted_by } = req.body;
     
     if (!posted_by) {
-        return res.status(400).json({ error: "Admin ID (posted_by) is required." });
+        return res.status(400).json({ error: "Admin/Teacher ID (posted_by) is required." });
     }
 
-    // If a physical file was uploaded, save its local path.
-    // If not, check if a text link was provided. Otherwise, set to null.
     const attachment_url = req.file ? `/uploads/${req.file.filename}` : (req.body.attachment_url || null);
 
     const sql = "INSERT INTO notices (title, content, target_role, priority, attachment_url, posted_by) VALUES (?, ?, ?, ?, ?, ?)";
@@ -575,13 +580,9 @@ app.post('/api/notices', upload.single('attachment'), (req, res) => {
     });
 });
 
-// PUT (Update) existing notice
-// Added upload.single('attachment') middleware
-app.put('/api/notices/:id', upload.single('attachment'), (req, res) => {
+app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
     const { title, content, target_role, priority } = req.body;
     
-    // If a NEW file is uploaded during edit, use the new file path.
-    // If no new file is uploaded, keep whatever the frontend sent back.
     const attachment_url = req.file ? `/uploads/${req.file.filename}` : req.body.attachment_url;
 
     const sql = "UPDATE notices SET title=?, content=?, target_role=?, priority=?, attachment_url=? WHERE id=?";
@@ -592,21 +593,34 @@ app.put('/api/notices/:id', upload.single('attachment'), (req, res) => {
     });
 });
 
-// DELETE notice
-app.delete('/api/notices/:id', (req, res) => {
-    // Note: To be completely efficient, you could also use fs.unlink() here to delete the physical file from the 'uploads' folder when a notice is deleted, but standard database deletion is fine for now!
-    const sql = "DELETE FROM notices WHERE id = ?";
-    db.query(sql, [req.params.id], (err, result) => {
+app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
+    const noticeId = req.params.id;
+
+    // 1. Get the path so we can delete the file after
+    db.query("SELECT attachment_url FROM notices WHERE id = ?", [noticeId], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
+        
+        const fileToDelete = results[0]?.attachment_url;
+
+        // 2. Delete the record from database
+        db.query("DELETE FROM notices WHERE id = ?", [noticeId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // 3. Delete physical file if it exists
+            if (fileToDelete) {
+                deleteFile(fileToDelete);
+            }
+
+            res.json({ success: true, message: "Notice and attachment deleted." });
+        });
     });
 });
 
 // ==========================================
-// 8. ADMIN DASHBOARD AGGREGATION
+// ADMIN DASHBOARD[cite: 7]
 // ==========================================
 
-app.get('/api/admin/dashboard-stats', (req, res) => {
+app.get('/api/admin/dashboard-stats', verifyRole(['admin']), (req, res) => {
     const statsSql = `
         SELECT 
             (SELECT COUNT(*) FROM students) as totalStudents,
@@ -642,12 +656,10 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
 });
 
 // ==========================================
-// 9. TEACHER NOTICE & CLASS ROUTES
+// TEACHER NOTICE & CLASS ROUTES[cite: 7]
 // ==========================================
 
-// Get subjects assigned to a specific teacher
-app.get('/api/teacher/:id/assigned-subjects', (req, res) => {
-    // This query now counts students by matching course_id and semester
+app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), (req, res) => {
     const sql = `
         SELECT 
             s.id, 
@@ -665,16 +677,12 @@ app.get('/api/teacher/:id/assigned-subjects', (req, res) => {
     `;
 
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) {
-            console.error("❌ SQL ERROR:", err.sqlMessage);
-            return res.status(500).json(err);
-        }
+        if (err) return res.status(500).json(err);
         res.json(data);
     });
 });
 
-// Get notices for the teacher (Official admin notices + their own sent notices)
-app.get('/api/teacher/:id/notices', (req, res) => {
+app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
     const sql = `
         SELECT n.*, DATE_FORMAT(n.created_at, '%Y-%m-%d') as date, 
                u.username as author, s.subject_name
@@ -691,28 +699,22 @@ app.get('/api/teacher/:id/notices', (req, res) => {
     });
 });
 
-// 2. Save Attendance (100% SQL Matched & Bulletproof)
-app.post('/api/attendance', (req, res) => {
+// Save Attendance[cite: 7]
+app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
     const { subject_id, date, students, marked_by } = req.body;
 
-    // STEP 1: Find the actual teacher_id using the logged-in user_id
     const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
 
     db.query(getTeacherSql, [marked_by], (err, teacherData) => {
-        if (err || teacherData.length === 0) {
-            console.error("❌ Error finding teacher:", err);
-            return res.status(500).json({ error: "Teacher lookup failed" });
-        }
+        if (err || teacherData.length === 0) return res.status(500).json({ error: "Teacher lookup failed" });
         
         const actualTeacherId = teacherData[0].teacher_id;
 
-        // STEP 2: Ensure a 'daily_class' exists for this date so we don't violate Foreign Keys
         const checkClassSql = `SELECT id FROM daily_classes WHERE subject_id = ? AND class_date = ?`;
 
         db.query(checkClassSql, [subject_id, date], (err, classData) => {
             if (err) return res.status(500).json({ error: "Class lookup failed" });
 
-            // Helper function to insert the attendance once we have a valid class ID
             const insertAttendance = (dailyClassId) => {
                 const values = students.map(student => [
                     student.student_id,
@@ -722,7 +724,6 @@ app.post('/api/attendance', (req, res) => {
                     actualTeacherId
                 ]);
 
-                // ON DUPLICATE KEY ensures that if a teacher updates a mistake and hits save again, it safely updates!
                 const insertSql = `
                     INSERT INTO attendance (student_id, daily_class_id, status, remarks, marked_by) 
                     VALUES ?
@@ -730,15 +731,11 @@ app.post('/api/attendance', (req, res) => {
                 `;
 
                 db.query(insertSql, [values], (insertErr, result) => {
-                    if (insertErr) {
-                        console.error("❌ SQL ERROR saving attendance:", insertErr.sqlMessage);
-                        return res.status(500).json({ error: "Failed to save attendance" });
-                    }
+                    if (insertErr) return res.status(500).json({ error: "Failed to save attendance" });
                     res.json({ success: true, message: "Attendance saved successfully!" });
                 });
             };
 
-            // STEP 3: If class exists, use it. If not, create a dummy one for the ledger.
             if (classData.length > 0) {
                 insertAttendance(classData[0].id);
             } else {
@@ -747,24 +744,16 @@ app.post('/api/attendance', (req, res) => {
                     VALUES (?, ?, ?, '09:00', '10:00', 'TBA', 'Completed')
                 `;
                 db.query(createClassSql, [subject_id, actualTeacherId, date], (err, newClass) => {
-                    if (err) {
-                        console.error("❌ SQL ERROR creating class:", err.sqlMessage);
-                        return res.status(500).json({ error: "Failed to auto-create class session" });
-                    }
-                    insertAttendance(newClass.insertId); // Pass the newly generated ID!
+                    if (err) return res.status(500).json({ error: "Failed to auto-create class session" });
+                    insertAttendance(newClass.insertId); 
                 });
             }
         });
     });
 });
 
-
-// ==========================================
-// ATTENDANCE: Get Students for a Subject
-// ==========================================
-app.get('/api/subjects/:id/students', (req, res) => {
-    
-    // We join on BOTH course_id and semester to get the exact right batch of students
+// Get Students for a Subject (Attendance)[cite: 7]
+app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, res) => {
     const sql = `
         SELECT 
             st.student_id, 
@@ -776,23 +765,13 @@ app.get('/api/subjects/:id/students', (req, res) => {
     `;
     
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) {
-            console.error("❌ SQL ERROR:", err.sqlMessage); 
-            return res.status(500).json({ error: "Database rejected the query" });
-        }
-        
-        // Add a default status of "Absent" to every student for the UI
+        if (err) return res.status(500).json({ error: "Database rejected the query" });
         const studentsWithStatus = data.map(st => ({ ...st, status: 'Absent' }));
         res.json(studentsWithStatus);
     });
 });
 
-// ==========================================
-// ATTENDANCE: History & Details
-// ==========================================
-
-// 1. Get Attendance History Summary for the Teacher
-app.get('/api/teacher/:id/attendance-history', (req, res) => {
+app.get('/api/teacher/:id/attendance-history', verifyRole(['teacher']), (req, res) => {
     const sql = `
         SELECT 
             dc.id, 
@@ -812,16 +791,12 @@ app.get('/api/teacher/:id/attendance-history', (req, res) => {
     `;
 
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) {
-            console.error("❌ SQL ERROR fetching history:", err.sqlMessage);
-            return res.status(500).json({ error: "Failed to load history" });
-        }
+        if (err) return res.status(500).json({ error: "Failed to load history" });
         res.json(data);
     });
 });
 
-// 2. Get Specific Roster Details for a Past Class
-app.get('/api/attendance/class/:classId', (req, res) => {
+app.get('/api/attendance/class/:classId', verifyRole(['teacher']), (req, res) => {
     const sql = `
         SELECT 
             st.enrollment_number as roll, 
@@ -833,34 +808,16 @@ app.get('/api/attendance/class/:classId', (req, res) => {
     `;
 
     db.query(sql, [req.params.classId], (err, data) => {
-        if (err) {
-            console.error("❌ SQL ERROR fetching details:", err.sqlMessage);
-            return res.status(500).json({ error: "Failed to load details" });
-        }
+        if (err) return res.status(500).json({ error: "Failed to load details" });
         res.json(data);
     });
 });
 
 // ==========================================
-// 10. MARKS MANAGEMENT ROUTES
+// MARKS MANAGEMENT ROUTES[cite: 7]
 // ==========================================
 
-// 1. Get Students for a specific subject (Using course_id and semester mapping)
-app.get('/api/subjects/:id/students', (req, res) => {
-    const sql = `
-        SELECT st.student_id as id, st.enrollment_number as enrollment, st.full_name as name
-        FROM students st
-        JOIN subjects sub ON st.course_id = sub.course_id AND st.semester = sub.semester
-        WHERE sub.id = ?
-    `;
-    db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json({ error: "Failed to fetch students" });
-        res.json(data);
-    });
-});
-
-// 2. Fetch specific marks for a class and exam type (Used for Entry merging & View Modal)
-app.get('/api/marks/details', (req, res) => {
+app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
     const { subject_id, exam_type } = req.query;
     const sql = `
         SELECT m.student_id as id, st.enrollment_number as enrollment, st.full_name as name, m.score, m.max_score
@@ -874,18 +831,15 @@ app.get('/api/marks/details', (req, res) => {
     });
 });
 
-// 3. Save Marks (Handles both new inserts and updating existing drafts)
-app.post('/api/marks', (req, res) => {
+app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
     const { subject_id, exam_type, max_score, marks, uploaded_by_user_id } = req.body;
 
-    // First find the exact teacher_id
     const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
     db.query(getTeacherSql, [uploaded_by_user_id], (err, teacherData) => {
         if (err || teacherData.length === 0) return res.status(500).json({ error: "Teacher lookup failed" });
 
         const teacherId = teacherData[0].teacher_id;
         
-        // Filter out empty scores to prevent inserting blanks
         const validMarks = marks.filter(m => m.score !== '');
         if (validMarks.length === 0) return res.json({ success: true, message: "Nothing to save" });
 
@@ -893,7 +847,6 @@ app.post('/api/marks', (req, res) => {
             m.id, subject_id, exam_type, m.score, max_score, teacherId
         ]);
 
-        // ON DUPLICATE KEY UPDATE allows teachers to edit/save drafts securely
         const sql = `
             INSERT INTO marks (student_id, subject_id, exam_type, score, max_score, uploaded_by)
             VALUES ?
@@ -901,24 +854,20 @@ app.post('/api/marks', (req, res) => {
         `;
 
         db.query(sql, [values], (err, result) => {
-            if (err) {
-                console.error("❌ SQL ERROR saving marks:", err.sqlMessage);
-                return res.status(500).json({ error: "Failed to save marks" });
-            }
+            if (err) return res.status(500).json({ error: "Failed to save marks" });
             res.json({ success: true });
         });
     });
 });
 
-// 4. Ledger Summary (Calculates class averages automatically)
-app.get('/api/teacher/:id/marks-ledger', (req, res) => {
+app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), (req, res) => {
     const sql = `
         SELECT 
             m.subject_id as classId, 
             m.exam_type as type, 
             DATE_FORMAT(MAX(m.created_at), '%Y-%m-%d') as date,
             s.subject_name as subject,
-            s.semester, -- Added semester for frontend filtering
+            s.semester, 
             c.course_name as course,
             MAX(m.max_score) as max,
             ROUND(AVG(m.score), 1) as avg,
@@ -936,13 +885,9 @@ app.get('/api/teacher/:id/marks-ledger', (req, res) => {
     });
 });
 
-// ==========================================
-// TEACHER DASHBOARD ROUTE
-// ==========================================
-app.get('/api/teacher/:id/dashboard', (req, res) => {
+app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), (req, res) => {
     const userId = req.params.id;
 
-    // 1. Get Teacher ID and Name
     const teacherSql = `SELECT teacher_id, full_name FROM teachers WHERE user_id = ?`;
 
     db.query(teacherSql, [userId], (err, teacherResult) => {
@@ -951,7 +896,6 @@ app.get('/api/teacher/:id/dashboard', (req, res) => {
         const teacherId = teacherResult[0].teacher_id;
         const teacherName = teacherResult[0].full_name;
 
-        // 2. Quick Stats (Assigned Subjects, Total Students)
         const statsSql = `
             SELECT 
                 (SELECT COUNT(*) FROM teacher_assignments WHERE teacher_id = ?) as totalSubjects,
@@ -961,8 +905,6 @@ app.get('/api/teacher/:id/dashboard', (req, res) => {
                  WHERE ta.teacher_id = ?) as totalStudents
         `;
 
-        // 3. Get Scheduled Classes for TODAY
-        // FIX APPLIED HERE: Used TIME_FORMAT instead of DATE_FORMAT
         const classesSql = `
             SELECT 
                 dc.id as class_id,
@@ -981,7 +923,6 @@ app.get('/api/teacher/:id/dashboard', (req, res) => {
             ORDER BY dc.start_time ASC
         `;
 
-        // 4. Get Recent Notices
         const noticesSql = `
             SELECT id, title, DATE_FORMAT(created_at, '%b %d') as date, priority 
             FROM notices 
@@ -997,9 +938,9 @@ app.get('/api/teacher/:id/dashboard', (req, res) => {
                         stats: {
                             totalSubjects: statsResult[0]?.totalSubjects || 0,
                             totalStudents: statsResult[0]?.totalStudents || 0,
-                            classesConducted: classesResult.length // Classes today
+                            classesConducted: classesResult.length 
                         },
-                        scheduledClasses: classesResult, // Updated to send daily schedule
+                        scheduledClasses: classesResult, 
                         notices: noticesResult
                     });
                 });
@@ -1008,57 +949,43 @@ app.get('/api/teacher/:id/dashboard', (req, res) => {
     });
 });
 
-// ==========================================
-// SCHEDULE A NEW CLASS ROUTE
-// ==========================================
-app.post('/api/teacher/schedule-class', (req, res) => {
+app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
     const { userId, subjectId, date, startTime, endTime, room } = req.body;
 
-    // Step 1: Find the actual teacher_id belonging to this logged-in user
     const findTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
 
     db.query(findTeacherSql, [userId], (err, teacherResult) => {
-        if (err || teacherResult.length === 0) {
-            console.error("Teacher Lookup Error:", err);
-            return res.status(404).json({ error: "Teacher account not found for this user." });
-        }
+        if (err || teacherResult.length === 0) return res.status(404).json({ error: "Teacher account not found for this user." });
 
         const exactTeacherId = teacherResult[0].teacher_id;
 
-        // Step 2: Insert the class into daily_classes using the correct teacher_id
         const insertSql = `
             INSERT INTO daily_classes (teacher_id, subject_id, class_date, start_time, end_time, room_number) 
             VALUES (?, ?, ?, ?, ?, ?)
         `;
 
         db.query(insertSql, [exactTeacherId, subjectId, date, startTime, endTime, room], (err, result) => {
-            if (err) {
-                console.error("Insert Class Error:", err);
-                return res.status(500).json({ error: "Failed to schedule class in database." });
-            }
-            
+            if (err) return res.status(500).json({ error: "Failed to schedule class in database." });
             res.json({ success: true, message: "Class successfully scheduled!" });
         });
     });
 });
 
+// ==========================================
+// STUDENT / PARENT DATA ROUTES[cite: 7]
+// ==========================================
 
-// ==========================================
-// STUDENT NOTICE ROUTE
-// ==========================================
-app.get('/api/student/:id/notices', (req, res) => {
+app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
 
-    // We use n.content to match your 'notices' table structure
     const sql = `
         SELECT DISTINCT 
             n.id, 
             n.title, 
-            n.content, -- Matches EXACT column name in your SQL file
+            n.content, 
             n.priority, 
             n.attachment_url,
             DATE_FORMAT(n.created_at, '%b %d, %Y') as date,
-            -- This gets the Full Name for Teachers/Students or Username for Admin
             COALESCE(t.full_name, s.full_name, u.username) as author_name,
             u.role as author_role
         FROM notices n
@@ -1078,20 +1005,14 @@ app.get('/api/student/:id/notices', (req, res) => {
     `;
 
     db.query(sql, [userId], (err, data) => {
-        if (err) {
-            console.error("❌ SQL ERROR:", err.sqlMessage);
-            return res.status(500).json({ error: err.sqlMessage });
-        }
+        if (err) return res.status(500).json({ error: err.sqlMessage });
         res.json(data || []);
     });
 });
 
-// ==========================================
-// 12. PARENT INTEGRATION PORTAL ROUTE
-// ==========================================
-app.get('/api/parent/:id/wards-overview', (req, res) => {
+app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => {
     const userId = req.params.id;
-    const requestedStudentId = req.query.student_id; // Check if frontend is asking for a specific child
+    const requestedStudentId = req.query.student_id; 
 
     const childSql = `
         SELECT s.student_id, s.user_id, s.full_name, s.enrollment_number, s.semester, c.course_name
@@ -1106,14 +1027,12 @@ app.get('/api/parent/:id/wards-overview', (req, res) => {
         if (err) return res.status(500).json(err);
         if (children.length === 0) return res.json({ message: "No children linked to this parent record." });
 
-        // Default to the first child, UNLESS the frontend specified a different one
         let targetStudent = children[0];
         if (requestedStudentId) {
             const found = children.find(c => c.student_id == requestedStudentId);
             if (found) targetStudent = found;
         }
 
-        // Fetch aggregate metrics for the TARGET student
         const metricsSql = `
             SELECT 
                 (SELECT ROUND((SUM(CASE WHEN status='Present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) 
@@ -1126,7 +1045,7 @@ app.get('/api/parent/:id/wards-overview', (req, res) => {
             if (err) return res.status(500).json(err);
             
             res.json({
-                allWards: children, // <-- We now send the full list of kids back to the frontend
+                allWards: children, 
                 childProfile: targetStudent,
                 summaryMetrics: metrics[0] || { attendanceRate: 0, totalDues: 0, classAverage: 0 }
             });
@@ -1134,13 +1053,9 @@ app.get('/api/parent/:id/wards-overview', (req, res) => {
     });
 });
 
-// ==========================================
-// STUDENT RESULTS ROUTE (Dynamic Max Scores)
-// ==========================================
-app.get('/api/student/:id/results', (req, res) => {
+app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
 
-    // We now sum both the score AND the max_score for each category!
     const sql = `
         SELECT 
             sub.id,
@@ -1162,19 +1077,14 @@ app.get('/api/student/:id/results', (req, res) => {
     `;
 
     db.query(sql, [userId], (err, data) => {
-        if (err) {
-            console.error("Database Error:", err);
-            return res.status(500).json({ error: "Failed to fetch results" });
-        }
+        if (err) return res.status(500).json({ error: "Failed to fetch results" });
 
         const formattedResults = {};
 
         data.forEach(row => {
             const total = parseFloat(row.total) || 0;
-            // Prevent division by 0 if a subject has no marks yet
             const totalMax = parseFloat(row.totalMax) > 0 ? parseFloat(row.totalMax) : 100; 
 
-            // Calculate Grade automatically based on the exact max scores available
             const percentage = (total / totalMax) * 100;
             let grade = 'F';
             if (percentage >= 90) grade = 'A+';
@@ -1183,9 +1093,7 @@ app.get('/api/student/:id/results', (req, res) => {
             else if (percentage >= 60) grade = 'C';
             else if (percentage >= 40) grade = 'D';
 
-            if (!formattedResults[row.semester]) {
-                formattedResults[row.semester] = [];
-            }
+            if (!formattedResults[row.semester]) formattedResults[row.semester] = [];
 
             formattedResults[row.semester].push({
                 id: row.id,
@@ -1205,12 +1113,7 @@ app.get('/api/student/:id/results', (req, res) => {
     });
 });
 
-// ==========================================
-// STUDENT ATTENDANCE ROUTE
-// ==========================================
-
-// A. GET ALL SUBJECTS FOR DROPDOWN
-app.get('/api/student/:id/subjects-list', (req, res) => {
+app.get('/api/student/:id/subjects-list', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
     const sql = `
@@ -1224,15 +1127,14 @@ app.get('/api/student/:id/subjects-list', (req, res) => {
     });
 });
 
-// B. GET ATTENDANCE LOGS
-app.get('/api/student/:id/attendance-logs', (req, res) => {
+app.get('/api/student/:id/attendance-logs', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
     const sql = `
         SELECT 
-            dc.class_date, -- From daily_classes table
-            s.subject_name, -- From subjects table
-            a.status        -- From attendance table (Present, Absent, Late)
+            dc.class_date, 
+            s.subject_name, 
+            a.status        
         FROM attendance a
         JOIN daily_classes dc ON a.daily_class_id = dc.id
         JOIN subjects s ON dc.subject_id = s.id
@@ -1245,8 +1147,7 @@ app.get('/api/student/:id/attendance-logs', (req, res) => {
     });
 });
 
-
-app.get('/api/student/:id/subjects', (req, res) => {
+app.get('/api/student/:id/subjects', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
 
@@ -1265,10 +1166,7 @@ app.get('/api/student/:id/subjects', (req, res) => {
     `;
 
     db.query(sql, [userId, semester], (err, data) => {
-        if (err) {
-            console.error("SQL Error:", err.message);
-            return res.status(500).json({ error: err.message });
-        }
+        if (err) return res.status(500).json({ error: err.message });
         
         const totalCredits = data.reduce((sum, sub) => sum + (sub.credits || 0), 0);
         
@@ -1280,9 +1178,7 @@ app.get('/api/student/:id/subjects', (req, res) => {
     });
 });
 
-
-// --- GET STUDENT PROFILE ---
-app.get('/api/student/:id/profile', (req, res) => {
+app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     
     const sql = `
@@ -1335,13 +1231,11 @@ app.get('/api/student/:id/profile', (req, res) => {
     });
 });
 
-
 // ==========================================
-// 11. FEE & PAYMENT MANAGEMENT ROUTES
+// FEE & PAYMENT MANAGEMENT ROUTES[cite: 7]
 // ==========================================
 
-// A. ADMIN: Get all student fee headers with student details
-app.get('/api/admin/fees', (req, res) => {
+app.get('/api/admin/fees', verifyRole(['admin']), (req, res) => {
     const sql = `
         SELECT f.*, s.full_name as name, s.enrollment_number as enrollment, c.course_name as course
         FROM fees f
@@ -1355,8 +1249,7 @@ app.get('/api/admin/fees', (req, res) => {
     });
 });
 
-// B. STUDENT: Get specific logged-in student's fees
-app.get('/api/student/:id/fees', (req, res) => {
+app.get('/api/student/:id/fees', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     const sql = `
         SELECT f.* FROM fees f
@@ -1370,8 +1263,7 @@ app.get('/api/student/:id/fees', (req, res) => {
     });
 });
 
-// C. STUDENT: Get specific logged-in student's transaction payments history
-app.get('/api/student/:id/payments', (req, res) => {
+app.get('/api/student/:id/payments', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     const sql = `
         SELECT p.*, f.fee_type
@@ -1387,8 +1279,7 @@ app.get('/api/student/:id/payments', (req, res) => {
     });
 });
 
-// D. STUDENT/ADMIN: Process a transaction (Complete all-or-nothing balance clearance)
-app.post('/api/payments', (req, res) => {
+app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const { fee_id, amount_paid, payment_method, transaction_reference, processed_by } = req.body;
 
     db.beginTransaction((err) => {
@@ -1400,22 +1291,16 @@ app.post('/api/payments', (req, res) => {
         `;
 
         db.query(insertPaymentSql, [fee_id, amount_paid, payment_method, transaction_reference, processed_by || null], (err) => {
-            if (err) {
-                return db.rollback(() => res.status(500).json({ error: "Payment registration error. Rolled back." }));
-            }
+            if (err) return db.rollback(() => res.status(500).json({ error: "Payment registration error. Rolled back." }));
 
             db.query(`SELECT total_fee, paid_amount FROM fees WHERE id = ?`, [fee_id], (err, feeRows) => {
-                if (err || feeRows.length === 0) {
-                    return db.rollback(() => res.status(500).json({ error: "Fee lookup failed." }));
-                }
+                if (err || feeRows.length === 0) return db.rollback(() => res.status(500).json({ error: "Fee lookup failed." }));
 
                 const newPaid = parseFloat(feeRows[0].paid_amount) + parseFloat(amount_paid);
                 const newStatus = newPaid >= parseFloat(feeRows[0].total_fee) ? 'Paid' : 'Partial';
 
                 db.query(`UPDATE fees SET paid_amount = ?, status = ? WHERE id = ?`, [newPaid, newStatus, fee_id], (err) => {
-                    if (err) {
-                        return db.rollback(() => res.status(500).json({ error: "Fee update error. Ledger entry rolled back." }));
-                    }
+                    if (err) return db.rollback(() => res.status(500).json({ error: "Fee update error. Ledger entry rolled back." }));
                     db.commit((err) => {
                         if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
                         res.json({ success: true, message: "Payment processed successfully!" });
@@ -1426,8 +1311,7 @@ app.post('/api/payments', (req, res) => {
     });
 });
 
-// E. ADMIN: Get overall transaction history ledger
-app.get('/api/admin/payments', (req, res) => {
+app.get('/api/admin/payments', verifyRole(['admin']), (req, res) => {
     const sql = `
         SELECT p.*, s.full_name as student_name, s.enrollment_number as enrollment
         FROM payments p
@@ -1441,8 +1325,7 @@ app.get('/api/admin/payments', (req, res) => {
     });
 });
 
-// Assign a fee to ONE student
-app.post('/api/fees', (req, res) => {
+app.post('/api/fees', verifyRole(['admin']), (req, res) => {
     const { student_id, semester, fee_type, total_fee, due_date } = req.body;
     const sql = `
         INSERT INTO fees (student_id, semester, fee_type, total_fee, paid_amount, due_date, status)
@@ -1450,25 +1333,20 @@ app.post('/api/fees', (req, res) => {
     `;
     db.query(sql, [student_id, semester, fee_type, total_fee, due_date], (err, result) => {
         if (err) {
-            if (err.code === 'ER_DUP_ENTRY') {
-                return res.status(400).json({ error: "This fee type already exists for this student & semester." });
-            }
+            if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "This fee type already exists for this student & semester." });
             return res.status(500).json({ error: err.message });
         }
         res.json({ success: true, id: result.insertId });
     });
 });
 
-// Bulk-assign a fee to every ACTIVE student in a course + semester
-app.post('/api/fees/bulk-assign', (req, res) => {
+app.post('/api/fees/bulk-assign', verifyRole(['admin']), (req, res) => {
     const { course_id, semester, fee_type, total_fee, due_date } = req.body;
 
     const studentsSql = `SELECT student_id FROM students WHERE course_id = ? AND semester = ? AND status = 'Active'`;
     db.query(studentsSql, [course_id, semester], (err, students) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (students.length === 0) {
-            return res.status(404).json({ error: "No active students found for that course & semester." });
-        }
+        if (students.length === 0) return res.status(404).json({ error: "No active students found for that course & semester." });
 
         const values = students.map(s => [s.student_id, semester, fee_type, total_fee, 0, due_date, 'Pending']);
 
@@ -1484,8 +1362,7 @@ app.post('/api/fees/bulk-assign', (req, res) => {
     });
 });
 
-// Edit an existing fee record
-app.put('/api/fees/:id', (req, res) => {
+app.put('/api/fees/:id', verifyRole(['admin']), (req, res) => {
     const { total_fee, due_date, fee_type } = req.body;
     const sql = `UPDATE fees SET total_fee = ?, due_date = ?, fee_type = ? WHERE id = ?`;
     db.query(sql, [total_fee, due_date, fee_type, req.params.id], (err) => {
@@ -1494,16 +1371,14 @@ app.put('/api/fees/:id', (req, res) => {
     });
 });
 
-// Delete a fee record
-app.delete('/api/fees/:id', (req, res) => {
+app.delete('/api/fees/:id', verifyRole(['admin']), (req, res) => {
     db.query(`DELETE FROM fees WHERE id = ?`, [req.params.id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
 
-// --- UPDATE STUDENT PROFILE ---
-app.put('/api/student/:id/profile', (req, res) => {
+app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     
     const { 
@@ -1532,21 +1407,14 @@ app.put('/api/student/:id/profile', (req, res) => {
     ];
 
     db.query(sql, params, (err, result) => {
-        if (err) {
-            console.error("❌ SQL Error:", err.message);
-            return res.status(500).json({ error: "Failed to update database records." });
-        }
+        if (err) return res.status(500).json({ error: "Failed to update database records." });
         res.json({ success: true, message: "Profile updated successfully!" });
     });
 });
 
-// ==========================================
-// STUDENT DASHBOARD (CUSTOM UI ROUTE)
-// ==========================================
-app.get('/api/student/:id/custom-dashboard', (req, res) => {
+app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
 
-    // 1. Profile Information
     const profileSql = `
         SELECT s.full_name, c.course_name, s.semester, s.email, s.enrollment_number as student_id
         FROM students s
@@ -1554,7 +1422,6 @@ app.get('/api/student/:id/custom-dashboard', (req, res) => {
         WHERE s.user_id = ?
     `;
 
-    // 2. Today's Classes
     const classesSql = `
         SELECT dc.id, sub.subject_name as subject, 
                CONCAT(TIME_FORMAT(dc.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(dc.end_time, '%h:%i %p')) as time,
@@ -1567,7 +1434,6 @@ app.get('/api/student/:id/custom-dashboard', (req, res) => {
         ORDER BY dc.start_time ASC
     `;
 
-    // 3. Recent Notices (Top 3)
     const noticesSql = `
         SELECT id, title, 
                CASE 
@@ -1582,7 +1448,6 @@ app.get('/api/student/:id/custom-dashboard', (req, res) => {
         LIMIT 3
     `;
 
-    // 4. Performance Trajectory (CGPA per semester based on marks)
     const performanceSql = `
         SELECT CONCAT('Sem ', sub.semester) as semester, 
                ROUND((SUM(m.score) / SUM(m.max_score)) * 10, 1) as cgpa
@@ -1633,7 +1498,7 @@ app.get('/api/student/:id/custom-dashboard', (req, res) => {
 });
 
 // --- START THE SERVER ---
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
