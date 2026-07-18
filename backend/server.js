@@ -650,10 +650,62 @@ app.put('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
 });
 
 app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
-    const sql = "DELETE FROM teachers WHERE teacher_id = ?";
-    db.query(sql, [req.params.id], (err, result) => {
-        if (err) return res.status(500).json(err);
-        res.json({ success: true });
+    db.beginTransaction((err) => {
+        if (err) {
+            return res.status(500).json({ error: "Transaction failed." });
+        }
+
+        const getUserSql = "SELECT user_id FROM teachers WHERE teacher_id = ?";
+
+        db.query(getUserSql, [req.params.id], (err, result) => {
+            if (err) {
+                return db.rollback(() =>
+                    res.status(500).json({ error: err.message })
+                );
+            }
+
+            if (result.length === 0) {
+                return db.rollback(() =>
+                    res.status(404).json({ error: "Teacher not found." })
+                );
+            }
+
+            const userId = result[0].user_id;
+
+            db.query(
+                "DELETE FROM teachers WHERE teacher_id = ?",
+                [req.params.id],
+                (err) => {
+                    if (err) {
+                        return db.rollback(() =>
+                            res.status(500).json({ error: err.message })
+                        );
+                    }
+
+                    db.query(
+                        "DELETE FROM users WHERE id = ?",
+                        [userId],
+                        (err) => {
+                            if (err) {
+                                return db.rollback(() =>
+                                    res.status(500).json({ error: err.message })
+                                );
+                            }
+
+                            db.commit((err) => {
+                                if (err) {
+                                    return db.rollback(() =>
+                                        res.status(500).json({ error: err.message })
+                                    );
+                                }
+
+                                res.json({ success: true });
+                            });
+                        }
+                    );
+                }
+            );
+        });
     });
 });
 
