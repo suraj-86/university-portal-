@@ -3,34 +3,31 @@ const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken'); // Added for JWT authentication[cite: 7]
-const cookieParser = require('cookie-parser'); // Added for secure cookies[cite: 7]
+const jwt = require('jsonwebtoken'); 
+const cookieParser = require('cookie-parser'); 
 
 const app = express();
 
-// 1. Update CORS to strictly allow your frontend URL and accept credentials (cookies)[cite: 7]
+// 1. Updated CORS to exactly match the URL in your screenshot
 app.use(cors({
-    origin: 'https://university-portal-flax-tau.vercel.app', // Must match your React app's URL exactly
-    credentials: true // Required to send and receive HTTP-Only cookies
+    origin: 'https://university-portal-flax-tau.vercel.app', 
+    credentials: true 
 }));
 
 app.use(express.json());
-app.use(cookieParser()); // Enable cookie parsing[cite: 7]
+app.use(cookieParser()); 
 
-// 2. Define a secret key for signing tokens (In production, move this to a .env file)
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_college_key_2026'; 
 
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure the 'uploads' directory exists[cite: 7]
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
-// Set up Multer storage configuration[cite: 7]
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, 'uploads/'); 
@@ -43,11 +40,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Serve the uploads folder statically[cite: 7]
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ==========================================
-// DATABASE CONNECTION[cite: 7]
+// DATABASE CONNECTION
 // ==========================================
 const db = mysql.createConnection({
     host: process.env.DB_HOST,
@@ -95,10 +91,9 @@ const verifyRole = (allowedRoles) => {
 };
 
 // ==========================================
-// AUTHENTICATION ROUTES[cite: 7]
+// AUTHENTICATION ROUTES
 // ==========================================
 
-// LOGIN ROUTE (Secured with Bcrypt & JWT)
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     
@@ -125,14 +120,12 @@ app.post('/api/login', (req, res) => {
             const isMatch = await bcrypt.compare(password, user.password);
             
             if (isMatch) {
-                // Generate JWT
                 const tokenPayload = {
                     id: user.id,
                     role: user.role
                 };
                 const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '8h' });
 
-                // Send HTTP-Only Cookie
                 res.cookie('token', token, {
                     httpOnly: true,      
                     secure: true,       
@@ -151,7 +144,6 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// LOGOUT ROUTE
 app.post('/api/logout', (req, res) => {
     res.clearCookie('token', {
         httpOnly: true,
@@ -161,11 +153,9 @@ app.post('/api/logout', (req, res) => {
     res.json({ success: true, message: "Logged out successfully" });
 });
 
-// CHANGE PASSWORD ROUTE
 app.put('/api/users/:id/change-password', verifyRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
     const userId = req.params.id;
     
-    // Security check: Users can only change their own password
     if (req.user.id !== parseInt(userId) && req.user.role !== 'admin') {
         return res.status(403).json({ error: "Forbidden" });
     }
@@ -173,7 +163,7 @@ app.put('/api/users/:id/change-password', verifyRole(['admin', 'teacher', 'stude
     const { currentPassword, newPassword } = req.body;
 
     db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
-        if (err) return res.status(500).json({ error: "Database error" });
+        if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) return res.status(404).json({ error: "User not found" });
 
         const user = results[0];
@@ -183,13 +173,12 @@ app.put('/api/users/:id/change-password', verifyRole(['admin', 'teacher', 'stude
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
         
         db.query("UPDATE users SET password = ? WHERE id = ?", [hashedNewPassword, userId], (err) => {
-            if (err) return res.status(500).json({ error: "Failed to update password" });
+            if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: "Password updated successfully!" });
         });
     });
 });
 
-// CHANGE USERNAME ROUTE
 app.put('/api/users/:id/change-username', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
     const userId = req.params.id;
     
@@ -206,17 +195,14 @@ app.put('/api/users/:id/change-username', verifyRole(['admin', 'teacher', 'stude
     db.query("UPDATE users SET username = ? WHERE id = ?", [newUsername.trim(), userId], (err) => {
         if (err) {
             if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "That username is already taken!" });
-            return res.status(500).json({ error: "Database error" });
+            return res.status(500).json({ error: err.message });
         }
         res.json({ success: true, message: "Username updated successfully! You will use this to log in next time." });
     });
 });
 
 const deleteFile = (filePath) => {
-    // filePath usually looks like "/uploads/1715421234-file.pdf"
-    // We need to resolve it to the full local path
     const fullPath = path.join(__dirname, filePath);
-    
     fs.unlink(fullPath, (err) => {
         if (err) {
             console.error(`❌ Error deleting file at ${fullPath}:`, err.message);
@@ -227,7 +213,7 @@ const deleteFile = (filePath) => {
 };
 
 // ==========================================
-// STUDENT MANAGEMENT ROUTES[cite: 7]
+// STUDENT MANAGEMENT ROUTES
 // ==========================================
 
 app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
@@ -237,7 +223,7 @@ app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
         LEFT JOIN courses ON students.course_id = courses.id
     `;
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         return res.json(data);
     });
 });
@@ -247,12 +233,12 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed to start" });
+        if (err) return res.status(500).json({ error: err.message });
 
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'student')";
         db.query(userSql, [roll, hashedPassword], (err, userResult) => {
             if (err) {
-                return db.rollback(() => res.status(500).json({ error: "Username (Roll No) already exists in users table." }));
+                return db.rollback(() => res.status(500).json({ error: err.message }));
             }
 
             const userId = userResult.insertId;
@@ -263,11 +249,11 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
             
             db.query(studentSql, [userId, course_id, roll, name, email, semester || 1], (err, result) => {
                 if (err) {
-                    return db.rollback(() => res.status(400).json({ error: "Email already exists in students table. Both entries rolled back." }));
+                    return db.rollback(() => res.status(400).json({ error: err.message }));
                 }
 
                 db.commit((err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                     res.json({ success: true });
                 });
             });
@@ -280,7 +266,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
     const sql = "UPDATE students SET full_name=?, email=?, enrollment_number=?, semester=?, course_id=? WHERE student_id=?";
     
     db.query(sql, [name, email, roll, semester, course_id, req.params.id], (err, result) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
@@ -289,17 +275,17 @@ app.delete('/api/students/:id', verifyRole(['admin']), (req, res) => {
     const userIdToDelete = req.params.id;
     
     db.query('DELETE FROM students WHERE user_id = ?', [userIdToDelete], (err, studentResult) => {
-        if (err) return res.status(500).json({ error: "Failed to delete student profile" });
+        if (err) return res.status(500).json({ error: err.message });
         
         db.query('DELETE FROM users WHERE id = ?', [userIdToDelete], (err2, userResult) => {
-            if (err2) return res.status(500).json({ error: "Failed to delete user login" });
+            if (err2) return res.status(500).json({ error: err2.message });
             return res.json({ success: true, message: "Student completely removed!" });
         });
     });
 });
 
 // ==========================================
-// TEACHER MANAGEMENT ROUTES[cite: 7]
+// TEACHER MANAGEMENT ROUTES
 // ==========================================
 
 app.get('/api/teachers', verifyRole(['admin']), (req, res) => {
@@ -315,11 +301,11 @@ app.post('/api/teachers', verifyRole(['admin']), async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed" });
+        if (err) return res.status(500).json({ error: err.message });
 
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'teacher')";
         db.query(userSql, [employee_id, hashedPassword], (err, userResult) => {
-            if (err) return db.rollback(() => res.status(400).json({ error: "Employee ID (Username) already exists." }));
+            if (err) return db.rollback(() => res.status(400).json({ error: err.message }));
 
             const userId = userResult.insertId;
             const teacherSql = `
@@ -328,10 +314,10 @@ app.post('/api/teachers', verifyRole(['admin']), async (req, res) => {
             `;
             
             db.query(teacherSql, [userId, employee_id, full_name, email, department, qualification, designation], (err, result) => {
-                if (err) return db.rollback(() => res.status(400).json({ error: "Email already exists in teacher records. Transaction rolled back." }));
+                if (err) return db.rollback(() => res.status(400).json({ error: err.message }));
 
                 db.commit((err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                     res.json({ success: true, message: "Faculty registered successfully" });
                 });
             });
@@ -351,13 +337,13 @@ app.put('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
 app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
     const sql = "DELETE FROM teachers WHERE teacher_id = ?";
     db.query(sql, [req.params.id], (err, result) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
 
 // ==========================================
-// COURSE MANAGEMENT ROUTES[cite: 7]
+// COURSE MANAGEMENT ROUTES
 // ==========================================
 
 app.get('/api/courses', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
@@ -397,7 +383,7 @@ app.delete('/api/courses/:id', verifyRole(['admin']), (req, res) => {
 });
 
 // ==========================================
-// SUBJECT MANAGEMENT ROUTES[cite: 7]
+// SUBJECT MANAGEMENT ROUTES
 // ==========================================
 
 app.get('/api/subjects', verifyRole(['admin', 'teacher']), (req, res) => {
@@ -429,18 +415,18 @@ app.put('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     const { subject_code, subject_name, course_id, semester, subject_type, credits, teacher_id } = req.body;
 
     db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction Error" });
+        if (err) return res.status(500).json({ error: err.message });
 
         const subSql = "UPDATE subjects SET course_id=?, semester=?, subject_code=?, subject_name=?, subject_type=?, credits=? WHERE id=?";
         db.query(subSql, [course_id, semester, subject_code, subject_name, subject_type, credits, subjectId], (err) => {
-            if (err) return db.rollback(() => res.status(500).json(err));
+            if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
 
             const assignSql = "REPLACE INTO teacher_assignments (teacher_id, subject_id, academic_year) VALUES (?, ?, '2026-2027')";
             db.query(assignSql, [teacher_id, subjectId], (err) => {
-                if (err) return db.rollback(() => res.status(500).json(err));
+                if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
 
                 db.commit((err) => {
-                    if (err) return db.rollback(() => res.status(500).json(err));
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                     res.json({ success: true });
                 });
             });
@@ -457,7 +443,7 @@ app.delete('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
 });
 
 // ==========================================
-// PARENT MANAGEMENT ROUTES (ADMIN)[cite: 7]
+// PARENT MANAGEMENT ROUTES (ADMIN)
 // ==========================================
 
 app.get('/api/parents', verifyRole(['admin']), (req, res) => {
@@ -488,25 +474,25 @@ app.post('/api/parents', verifyRole(['admin']), async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed" });
+        if (err) return res.status(500).json({ error: err.message });
 
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'parent')";
         db.query(userSql, [username, hashedPassword], (err, userResult) => {      
-            if (err) return db.rollback(() => res.status(400).json({ error: "Username already exists" }));
+            if (err) return db.rollback(() => res.status(400).json({ error: err.message }));
             const userId = userResult.insertId;
 
             const parentSql = "INSERT INTO parents (user_id, full_name, phone, email) VALUES (?, ?, ?, ?)";
             db.query(parentSql, [userId, full_name, phone, email], (err, parentResult) => {
-                if (err) return db.rollback(() => res.status(500).json({ error: "Failed to create parent profile" }));
+                if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                 const parentId = parentResult.insertId;
 
                 const values = student_ids.map(sId => [parentId, sId]);
                 const mapSql = "INSERT INTO parent_student_map (parent_id, student_id) VALUES ?";
                 db.query(mapSql, [values], (err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: "Failed to link students" }));
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
 
                     db.commit((err) => {
-                        if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                        if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                         res.json({ success: true, message: "Parent account created and linked!" });
                     });
                 });
@@ -520,7 +506,7 @@ app.put('/api/parents/:id', verifyRole(['admin']), (req, res) => {
     const { full_name, phone, email, student_ids } = req.body; 
     
     db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed" });
+        if (err) return res.status(500).json({ error: err.message });
 
         db.query("UPDATE parents SET full_name = ?, phone = ?, email = ? WHERE parent_id = ?", [full_name, phone, email, parentId], (err) => {
             if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
@@ -533,7 +519,7 @@ app.put('/api/parents/:id', verifyRole(['admin']), (req, res) => {
                     if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                     
                     db.commit((err) => {
-                        if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                        if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                         res.json({ success: true, message: "Parent updated successfully" });
                     });
                 });
@@ -546,7 +532,8 @@ app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
     const parentId = req.params.id;
     
     db.query("SELECT user_id FROM parents WHERE parent_id = ?", [parentId], (err, results) => {
-        if (err || results.length === 0) return res.status(500).json({ error: "Parent not found" });
+        if (err) return res.status(500).json({ error: err.message });
+        if (results.length === 0) return res.status(404).json({ error: "Parent not found" });
         
         const userId = results[0].user_id;
         
@@ -558,7 +545,7 @@ app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
 });
 
 // ==========================================
-// CAMPUS NOTICE ROUTES[cite: 7]
+// CAMPUS NOTICE ROUTES
 // ==========================================
 
 app.get('/api/notices', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
@@ -605,17 +592,14 @@ app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('att
 app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
     const noticeId = req.params.id;
 
-    // 1. Get the path so we can delete the file after
     db.query("SELECT attachment_url FROM notices WHERE id = ?", [noticeId], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         
         const fileToDelete = results[0]?.attachment_url;
 
-        // 2. Delete the record from database
         db.query("DELETE FROM notices WHERE id = ?", [noticeId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            // 3. Delete physical file if it exists
             if (fileToDelete) {
                 deleteFile(fileToDelete);
             }
@@ -626,7 +610,7 @@ app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
 });
 
 // ==========================================
-// ADMIN DASHBOARD[cite: 7]
+// ADMIN DASHBOARD
 // ==========================================
 
 app.get('/api/admin/dashboard-stats', verifyRole(['admin']), (req, res) => {
@@ -665,7 +649,7 @@ app.get('/api/admin/dashboard-stats', verifyRole(['admin']), (req, res) => {
 });
 
 // ==========================================
-// TEACHER NOTICE & CLASS ROUTES[cite: 7]
+// TEACHER NOTICE & CLASS ROUTES
 // ==========================================
 
 app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), (req, res) => {
@@ -686,7 +670,7 @@ app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), (req, res
     `;
 
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         res.json(data);
     });
 });
@@ -703,26 +687,27 @@ app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
         ORDER BY n.created_at DESC
     `;
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         res.json(data);
     });
 });
 
-// Save Attendance[cite: 7]
+// Save Attendance
 app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
     const { subject_id, date, students, marked_by } = req.body;
 
     const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
 
     db.query(getTeacherSql, [marked_by], (err, teacherData) => {
-        if (err || teacherData.length === 0) return res.status(500).json({ error: "Teacher lookup failed" });
+        if (err) return res.status(500).json({ error: err.message });
+        if (teacherData.length === 0) return res.status(404).json({ error: "Teacher lookup failed" });
         
         const actualTeacherId = teacherData[0].teacher_id;
 
         const checkClassSql = `SELECT id FROM daily_classes WHERE subject_id = ? AND class_date = ?`;
 
         db.query(checkClassSql, [subject_id, date], (err, classData) => {
-            if (err) return res.status(500).json({ error: "Class lookup failed" });
+            if (err) return res.status(500).json({ error: err.message });
 
             const insertAttendance = (dailyClassId) => {
                 const values = students.map(student => [
@@ -740,7 +725,7 @@ app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
                 `;
 
                 db.query(insertSql, [values], (insertErr, result) => {
-                    if (insertErr) return res.status(500).json({ error: "Failed to save attendance" });
+                    if (insertErr) return res.status(500).json({ error: insertErr.message });
                     res.json({ success: true, message: "Attendance saved successfully!" });
                 });
             };
@@ -753,7 +738,7 @@ app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
                     VALUES (?, ?, ?, '09:00', '10:00', 'TBA', 'Completed')
                 `;
                 db.query(createClassSql, [subject_id, actualTeacherId, date], (err, newClass) => {
-                    if (err) return res.status(500).json({ error: "Failed to auto-create class session" });
+                    if (err) return res.status(500).json({ error: err.message });
                     insertAttendance(newClass.insertId); 
                 });
             }
@@ -761,7 +746,6 @@ app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
     });
 });
 
-// Get Students for a Subject (Attendance)[cite: 7]
 app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, res) => {
     const sql = `
         SELECT 
@@ -774,7 +758,7 @@ app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, re
     `;
     
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json({ error: "Database rejected the query" });
+        if (err) return res.status(500).json({ error: err.message });
         const studentsWithStatus = data.map(st => ({ ...st, status: 'Absent' }));
         res.json(studentsWithStatus);
     });
@@ -800,7 +784,7 @@ app.get('/api/teacher/:id/attendance-history', verifyRole(['teacher']), (req, re
     `;
 
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json({ error: "Failed to load history" });
+        if (err) return res.status(500).json({ error: err.message });
         res.json(data);
     });
 });
@@ -817,13 +801,13 @@ app.get('/api/attendance/class/:classId', verifyRole(['teacher']), (req, res) =>
     `;
 
     db.query(sql, [req.params.classId], (err, data) => {
-        if (err) return res.status(500).json({ error: "Failed to load details" });
+        if (err) return res.status(500).json({ error: err.message });
         res.json(data);
     });
 });
 
 // ==========================================
-// MARKS MANAGEMENT ROUTES[cite: 7]
+// MARKS MANAGEMENT ROUTES
 // ==========================================
 
 app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
@@ -835,7 +819,7 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
         WHERE m.subject_id = ? AND m.exam_type = ?
     `;
     db.query(sql, [subject_id, exam_type], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         res.json(data);
     });
 });
@@ -845,7 +829,8 @@ app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
 
     const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
     db.query(getTeacherSql, [uploaded_by_user_id], (err, teacherData) => {
-        if (err || teacherData.length === 0) return res.status(500).json({ error: "Teacher lookup failed" });
+        if (err) return res.status(500).json({ error: err.message });
+        if (teacherData.length === 0) return res.status(404).json({ error: "Teacher lookup failed" });
 
         const teacherId = teacherData[0].teacher_id;
         
@@ -863,7 +848,7 @@ app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
         `;
 
         db.query(sql, [values], (err, result) => {
-            if (err) return res.status(500).json({ error: "Failed to save marks" });
+            if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true });
         });
     });
@@ -889,7 +874,7 @@ app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), (req, res) => 
         ORDER BY MAX(m.created_at) DESC
     `;
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         res.json(data);
     });
 });
@@ -900,7 +885,8 @@ app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), (req, res) => {
     const teacherSql = `SELECT teacher_id, full_name FROM teachers WHERE user_id = ?`;
 
     db.query(teacherSql, [userId], (err, teacherResult) => {
-        if (err || teacherResult.length === 0) return res.status(404).json({ error: "Teacher not found" });
+        if (err) return res.status(500).json({ error: err.message });
+        if (teacherResult.length === 0) return res.status(404).json({ error: "Teacher not found" });
 
         const teacherId = teacherResult[0].teacher_id;
         const teacherName = teacherResult[0].full_name;
@@ -940,8 +926,11 @@ app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), (req, res) => {
         `;
 
         db.query(statsSql, [teacherId, teacherId], (err, statsResult) => {
+            if (err) return res.status(500).json({ error: err.message });
             db.query(classesSql, [teacherId], (err, classesResult) => {
+                if (err) return res.status(500).json({ error: err.message });
                 db.query(noticesSql, (err, noticesResult) => {
+                    if (err) return res.status(500).json({ error: err.message });
                     res.json({
                         teacherName: teacherName,
                         stats: {
@@ -964,7 +953,8 @@ app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
     const findTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
 
     db.query(findTeacherSql, [userId], (err, teacherResult) => {
-        if (err || teacherResult.length === 0) return res.status(404).json({ error: "Teacher account not found for this user." });
+        if (err) return res.status(500).json({ error: err.message });
+        if (teacherResult.length === 0) return res.status(404).json({ error: "Teacher account not found for this user." });
 
         const exactTeacherId = teacherResult[0].teacher_id;
 
@@ -974,14 +964,14 @@ app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
         `;
 
         db.query(insertSql, [exactTeacherId, subjectId, date, startTime, endTime, room], (err, result) => {
-            if (err) return res.status(500).json({ error: "Failed to schedule class in database." });
+            if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: "Class successfully scheduled!" });
         });
     });
 });
 
 // ==========================================
-// STUDENT / PARENT DATA ROUTES[cite: 7]
+// STUDENT / PARENT DATA ROUTES
 // ==========================================
 
 app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), (req, res) => {
@@ -1014,7 +1004,7 @@ app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), 
     `;
 
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.sqlMessage });
+        if (err) return res.status(500).json({ error: err.message });
         res.json(data || []);
     });
 });
@@ -1033,7 +1023,7 @@ app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => 
     `;
 
     db.query(childSql, [userId], (err, children) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: err.message });
         if (children.length === 0) return res.json({ message: "No children linked to this parent record." });
 
         let targetStudent = children[0];
@@ -1051,7 +1041,7 @@ app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => 
         `;
 
         db.query(metricsSql, [targetStudent.student_id, targetStudent.student_id, targetStudent.student_id], (err, metrics) => {
-            if (err) return res.status(500).json(err);
+            if (err) return res.status(500).json({ error: err.message });
             
             res.json({
                 allWards: children, 
@@ -1086,7 +1076,7 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
     `;
 
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: "Failed to fetch results" });
+        if (err) return res.status(500).json({ error: err.message });
 
         const formattedResults = {};
 
@@ -1241,7 +1231,7 @@ app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
 });
 
 // ==========================================
-// FEE & PAYMENT MANAGEMENT ROUTES[cite: 7]
+// FEE & PAYMENT MANAGEMENT ROUTES
 // ==========================================
 
 app.get('/api/admin/fees', verifyRole(['admin']), (req, res) => {
@@ -1292,7 +1282,7 @@ app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res)
     const { fee_id, amount_paid, payment_method, transaction_reference, processed_by } = req.body;
 
     db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed to initialize." });
+        if (err) return res.status(500).json({ error: err.message });
 
         const insertPaymentSql = `
             INSERT INTO payments (fee_id, amount_paid, payment_method, transaction_reference, processed_by, payment_date)
@@ -1300,18 +1290,19 @@ app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res)
         `;
 
         db.query(insertPaymentSql, [fee_id, amount_paid, payment_method, transaction_reference, processed_by || null], (err) => {
-            if (err) return db.rollback(() => res.status(500).json({ error: "Payment registration error. Rolled back." }));
+            if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
 
             db.query(`SELECT total_fee, paid_amount FROM fees WHERE id = ?`, [fee_id], (err, feeRows) => {
-                if (err || feeRows.length === 0) return db.rollback(() => res.status(500).json({ error: "Fee lookup failed." }));
+                if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+                if (feeRows.length === 0) return db.rollback(() => res.status(404).json({ error: "Fee lookup failed." }));
 
                 const newPaid = parseFloat(feeRows[0].paid_amount) + parseFloat(amount_paid);
                 const newStatus = newPaid >= parseFloat(feeRows[0].total_fee) ? 'Paid' : 'Partial';
 
                 db.query(`UPDATE fees SET paid_amount = ?, status = ? WHERE id = ?`, [newPaid, newStatus, fee_id], (err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: "Fee update error. Ledger entry rolled back." }));
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                     db.commit((err) => {
-                        if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                        if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
                         res.json({ success: true, message: "Payment processed successfully!" });
                     });
                 });
@@ -1416,7 +1407,7 @@ app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
     ];
 
     db.query(sql, params, (err, result) => {
-        if (err) return res.status(500).json({ error: "Failed to update database records." });
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, message: "Profile updated successfully!" });
     });
 });
@@ -1469,17 +1460,17 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     `;
 
     db.query(profileSql, [userId], (err, profileData) => {
-        if (err) return res.status(500).json({ error: "Profile fetch failed" });
+        if (err) return res.status(500).json({ error: err.message });
         if (profileData.length === 0) return res.status(404).json({ error: "Student not found" });
 
         db.query(classesSql, [userId], (err, classesData) => {
-            if (err) return res.status(500).json({ error: "Classes fetch failed" });
+            if (err) return res.status(500).json({ error: err.message });
 
             db.query(noticesSql, (err, noticesData) => {
-                if (err) return res.status(500).json({ error: "Notices fetch failed" });
+                if (err) return res.status(500).json({ error: err.message });
 
                 db.query(performanceSql, [userId], (err, perfData) => {
-                    if (err) return res.status(500).json({ error: "Performance fetch failed" });
+                    if (err) return res.status(500).json({ error: err.message });
 
                     const mappedNotices = noticesData.map(n => ({
                         id: n.id,
@@ -1506,7 +1497,6 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     });
 });
 
-// --- START THE SERVER ---
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
