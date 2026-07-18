@@ -542,17 +542,101 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 });
 
 app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
-    const { name, email, roll, semester, course_id } = req.body; 
+    const { name, email, roll, semester, course_id, password } = req.body;
+
     if (!name || !email || !roll || !course_id) {
-    return res.status(400).json({
-        error: "Please fill all required fields."
-    });
-}
-    const sql = "UPDATE students SET full_name=?, email=?, enrollment_number=?, semester=?, course_id=? WHERE student_id=?";
-    
-    db.query(sql, [name, email, roll, semester, course_id, req.params.id], (err, result) => {
-        if (err) return res.status(500).json(err);
-        res.json({ success: true });
+        return res.status(400).json({
+            error: "Please fill all required fields."
+        });
+    }
+
+    db.beginTransaction((err) => {
+        if (err) {
+            return res.status(500).json({
+                error: "Transaction failed."
+            });
+        }
+
+        db.query(
+            "SELECT user_id FROM students WHERE student_id = ?",
+            [req.params.id],
+            async (err, result) => {
+                if (err) {
+                    return db.rollback(() =>
+                        res.status(500).json({ error: err.message })
+                    );
+                }
+
+                if (result.length === 0) {
+                    return db.rollback(() =>
+                        res.status(404).json({
+                            error: "Student not found."
+                        })
+                    );
+                }
+
+                const userId = result[0].user_id;
+
+                const studentSql = `
+                    UPDATE students
+                    SET
+                        full_name = ?,
+                        email = ?,
+                        enrollment_number = ?,
+                        semester = ?,
+                        course_id = ?
+                    WHERE student_id = ?
+                `;
+
+                db.query(
+                    studentSql,
+                    [name, email, roll, semester, course_id, req.params.id],
+                    async (err) => {
+                        if (err) {
+                            return db.rollback(() =>
+                                res.status(500).json({ error: err.message })
+                            );
+                        }
+
+                        let userSql = "UPDATE users SET username = ? WHERE id = ?";
+                        let params = [roll, userId];
+
+                        if (password && password.trim() !== "") {
+                            const hashedPassword = await bcrypt.hash(password, 10);
+
+                            userSql = `
+                                UPDATE users
+                                SET username = ?, password = ?
+                                WHERE id = ?
+                            `;
+
+                            params = [roll, hashedPassword, userId];
+                        }
+
+                        db.query(userSql, params, (err) => {
+                            if (err) {
+                                return db.rollback(() =>
+                                    res.status(500).json({ error: err.message })
+                                );
+                            }
+
+                            db.commit((err) => {
+                                if (err) {
+                                    return db.rollback(() =>
+                                        res.status(500).json({ error: err.message })
+                                    );
+                                }
+
+                                res.json({
+                                    success: true,
+                                    message: "Student updated successfully!"
+                                });
+                            });
+                        });
+                    }
+                );
+            }
+        );
     });
 });
 
@@ -628,8 +712,17 @@ if (err) {
     });
 });
 
-app.put('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
-    const { full_name, email, employee_id, department, qualification, designation } = req.body;
+app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
+    const {
+        full_name,
+        email,
+        employee_id,
+        department,
+        qualification,
+        designation,
+        password
+    } = req.body;
+
     if (
         !full_name ||
         !email ||
@@ -642,11 +735,115 @@ app.put('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
             error: "Please fill all required fields."
         });
     }
-    const sql = "UPDATE teachers SET full_name=?, email=?, employee_id=?, department=?, qualification=?, designation=? WHERE teacher_id=?";
-    db.query(sql, [full_name, email, employee_id, department, qualification, designation, req.params.id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
-    });
+
+    try {
+        db.beginTransaction((err) => {
+            if (err) {
+                return res.status(500).json({
+                    error: "Transaction failed to start."
+                });
+            }
+
+            // Get user_id for this teacher
+            db.query(
+                "SELECT user_id FROM teachers WHERE teacher_id = ?",
+                [req.params.id],
+                async (err, result) => {
+                    if (err) {
+                        return db.rollback(() =>
+                            res.status(500).json({ error: err.message })
+                        );
+                    }
+
+                    if (result.length === 0) {
+                        return db.rollback(() =>
+                            res.status(404).json({
+                                error: "Teacher not found."
+                            })
+                        );
+                    }
+
+                    const userId = result[0].user_id;
+
+                    // Update teacher profile
+                    const teacherSql = `
+                        UPDATE teachers
+                        SET
+                            full_name = ?,
+                            email = ?,
+                            employee_id = ?,
+                            department = ?,
+                            qualification = ?,
+                            designation = ?
+                        WHERE teacher_id = ?
+                    `;
+
+                    db.query(
+                        teacherSql,
+                        [
+                            full_name,
+                            email,
+                            employee_id,
+                            department,
+                            qualification,
+                            designation,
+                            req.params.id
+                        ],
+                        async (err) => {
+                            if (err) {
+                                return db.rollback(() =>
+                                    res.status(500).json({ error: err.message })
+                                );
+                            }
+
+                            // Update login username
+                            let userSql = "UPDATE users SET username = ? WHERE id = ?";
+                            let params = [employee_id, userId];
+
+                            // Update password only if provided
+                            if (password && password.trim() !== "") {
+                                const hashedPassword = await bcrypt.hash(password, 10);
+
+                                userSql = `
+                                    UPDATE users
+                                    SET username = ?, password = ?
+                                    WHERE id = ?
+                                `;
+
+                                params = [employee_id, hashedPassword, userId];
+                            }
+
+                            db.query(userSql, params, (err) => {
+                                if (err) {
+                                    return db.rollback(() =>
+                                        res.status(500).json({ error: err.message })
+                                    );
+                                }
+
+                                db.commit((err) => {
+                                    if (err) {
+                                        return db.rollback(() =>
+                                            res.status(500).json({ error: err.message })
+                                        );
+                                    }
+
+                                    res.json({
+                                        success: true,
+                                        message: "Teacher updated successfully!"
+                                    });
+                                });
+                            });
+                        }
+                    );
+                }
+            );
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            error: "Unexpected server error."
+        });
+    }
 });
 
 app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
