@@ -1850,32 +1850,19 @@ app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), 
         LEFT JOIN students s
             ON u.id = s.user_id
         WHERE
+            n.target_role IN ('all', 'student')
 
-            -- Notices for everyone
-            n.target_role = 'all'
+            OR u.role = 'admin'
 
-            OR
-
-            -- Admin notices for students
-            (
-                n.target_role = 'student'
-                AND u.role = 'admin'
-            )
-
-            OR
-
-            -- Teacher notices for this student's assigned subjects
-            (
-                n.target_role = 'student'
-                AND u.role = 'teacher'
-                AND n.subject_id IN (
-                    SELECT ta.subject_id
-                    FROM students st
-                    JOIN teacher_assignments ta
-                        ON ta.course_id = st.course_id
-                       AND ta.semester = st.semester
-                    WHERE st.user_id = ?
-                )
+            OR n.subject_id IN (
+                SELECT ta.subject_id
+                FROM students st
+                JOIN subjects sub
+                    ON st.course_id = sub.course_id
+                   AND st.semester = sub.semester
+                JOIN teacher_assignments ta
+                    ON ta.subject_id = sub.id
+                WHERE st.user_id = ?
             )
 
         ORDER BY n.created_at DESC
