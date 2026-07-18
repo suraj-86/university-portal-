@@ -526,8 +526,8 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
     console.error(err);
 
     return db.rollback(() =>
-        res.status(400).json({
-            error: "Email already exists in students table. Both entries rolled back."
+        res.status(500).json({
+            error: err.sqlMessage || err.message
         })
     );
 }
@@ -610,8 +610,15 @@ if (
             `;
             
             db.query(teacherSql, [userId, employee_id, full_name, email, department, qualification, designation], (err, result) => {
-                if (err) return db.rollback(() => res.status(400).json({ error: "Email already exists in teacher records. Transaction rolled back." }));
+if (err) {
+    console.error(err);
 
+    return db.rollback(() =>
+        res.status(500).json({
+            error: err.sqlMessage || err.message
+        })
+    );
+}
                 db.commit((err) => {
                     if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
                     res.json({ success: true, message: "Faculty registered successfully" });
