@@ -1167,86 +1167,199 @@ app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
 // ==========================================
 
 app.get('/api/notices', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
-    const sql = "SELECT id, title, content, target_role, priority, attachment_url, DATE_FORMAT(created_at, '%Y-%m-%d') as date FROM notices ORDER BY created_at DESC";
+    const sql = `
+        SELECT
+            id,
+            title,
+            content,
+            target_role,
+            priority,
+            attachment_url,
+            posted_by,
+            subject_id,
+            DATE_FORMAT(created_at,'%Y-%m-%d') AS date
+        FROM notices
+        ORDER BY created_at DESC
+    `;
+
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                error: err.message
+            });
+        }
+
         res.json(data);
     });
 });
 
 app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
-    const { title, content, target_role, priority, posted_by } = req.body;
-    if (!title || !content || !target_role || !priority) {
-    return res.status(400).json({
-        error: "Please fill all required fields."
-    });
-}
-    
-    if (!posted_by) {
-        return res.status(400).json({ error: "Admin/Teacher ID (posted_by) is required." });
+
+    const {
+        title,
+        content,
+        target_role,
+        posted_by,
+        subject_id = null,
+        priority = "Normal"
+    } = req.body;
+
+    if (!title || !content || !target_role || !posted_by) {
+        return res.status(400).json({
+            error: "Please fill all required fields."
+        });
     }
 
-    const attachment_url = req.file ? `/uploads/${req.file.filename}` : (req.body.attachment_url || null);
+    const attachment_url = req.file
+        ? `/uploads/${req.file.filename}`
+        : (req.body.attachment_url || null);
 
-    const sql = "INSERT INTO notices (title, content, target_role, priority, attachment_url, posted_by) VALUES (?, ?, ?, ?, ?, ?)";
-    
-    db.query(sql, [title, content, target_role, priority, attachment_url, posted_by], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ success: true, id: result.insertId });
-    });
-});
+    const sql = `
+        INSERT INTO notices
+        (
+            title,
+            content,
+            target_role,
+            priority,
+            attachment_url,
+            posted_by,
+            subject_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
 
-app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
-    const { title, content, target_role, priority } = req.body;
-    if (!title || !content || !target_role || !priority) {
-    return res.status(400).json({
-        error: "Please fill all required fields."
-    });
-}
-    
-    const attachment_url = req.file ? `/uploads/${req.file.filename}` : req.body.attachment_url;
+    db.query(
+        sql,
+        [
+            title,
+            content,
+            target_role,
+            priority,
+            attachment_url,
+            posted_by,
+            subject_id
+        ],
+        (err, result) => {
 
-    const sql = "UPDATE notices SET title=?, content=?, target_role=?, priority=?, attachment_url=? WHERE id=?";
-    
-    db.query(sql, [title, content, target_role, priority, attachment_url, req.params.id], (err, result) => {
-        if (err) {
-    console.error(err);
-
-    return res.status(500).json({
-        error: err.message
-    });
-}
-    });
-});
-
-
-app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
-    const noticeId = req.params.id;
-
-    // 1. Get the path so we can delete the file after
-    db.query("SELECT attachment_url FROM notices WHERE id = ?", [noticeId], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-const fileToDelete =
-results.length > 0
-    ? results[0].attachment_url
-    : null;
-
-        // 2. Delete the record from database
-        db.query("DELETE FROM notices WHERE id = ?", [noticeId], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            // 3. Delete physical file if it exists
-            if (fileToDelete) {
-                deleteFile(fileToDelete);
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: err.message
+                });
             }
 
-            res.json({ success: true, message: "Notice and attachment deleted." });
+            res.json({
+                success: true,
+                id: result.insertId
+            });
+        }
+    );
+});
+app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
+
+    const {
+        title,
+        content,
+        target_role,
+        subject_id = null,
+        priority = "Normal"
+    } = req.body;
+
+    if (!title || !content || !target_role) {
+        return res.status(400).json({
+            error: "Please fill all required fields."
         });
-    });
+    }
+
+    const attachment_url = req.file
+        ? `/uploads/${req.file.filename}`
+        : req.body.attachment_url;
+
+    const sql = `
+        UPDATE notices
+        SET
+            title = ?,
+            content = ?,
+            target_role = ?,
+            priority = ?,
+            attachment_url = ?,
+            subject_id = ?
+        WHERE id = ?
+    `;
+
+    db.query(
+        sql,
+        [
+            title,
+            content,
+            target_role,
+            priority,
+            attachment_url,
+            subject_id,
+            req.params.id
+        ],
+        (err) => {
+
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: err.message
+                });
+            }
+
+            res.json({
+                success: true,
+                message: "Notice updated successfully."
+            });
+        }
+    );
+});
+app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
+
+    const noticeId = req.params.id;
+
+    db.query(
+        "SELECT attachment_url FROM notices WHERE id=?",
+        [noticeId],
+        (err, results) => {
+
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: err.message
+                });
+            }
+
+            const fileToDelete =
+                results.length > 0
+                    ? results[0].attachment_url
+                    : null;
+
+            db.query(
+                "DELETE FROM notices WHERE id=?",
+                [noticeId],
+                (err) => {
+
+                    if (err) {
+                        console.error(err);
+                        return res.status(500).json({
+                            error: err.message
+                        });
+                    }
+
+                    if (fileToDelete) {
+                        deleteFile(fileToDelete);
+                    }
+
+                    res.json({
+                        success: true,
+                        message: "Notice deleted successfully."
+                    });
+                }
+            );
+        }
+    );
 });
 
 // ==========================================
@@ -1716,38 +1829,67 @@ app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
 // ==========================================
 // STUDENT / PARENT DATA ROUTES[cite: 7]
 // ==========================================
-
 app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
 
     const sql = `
-        SELECT DISTINCT 
-            n.id, 
-            n.title, 
-            n.content, 
-            n.priority, 
+        SELECT DISTINCT
+            n.id,
+            n.title,
+            n.content,
+            n.priority,
             n.attachment_url,
-            DATE_FORMAT(n.created_at, '%b %d, %Y') as date,
-            COALESCE(t.full_name, s.full_name, u.username) as author_name,
-            u.role as author_role
+            DATE_FORMAT(n.created_at, '%b %d, %Y') AS date,
+            COALESCE(t.full_name, s.full_name, u.username) AS author_name,
+            u.role AS author_role
         FROM notices n
-        JOIN users u ON n.posted_by = u.id
-        LEFT JOIN teachers t ON u.id = t.user_id
-        LEFT JOIN students s ON u.id = s.user_id
-        WHERE n.target_role IN ('all', 'student')
-        OR u.role = 'admin'
-        OR n.posted_by IN (
-            SELECT t2.user_id FROM teachers t2
-            JOIN teacher_assignments ta ON t2.teacher_id = ta.teacher_id
-            JOIN subjects sub ON ta.subject_id = sub.id
-            JOIN students st ON sub.course_id = st.course_id AND sub.semester = st.semester
-            WHERE st.user_id = ?
-        )
+        JOIN users u
+            ON n.posted_by = u.id
+        LEFT JOIN teachers t
+            ON u.id = t.user_id
+        LEFT JOIN students s
+            ON u.id = s.user_id
+        WHERE
+
+            -- Notices for everyone
+            n.target_role = 'all'
+
+            OR
+
+            -- Admin notices for students
+            (
+                n.target_role = 'student'
+                AND u.role = 'admin'
+            )
+
+            OR
+
+            -- Teacher notices for this student's assigned subjects
+            (
+                n.target_role = 'student'
+                AND u.role = 'teacher'
+                AND n.subject_id IN (
+                    SELECT ta.subject_id
+                    FROM students st
+                    JOIN teacher_assignments ta
+                        ON ta.course_id = st.course_id
+                       AND ta.semester = st.semester
+                    WHERE st.user_id = ?
+                )
+            )
+
         ORDER BY n.created_at DESC
     `;
 
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.sqlMessage });
+        if (err) {
+            console.error(err);
+
+            return res.status(500).json({
+                error: err.sqlMessage || err.message
+            });
+        }
+
         res.json(data || []);
     });
 });
