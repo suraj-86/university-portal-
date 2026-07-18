@@ -25,23 +25,29 @@ const path = require('path');
 const fs = require('fs');
 
 // Ensure the 'uploads' directory exists[cite: 7]
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
-}
+const uploadDir = path.join(__dirname, "uploads");
+
+fs.mkdirSync(uploadDir, {
+    recursive: true
+});
 
 // Set up Multer storage configuration[cite: 7]
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/'); 
+    destination(req, file, cb) {
+        cb(null, uploadDir);
     },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
+
+    filename(req, file, cb) {
+        const uniqueName =
+            `${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.originalname}`;
+
+        cb(null, uniqueName);
     }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({
+    storage
+});
 
 // Serve the uploads folder statically[cite: 7]
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -62,168 +68,410 @@ const db = mysql.createConnection({
 
 db.connect((err) => {
     if (err) {
-        console.error('❌ Database connection failed:', err.message);
-        return;
+        console.error(
+            "❌ Database connection failed:",
+            err.message
+        );
+
+        process.exit(1);
     }
-    console.log('✅ Successfully connected to MySQL');
+
+    console.log(
+        "✅ Successfully connected to MySQL"
+    );
 });
 
 // ==========================================
-// SECURITY MIDDLEWARE (RBAC)
+// ROLE-BASED AUTHORIZATION MIDDLEWARE
 // ==========================================
-const verifyRole = (allowedRoles) => {
+const verifyRole = (allowedRoles = []) => {
     return (req, res, next) => {
-        const token = req.cookies.token;
-
-        if (!token) {
-            return res.status(401).json({ error: "Access Denied: No session token provided. Please log in." });
-        }
-
         try {
-            const decoded = jwt.verify(token, JWT_SECRET);
-            req.user = decoded; 
+            const token = req.cookies.token;
 
-            if (!allowedRoles.includes(req.user.role)) {
-                return res.status(403).json({ error: "Forbidden: You do not have permission to perform this action." });
+            if (!token) {
+                return res.status(401).json({
+                    success: false,
+                    error: "Authentication required. Please log in."
+                });
             }
 
-            next(); 
-        } catch (err) {
-            return res.status(401).json({ error: "Invalid or Expired Session. Please log in again." });
+            const decoded = jwt.verify(token, JWT_SECRET);
+
+            req.user = {
+                id: decoded.id,
+                role: decoded.role
+            };
+
+            if (!allowedRoles.includes(req.user.role)) {
+                return res.status(403).json({
+                    success: false,
+                    error: "You are not authorized to access this resource."
+                });
+            }
+
+            next();
+
+        } catch (error) {
+            console.error("JWT Verification Error:", error.message);
+
+            return res.status(401).json({
+                success: false,
+                error: "Session expired or invalid token. Please log in again."
+            });
         }
     };
 };
 
 // ==========================================
-// AUTHENTICATION ROUTES[cite: 7]
+// LOGIN ROUTE
 // ==========================================
+app.post("/api/login", async (req, res) => {
+    try {
+        const { username, password } = req.body;
 
-// LOGIN ROUTE (Secured with Bcrypt & JWT)
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    
-    const sql = `
-        SELECT u.id, u.username, u.password, u.role, 
-               COALESCE(t.full_name, s.full_name, p.full_name, u.username) AS full_name
-        FROM users u
-        LEFT JOIN teachers t ON u.id = t.user_id
-        LEFT JOIN students s ON u.id = s.user_id
-        LEFT JOIN parents p ON u.id = p.user_id
-        WHERE u.username = ?`;
-
-    db.query(sql, [username], async (err, data) => {
-        if (err) {
-            console.error("LOGIN QUERY ERROR:", err);
-            return res.status(500).json({
-                error: "Database error",
-                details: err.message
+        // Validate request
+        if (!username || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Username and password are required."
             });
         }
-        
-        if (data.length > 0) {
-            const user = data[0];
-            const isMatch = await bcrypt.compare(password, user.password);
-            
-            if (isMatch) {
-                // Generate JWT
-                const tokenPayload = {
+
+        const sql = `
+            SELECT
+                u.id,
+                u.username,
+                u.password,
+                u.role,
+                COALESCE(
+                    t.full_name,
+                    s.full_name,
+                    p.full_name,
+                    u.username
+                ) AS full_name
+            FROM users u
+            LEFT JOIN teachers t ON u.id = t.user_id
+            LEFT JOIN students s ON u.id = s.user_id
+            LEFT JOIN parents p ON u.id = p.user_id
+            WHERE u.username = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [username], async (err, results) => {
+            if (err) {
+                console.error("Login Error:", err);
+
+                return res.status(500).json({
+                    success: false,
+                    message: "Database error."
+                });
+            }
+
+            if (!results.length) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Invalid username or password."
+                });
+            }
+
+            const user = results[0];
+
+            const passwordMatched = await bcrypt.compare(
+                password,
+                user.password
+            );
+
+            if (!passwordMatched) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Invalid username or password."
+                });
+            }
+
+            const token = jwt.sign(
+                {
                     id: user.id,
                     role: user.role
-                };
-                const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '8h' });
+                },
+                JWT_SECRET,
+                {
+                    expiresIn: "8h"
+                }
+            );
 
-                // Send HTTP-Only Cookie
-                res.cookie('token', token, {
-                    httpOnly: true,      
-                    secure: true,       
-                    sameSite: 'none',  
-                    maxAge: 8 * 60 * 60 * 1000 
-                });
+            res.cookie("token", token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite:
+                    process.env.NODE_ENV === "production"
+                        ? "none"
+                        : "lax",
+                maxAge: 8 * 60 * 60 * 1000
+            });
 
-                delete user.password;
-                return res.json({ success: true, user: user });
-            } else {
-                return res.status(401).json({ success: false, message: "Invalid credentials" });
-            }
-        } else {
-            return res.status(401).json({ success: false, message: "Invalid credentials" });
-        }
-    });
+            delete user.password;
+
+            return res.json({
+                success: true,
+                user
+            });
+        });
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error."
+        });
+    }
 });
 
 // LOGOUT ROUTE
-app.post('/api/logout', (req, res) => {
-    res.clearCookie('token', {
+app.post("/api/logout", (req, res) => {
+
+    res.clearCookie("token", {
         httpOnly: true,
-        sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production' 
+        secure: true,
+        sameSite: "none"
     });
-    res.json({ success: true, message: "Logged out successfully" });
+
+    res.json({
+        success: true,
+        message: "Logged out successfully"
+    });
+
 });
 
-// CHANGE PASSWORD ROUTE
-app.put('/api/users/:id/change-password', verifyRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
-    const userId = req.params.id;
-    
-    // Security check: Users can only change their own password
-    if (req.user.id !== parseInt(userId) && req.user.role !== 'admin') {
-        return res.status(403).json({ error: "Forbidden" });
-    }
+// ==========================================
+// CHANGE PASSWORD
+// ==========================================
+app.put(
+    "/api/users/:id/change-password",
+    verifyRole(["admin", "teacher", "student", "parent"]),
+    async (req, res) => {
+        try {
+            const userId = Number(req.params.id);
 
-    const { currentPassword, newPassword } = req.body;
+            // Only the account owner or an admin can change the password
+            if (req.user.id !== userId && req.user.role !== "admin") {
+                return res.status(403).json({
+                    success: false,
+                    error: "You are not authorized to change this password."
+                });
+            }
 
-    db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
-        if (err) return res.status(500).json({ error: "Database error" });
-        if (results.length === 0) return res.status(404).json({ error: "User not found" });
+            const { currentPassword, newPassword } = req.body;
 
-        const user = results[0];
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) return res.status(401).json({ error: "Incorrect current password" });
+            // Validate input
+            if (!currentPassword || !newPassword) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Current password and new password are required."
+                });
+            }
 
-        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-        
-        db.query("UPDATE users SET password = ? WHERE id = ?", [hashedNewPassword, userId], (err) => {
-            if (err) return res.status(500).json({ error: "Failed to update password" });
-            res.json({ success: true, message: "Password updated successfully!" });
-        });
-    });
-});
+            // Basic password policy
+            if (newPassword.length < 8) {
+                return res.status(400).json({
+                    success: false,
+                    error: "New password must be at least 8 characters long."
+                });
+            }
 
-// CHANGE USERNAME ROUTE
-app.put('/api/users/:id/change-username', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
-    const userId = req.params.id;
-    
-    if (req.user.id !== parseInt(userId) && req.user.role !== 'admin') {
-        return res.status(403).json({ error: "Forbidden" });
-    }
+            db.query(
+                "SELECT password FROM users WHERE id = ?",
+                [userId],
+                async (err, results) => {
+                    if (err) {
+                        console.error(err);
 
-    const { newUsername } = req.body;
+                        return res.status(500).json({
+                            success: false,
+                            error: "Database error."
+                        });
+                    }
 
-    if (!newUsername || newUsername.trim() === '') {
-        return res.status(400).json({ error: "Username cannot be empty" });
-    }
+                    if (results.length === 0) {
+                        return res.status(404).json({
+                            success: false,
+                            error: "User not found."
+                        });
+                    }
 
-    db.query("UPDATE users SET username = ? WHERE id = ?", [newUsername.trim(), userId], (err) => {
-        if (err) {
-            if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "That username is already taken!" });
-            return res.status(500).json({ error: "Database error" });
+                    const passwordMatched = await bcrypt.compare(
+                        currentPassword,
+                        results[0].password
+                    );
+
+                    if (!passwordMatched) {
+                        return res.status(401).json({
+                            success: false,
+                            error: "Current password is incorrect."
+                        });
+                    }
+
+                    // Prevent reusing the same password
+                    const samePassword = await bcrypt.compare(
+                        newPassword,
+                        results[0].password
+                    );
+
+                    if (samePassword) {
+                        return res.status(400).json({
+                            success: false,
+                            error: "New password must be different from the current password."
+                        });
+                    }
+
+                    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+                    db.query(
+                        "UPDATE users SET password = ? WHERE id = ?",
+                        [hashedPassword, userId],
+                        (updateErr) => {
+                            if (updateErr) {
+                                console.error(updateErr);
+
+                                return res.status(500).json({
+                                    success: false,
+                                    error: "Failed to update password."
+                                });
+                            }
+
+                            return res.json({
+                                success: true,
+                                message: "Password updated successfully."
+                            });
+                        }
+                    );
+                }
+            );
+        } catch (error) {
+            console.error(error);
+
+            return res.status(500).json({
+                success: false,
+                error: "Internal server error."
+            });
         }
-        res.json({ success: true, message: "Username updated successfully! You will use this to log in next time." });
-    });
-});
+    }
+);
+// ==========================================
+// CHANGE USERNAME
+// ==========================================
+app.put(
+    "/api/users/:id/change-username",
+    verifyRole(["admin", "teacher", "student", "parent"]),
+    (req, res) => {
+        const userId = Number(req.params.id);
+
+        // Only the account owner or an admin can change the username
+        if (req.user.id !== userId && req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                error: "You are not authorized to change this username."
+            });
+        }
+
+        const { newUsername } = req.body;
+
+        if (!newUsername || typeof newUsername !== "string") {
+            return res.status(400).json({
+                success: false,
+                error: "Username is required."
+            });
+        }
+
+        const username = newUsername.trim();
+
+        if (username.length < 3) {
+            return res.status(400).json({
+                success: false,
+                error: "Username must be at least 3 characters long."
+            });
+        }
+
+        if (username.length > 50) {
+            return res.status(400).json({
+                success: false,
+                error: "Username is too long."
+            });
+        }
+
+        const checkSql = "SELECT id FROM users WHERE username = ? AND id != ?";
+
+        db.query(checkSql, [username, userId], (checkErr, users) => {
+            if (checkErr) {
+                console.error(checkErr);
+
+                return res.status(500).json({
+                    success: false,
+                    error: "Database error."
+                });
+            }
+
+            if (users.length > 0) {
+                return res.status(409).json({
+                    success: false,
+                    error: "Username already exists."
+                });
+            }
+
+            const updateSql =
+                "UPDATE users SET username = ? WHERE id = ?";
+
+            db.query(updateSql, [username, userId], (updateErr) => {
+                if (updateErr) {
+                    console.error(updateErr);
+
+                    return res.status(500).json({
+                        success: false,
+                        error: "Failed to update username."
+                    });
+                }
+
+                return res.json({
+                    success: true,
+                    message: "Username updated successfully."
+                });
+            });
+        });
+    }
+);
+
+// ==========================================
+//DELETE FILE FUNCTION
+// ==========================================
 
 const deleteFile = (filePath) => {
-    // filePath usually looks like "/uploads/1715421234-file.pdf"
-    // We need to resolve it to the full local path
-    const fullPath = path.join(__dirname, filePath);
-    
-    fs.unlink(fullPath, (err) => {
-        if (err) {
-            console.error(`❌ Error deleting file at ${fullPath}:`, err.message);
-        } else {
-            console.log(`✅ File deleted successfully: ${fullPath}`);
-        }
+
+    if (!filePath) return;
+
+    const fullPath = path.join(
+        __dirname,
+        filePath
+    );
+
+    fs.access(fullPath, fs.constants.F_OK, (err) => {
+
+        if (err) return;
+
+        fs.unlink(fullPath, (unlinkErr) => {
+
+            if (unlinkErr) {
+
+                console.error(
+                    "Delete Error:",
+                    unlinkErr.message
+                );
+
+            }
+
+        });
+
     });
+
 };
 
 // ==========================================
@@ -232,9 +480,10 @@ const deleteFile = (filePath) => {
 
 app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
     const sql = `
-        SELECT students.*, courses.course_name 
-        FROM students 
-        LEFT JOIN courses ON students.course_id = courses.id
+        SELECT students.*, courses.course_name
+FROM students
+LEFT JOIN courses ON students.course_id = courses.id
+ORDER BY students.student_id DESC
     `;
     db.query(sql, (err, data) => {
         if (err) return res.status(500).json(err);
@@ -244,6 +493,11 @@ app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
 
 app.post('/api/students', verifyRole(['admin']), async (req, res) => { 
     const { name, email, roll, password, semester, course_id } = req.body;
+    if (!name || !email || !roll || !password || !course_id) {
+        return res.status(400).json({
+            error: "Please fill all required fields."
+        });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
@@ -252,7 +506,13 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'student')";
         db.query(userSql, [roll, hashedPassword], (err, userResult) => {
             if (err) {
-                return db.rollback(() => res.status(500).json({ error: "Username (Roll No) already exists in users table." }));
+                console.error(err);
+
+                return db.rollback(() =>
+                   res.status(500).json({
+                   error: "Username (Roll No) already exists in users table."
+                })
+             );
             }
 
             const userId = userResult.insertId;
@@ -262,9 +522,15 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
             `;
             
             db.query(studentSql, [userId, course_id, roll, name, email, semester || 1], (err, result) => {
-                if (err) {
-                    return db.rollback(() => res.status(400).json({ error: "Email already exists in students table. Both entries rolled back." }));
-                }
+               if (err) {
+    console.error(err);
+
+    return db.rollback(() =>
+        res.status(400).json({
+            error: "Email already exists in students table. Both entries rolled back."
+        })
+    );
+}
 
                 db.commit((err) => {
                     if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
@@ -277,6 +543,11 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 
 app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
     const { name, email, roll, semester, course_id } = req.body; 
+    if (!name || !email || !roll || !course_id) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     const sql = "UPDATE students SET full_name=?, email=?, enrollment_number=?, semester=?, course_id=? WHERE student_id=?";
     
     db.query(sql, [name, email, roll, semester, course_id, req.params.id], (err, result) => {
@@ -312,6 +583,17 @@ app.get('/api/teachers', verifyRole(['admin']), (req, res) => {
 
 app.post('/api/teachers', verifyRole(['admin']), async (req, res) => { 
     const { full_name, email, employee_id, department, qualification, designation, password } = req.body;
+if (
+    !full_name ||
+    !email ||
+    !employee_id ||
+    !department ||
+    !designation
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
@@ -341,6 +623,18 @@ app.post('/api/teachers', verifyRole(['admin']), async (req, res) => {
 
 app.put('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
     const { full_name, email, employee_id, department, qualification, designation } = req.body;
+    if (
+        !full_name ||
+        !email ||
+        !employee_id ||
+        !department ||
+        !qualification ||
+        !designation
+    ) {
+        return res.status(400).json({
+            error: "Please fill all required fields."
+        });
+    }
     const sql = "UPDATE teachers SET full_name=?, email=?, employee_id=?, department=?, qualification=?, designation=? WHERE teacher_id=?";
     db.query(sql, [full_name, email, employee_id, department, qualification, designation, req.params.id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -370,6 +664,17 @@ app.get('/api/courses', verifyRole(['admin', 'teacher', 'student', 'parent']), (
 
 app.post('/api/courses', verifyRole(['admin']), (req, res) => {
     const { course_code, course_name, department, duration_years, total_semesters } = req.body;
+    if (
+    !course_code ||
+    !course_name ||
+    !department ||
+    !duration_years ||
+    !total_semesters
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     const sql = "INSERT INTO courses (course_code, course_name, department, duration_years, total_semesters) VALUES (?, ?, ?, ?, ?)";
     
     db.query(sql, [course_code, course_name, department, duration_years, total_semesters], (err, result) => {
@@ -416,6 +721,18 @@ app.get('/api/subjects', verifyRole(['admin', 'teacher']), (req, res) => {
 
 app.post('/api/subjects', verifyRole(['admin']), (req, res) => {
     const { course_id, semester, subject_code, subject_name, subject_type, credits } = req.body;
+    if (
+    !course_id ||
+    !semester ||
+    !subject_code ||
+    !subject_name ||
+    !subject_type ||
+    !credits
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     const sql = "INSERT INTO subjects (course_id, semester, subject_code, subject_name, subject_type, credits) VALUES (?, ?, ?, ?, ?, ?)";
     
     db.query(sql, [course_id, semester, subject_code, subject_name, subject_type, credits], (err, result) => {
@@ -485,6 +802,23 @@ app.get('/api/parents', verifyRole(['admin']), (req, res) => {
 
 app.post('/api/parents', verifyRole(['admin']), async (req, res) => { 
     const { full_name, phone, email, username, password, student_ids } = req.body; 
+    if (
+    !full_name ||
+    !phone ||
+    !email ||
+    !username ||
+    !password
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
+
+if (!Array.isArray(student_ids) || student_ids.length === 0) {
+    return res.status(400).json({
+        error: "Please select at least one student."
+    });
+}
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.beginTransaction((err) => {
@@ -518,6 +852,21 @@ app.post('/api/parents', verifyRole(['admin']), async (req, res) => {
 app.put('/api/parents/:id', verifyRole(['admin']), (req, res) => {
     const parentId = req.params.id;
     const { full_name, phone, email, student_ids } = req.body; 
+    if (
+    !full_name ||
+    !phone ||
+    !email
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
+
+if (!Array.isArray(student_ids) || student_ids.length === 0) {
+    return res.status(400).json({
+        error: "Please select at least one student."
+    });
+}
     
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction failed" });
@@ -571,6 +920,11 @@ app.get('/api/notices', verifyRole(['admin', 'teacher', 'student', 'parent']), (
 
 app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
     const { title, content, target_role, priority, posted_by } = req.body;
+    if (!title || !content || !target_role || !priority) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     
     if (!posted_by) {
         return res.status(400).json({ error: "Admin/Teacher ID (posted_by) is required." });
@@ -591,16 +945,27 @@ app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attach
 
 app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
     const { title, content, target_role, priority } = req.body;
+    if (!title || !content || !target_role || !priority) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     
     const attachment_url = req.file ? `/uploads/${req.file.filename}` : req.body.attachment_url;
 
     const sql = "UPDATE notices SET title=?, content=?, target_role=?, priority=?, attachment_url=? WHERE id=?";
     
     db.query(sql, [title, content, target_role, priority, attachment_url, req.params.id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
+        if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: err.message
+    });
+}
     });
 });
+
 
 app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
     const noticeId = req.params.id;
@@ -609,7 +974,10 @@ app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
     db.query("SELECT attachment_url FROM notices WHERE id = ?", [noticeId], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         
-        const fileToDelete = results[0]?.attachment_url;
+const fileToDelete =
+results.length > 0
+    ? results[0].attachment_url
+    : null;
 
         // 2. Delete the record from database
         db.query("DELETE FROM notices WHERE id = ?", [noticeId], (err) => {
@@ -651,11 +1019,21 @@ app.get('/api/admin/dashboard-stats', verifyRole(['admin']), (req, res) => {
     `;
 
     db.query(statsSql, (err, statsData) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
+if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: err.message
+    });
+}        
         db.query(activitySql, (err, activityData) => {
-            if (err) return res.status(500).json({ error: err.message });
-            
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: err.message
+                });
+            }
+
             res.json({
                 stats: statsData[0],
                 activities: activityData
@@ -711,18 +1089,44 @@ app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
 // Save Attendance[cite: 7]
 app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
     const { subject_id, date, students, marked_by } = req.body;
+    if (
+    !subject_id ||
+    !date ||
+    !marked_by ||
+    !Array.isArray(students)
+) {
+    return res.status(400).json({
+        error: "Invalid attendance data."
+    });
+}
+
+if (students.length === 0) {
+    return res.status(400).json({
+        error: "No students found."
+    });
+}
 
     const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
 
     db.query(getTeacherSql, [marked_by], (err, teacherData) => {
-        if (err || teacherData.length === 0) return res.status(500).json({ error: "Teacher lookup failed" });
-        
+if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: "Teacher lookup failed"
+    });
+}        
         const actualTeacherId = teacherData[0].teacher_id;
 
         const checkClassSql = `SELECT id FROM daily_classes WHERE subject_id = ? AND class_date = ?`;
 
         db.query(checkClassSql, [subject_id, date], (err, classData) => {
-            if (err) return res.status(500).json({ error: "Class lookup failed" });
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Class lookup failed"
+                });
+            }
 
             const insertAttendance = (dailyClassId) => {
                 const values = students.map(student => [
@@ -763,6 +1167,11 @@ app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
 
 // Get Students for a Subject (Attendance)[cite: 7]
 app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, res) => {
+    if (!req.params.id) {
+    return res.status(400).json({
+        error: "Subject ID is required."
+    });
+}
     const sql = `
         SELECT 
             st.student_id, 
@@ -771,11 +1180,20 @@ app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, re
         FROM students st
         JOIN subjects sub ON st.course_id = sub.course_id AND st.semester = sub.semester
         WHERE sub.id = ?
+        ORDER BY st.full_name ASC
     `;
     
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json({ error: "Database rejected the query" });
-        const studentsWithStatus = data.map(st => ({ ...st, status: 'Absent' }));
+if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: "Database rejected the query"
+    });
+}        const studentsWithStatus = data.map(student => ({
+    ...student,
+    status: "Absent"
+}));
         res.json(studentsWithStatus);
     });
 });
@@ -800,7 +1218,13 @@ app.get('/api/teacher/:id/attendance-history', verifyRole(['teacher']), (req, re
     `;
 
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json({ error: "Failed to load history" });
+        if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: "Failed to load history"
+    });
+}
         res.json(data);
     });
 });
@@ -814,6 +1238,7 @@ app.get('/api/attendance/class/:classId', verifyRole(['teacher']), (req, res) =>
         FROM attendance a
         JOIN students st ON a.student_id = st.student_id
         WHERE a.daily_class_id = ?
+        ORDER BY st.full_name ASC
     `;
 
     db.query(sql, [req.params.classId], (err, data) => {
@@ -828,6 +1253,11 @@ app.get('/api/attendance/class/:classId', verifyRole(['teacher']), (req, res) =>
 
 app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
     const { subject_id, exam_type } = req.query;
+    if (!subject_id || !exam_type) {
+    return res.status(400).json({
+        error: "Subject and exam type are required."
+    });
+}
     const sql = `
         SELECT m.student_id as id, st.enrollment_number as enrollment, st.full_name as name, m.score, m.max_score
         FROM marks m
@@ -835,17 +1265,40 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
         WHERE m.subject_id = ? AND m.exam_type = ?
     `;
     db.query(sql, [subject_id, exam_type], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: err.message
+    });
+}
         res.json(data);
     });
 });
 
 app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
     const { subject_id, exam_type, max_score, marks, uploaded_by_user_id } = req.body;
+    if (
+    !subject_id ||
+    !exam_type ||
+    !max_score ||
+    !uploaded_by_user_id ||
+    !Array.isArray(marks)
+) {
+    return res.status(400).json({
+        error: "Invalid marks data."
+    });
+}
 
     const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
     db.query(getTeacherSql, [uploaded_by_user_id], (err, teacherData) => {
-        if (err || teacherData.length === 0) return res.status(500).json({ error: "Teacher lookup failed" });
+        if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: "teacher lookup failed"
+    });
+}
 
         const teacherId = teacherData[0].teacher_id;
         
@@ -863,7 +1316,13 @@ app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
         `;
 
         db.query(sql, [values], (err, result) => {
-            if (err) return res.status(500).json({ error: "Failed to save marks" });
+            if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: "Failed to save marks"
+    });
+}
             res.json({ success: true });
         });
     });
@@ -889,7 +1348,13 @@ app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), (req, res) => 
         ORDER BY MAX(m.created_at) DESC
     `;
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: "Failed to load marks ledger"
+    });
+}
         res.json(data);
     });
 });
@@ -960,6 +1425,18 @@ app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), (req, res) => {
 
 app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
     const { userId, subjectId, date, startTime, endTime, room } = req.body;
+    if (
+    !userId ||
+    !subjectId ||
+    !date ||
+    !startTime ||
+    !endTime ||
+    !room
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
 
     const findTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
 
@@ -1033,7 +1510,12 @@ app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => 
     `;
 
     db.query(childSql, [userId], (err, children) => {
-        if (err) return res.status(500).json(err);
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                error: "Failed to load child information"
+            });
+        }
         if (children.length === 0) return res.json({ message: "No children linked to this parent record." });
 
         let targetStudent = children[0];
@@ -1051,8 +1533,13 @@ app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => 
         `;
 
         db.query(metricsSql, [targetStudent.student_id, targetStudent.student_id, targetStudent.student_id], (err, metrics) => {
-            if (err) return res.status(500).json(err);
-            
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Failed to load summary metrics"
+                });
+            }
+
             res.json({
                 allWards: children, 
                 childProfile: targetStudent,
@@ -1086,7 +1573,12 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
     `;
 
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: "Failed to fetch results" });
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                error: "Failed to fetch results"
+            });
+        }
 
         const formattedResults = {};
 
@@ -1125,13 +1617,23 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
 app.get('/api/student/:id/subjects-list', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
+    if (!semester) {
+    return res.status(400).json({
+        error: "Semester is required."
+    });
+}
     const sql = `
         SELECT DISTINCT s.subject_name 
         FROM subjects s
         JOIN students st ON s.course_id = st.course_id
         WHERE st.user_id = ? AND s.semester = ?`;
     db.query(sql, [userId, semester], (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                error: "Failed to load subjects list"
+            });
+        }
         res.json(data);
     });
 });
@@ -1139,6 +1641,11 @@ app.get('/api/student/:id/subjects-list', verifyRole(['student', 'parent', 'admi
 app.get('/api/student/:id/attendance-logs', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
+    if (!semester) {
+    return res.status(400).json({
+        error: "Semester is required."
+    });
+}
     const sql = `
         SELECT 
             dc.class_date, 
@@ -1253,7 +1760,13 @@ app.get('/api/admin/fees', verifyRole(['admin']), (req, res) => {
         ORDER BY f.due_date ASC
     `;
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+    console.error(err);
+
+    return res.status(500).json({
+        error: err.message
+    });
+}
         res.json(data);
     });
 });
@@ -1290,6 +1803,15 @@ app.get('/api/student/:id/payments', verifyRole(['student', 'parent', 'admin']),
 
 app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res) => {
     const { fee_id, amount_paid, payment_method, transaction_reference, processed_by } = req.body;
+    if (
+    !fee_id ||
+    !amount_paid ||
+    !payment_method
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
 
     db.beginTransaction((err) => {
         if (err) return res.status(500).json({ error: "Transaction failed to initialize." });
@@ -1305,7 +1827,12 @@ app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res)
             db.query(`SELECT total_fee, paid_amount FROM fees WHERE id = ?`, [fee_id], (err, feeRows) => {
                 if (err || feeRows.length === 0) return db.rollback(() => res.status(500).json({ error: "Fee lookup failed." }));
 
-                const newPaid = parseFloat(feeRows[0].paid_amount) + parseFloat(amount_paid);
+                const totalFee = parseFloat(feeRows[0].total_fee);
+const newPaid = Math.min(
+    parseFloat(feeRows[0].paid_amount) +
+    parseFloat(amount_paid),
+    totalFee
+);
                 const newStatus = newPaid >= parseFloat(feeRows[0].total_fee) ? 'Paid' : 'Partial';
 
                 db.query(`UPDATE fees SET paid_amount = ?, status = ? WHERE id = ?`, [newPaid, newStatus, fee_id], (err) => {
@@ -1336,6 +1863,17 @@ app.get('/api/admin/payments', verifyRole(['admin']), (req, res) => {
 
 app.post('/api/fees', verifyRole(['admin']), (req, res) => {
     const { student_id, semester, fee_type, total_fee, due_date } = req.body;
+    if (
+    !student_id ||
+    !semester ||
+    !fee_type ||
+    !total_fee ||
+    !due_date
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     const sql = `
         INSERT INTO fees (student_id, semester, fee_type, total_fee, paid_amount, due_date, status)
         VALUES (?, ?, ?, ?, 0, ?, 'Pending')
@@ -1352,27 +1890,79 @@ app.post('/api/fees', verifyRole(['admin']), (req, res) => {
 app.post('/api/fees/bulk-assign', verifyRole(['admin']), (req, res) => {
     const { course_id, semester, fee_type, total_fee, due_date } = req.body;
 
-    const studentsSql = `SELECT student_id FROM students WHERE course_id = ? AND semester = ? AND status = 'Active'`;
-    db.query(studentsSql, [course_id, semester], (err, students) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (students.length === 0) return res.status(404).json({ error: "No active students found for that course & semester." });
+    if (
+        !course_id ||
+        !semester ||
+        !fee_type ||
+        !total_fee ||
+        !due_date
+    ) {
+        return res.status(400).json({
+            error: "Please fill all required fields."
+        });
+    }
 
-        const values = students.map(s => [s.student_id, semester, fee_type, total_fee, 0, due_date, 'Pending']);
+    const studentsSql = `
+        SELECT student_id
+        FROM students
+        WHERE course_id = ? AND semester = ? AND status = 'Active'
+    `;
+
+    db.query(studentsSql, [course_id, semester], (err, students) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: err.message });
+        }
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                error: "No active students found for that course & semester."
+            });
+        }
+
+        const values = students.map(s => [
+            s.student_id,
+            semester,
+            fee_type,
+            total_fee,
+            0,
+            due_date,
+            'Pending'
+        ]);
 
         const insertSql = `
             INSERT INTO fees (student_id, semester, fee_type, total_fee, paid_amount, due_date, status)
             VALUES ?
-            ON DUPLICATE KEY UPDATE total_fee = VALUES(total_fee), due_date = VALUES(due_date)
+            ON DUPLICATE KEY UPDATE
+                total_fee = VALUES(total_fee),
+                due_date = VALUES(due_date)
         `;
+
         db.query(insertSql, [values], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, assigned: students.length });
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: err.message });
+            }
+
+            res.json({
+                success: true,
+                assigned: students.length
+            });
         });
     });
 });
 
 app.put('/api/fees/:id', verifyRole(['admin']), (req, res) => {
     const { total_fee, due_date, fee_type } = req.body;
+    if (
+    !total_fee ||
+    !due_date ||
+    !fee_type
+) {
+    return res.status(400).json({
+        error: "Please fill all required fields."
+    });
+}
     const sql = `UPDATE fees SET total_fee = ?, due_date = ?, fee_type = ? WHERE id = ?`;
     db.query(sql, [total_fee, due_date, fee_type, req.params.id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1394,6 +1984,11 @@ app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
         contact, blood_group, address, city, state, pin_code, 
         father_name, emergency_contact, guardian_relation, profile_picture
     } = req.body;
+    if (!contact) {
+    return res.status(400).json({
+        error: "Contact number is required."
+    });
+}
 
     const sql = `
         UPDATE students SET 
@@ -1469,17 +2064,29 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     `;
 
     db.query(profileSql, [userId], (err, profileData) => {
-        if (err) return res.status(500).json({ error: "Profile fetch failed" });
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Profile fetch failed" });
+        }
         if (profileData.length === 0) return res.status(404).json({ error: "Student not found" });
 
         db.query(classesSql, [userId], (err, classesData) => {
-            if (err) return res.status(500).json({ error: "Classes fetch failed" });
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "Classes fetch failed" });
+            }
 
             db.query(noticesSql, (err, noticesData) => {
-                if (err) return res.status(500).json({ error: "Notices fetch failed" });
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({ error: "Notices fetch failed" });
+                }
 
                 db.query(performanceSql, [userId], (err, perfData) => {
-                    if (err) return res.status(500).json({ error: "Performance fetch failed" });
+                    if (err) {
+                        console.error(err);
+                        return res.status(500).json({ error: "Performance fetch failed" });
+                    }
 
                     const mappedNotices = noticesData.map(n => ({
                         id: n.id,
@@ -1508,6 +2115,13 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
 
 // --- START THE SERVER ---
 const PORT = process.env.PORT || 5000;
+process.on("uncaughtException", err => {
+    console.error(err);
+});
+
+process.on("unhandledRejection", err => {
+    console.error(err);
+});
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
