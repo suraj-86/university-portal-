@@ -10,7 +10,7 @@ const app = express();
 
 // 1. Update CORS to strictly allow your frontend URL and accept credentials (cookies)[cite: 7]
 app.use(cors({
-    origin: 'http://localhost:5173', // Must match your React app's URL exactly
+    origin: 'https://university-portal-flax-tau.vercel.app', // Must match your React app's URL exactly
     credentials: true // Required to send and receive HTTP-Only cookies
 }));
 
