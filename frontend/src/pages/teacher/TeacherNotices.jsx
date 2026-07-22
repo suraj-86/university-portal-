@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, Save, Paperclip, Bell, FileText, Send, Inbox, Megaphone, Download } from 'lucide-react';
-import api from '../../services/api';
+import api, { getFileUrl } from '../../services/api';
 import Card from '../../components/Card';
 import Modal from '../../components/Modal';
 import FormInput from '../../components/FormInput';
@@ -112,10 +112,7 @@ const TeacherNotices = () => {
 
     const handleDownloadFile = (fileName) => {
         if (!fileName) return;
-        const fullUrl = fileName.startsWith('/') 
-            ? `http://localhost:5000${fileName}` 
-            : `http://localhost:5000/uploads/${fileName}`;
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     const AttachmentCard = ({ fileName }) => (

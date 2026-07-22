@@ -1,5 +1,6 @@
 import React from 'react';
 import { FileText, Download } from 'lucide-react';
+import { getFileUrl } from '../services/api';
 
 const AttachmentBadge = ({ fileUrl, fileName, color = "indigo" }) => {
     
@@ -8,11 +9,7 @@ const AttachmentBadge = ({ fileUrl, fileName, color = "indigo" }) => {
         if (!fileUrl && !fileName) return alert("No attachment path found.");
         
         const path = fileUrl || fileName;
-        const fullUrl = path.startsWith('/') 
-            ? `http://localhost:5000${path}` 
-            : `http://localhost:5000/uploads/${path}`;
-            
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(path), '_blank');
     };
 
     const colorClasses = {

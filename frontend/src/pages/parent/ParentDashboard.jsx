@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, DollarSign, Award, BookOpen, Clock, Bell, FileText, Calendar, CheckCircle2, Users } from 'lucide-react';
+import { Activity, DollarSign, Award, BookOpen, Clock, Bell, FileText, Calendar, CheckCircle2, Users, Download, X } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import StatsWidget from '../../components/StatsWidget';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
+import Modal from '../../components/Modal';
 
 const ParentDashboard = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
+    const [viewingNotice, setViewingNotice] = useState(null);
     
     const [selectedWardId, setSelectedWardId] = useState('');
     const [allWards, setAllWards] = useState([]);
@@ -61,6 +63,14 @@ const ParentDashboard = () => {
         };
         fetchAllData();
     }, [user, selectedWardId]); 
+
+    const handleDownload = (e, fileName) => {
+        if (e) e.stopPropagation();
+        if (!fileName) return;
+        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
+        window.open(fullUrl, '_blank');
+    };
 
     if (loading && !wardSummary) {
         return <div className="p-10 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Loading Ward Information...</div>;
@@ -218,7 +228,11 @@ const ParentDashboard = () => {
                     <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-6"><Bell size={18} className="text-indigo-600"/> Campus Notices</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {wardDetails.notices.length > 0 ? wardDetails.notices.map(notice => (
-                            <div key={notice.id} className={`p-4 rounded-2xl border transition-all ${notice.bg} ${notice.border}`}>
+                            <div 
+                                key={notice.id} 
+                                onClick={() => setViewingNotice(notice)}
+                                className={`p-4 rounded-2xl border transition-all cursor-pointer hover:scale-[1.02] ${notice.bg} ${notice.border}`}
+                            >
                                 <h4 className={`font-bold text-sm mb-1 ${notice.text}`}>{notice.title}</h4>
                                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
                                     <span>{notice.date}</span>
@@ -229,6 +243,46 @@ const ParentDashboard = () => {
                         )) : <p className="text-sm text-slate-400 italic">No recent notices available.</p>}
                     </div>
                 </div>
+            )}
+
+            {viewingNotice && (
+                <Modal isOpen={!!viewingNotice} onClose={() => setViewingNotice(null)} title="Notice Preview">
+                    <div className="flex flex-col h-full max-h-[80vh]">
+                        <div className="shrink-0 pb-4 border-b border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${viewingNotice.type === 'Alert' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>
+                                    {viewingNotice.type} Priority
+                                </span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{viewingNotice.date}</span>
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 leading-tight capitalize">{viewingNotice.title}</h2>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto py-6 my-2 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner px-6">
+                            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap break-words font-medium">{viewingNotice.content || viewingNotice.title}</p>
+                        </div>
+                        
+                        <div className="shrink-0 pt-4 space-y-4">
+                            {viewingNotice.attachment_url && (
+                                <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileText size={20} /></div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Attachment</p>
+                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={(e) => handleDownload(e, viewingNotice.attachment_url)} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">
+                                        <Download size={18} />
+                                    </button>
+                                </div>
+                            )}
+                            <button onClick={() => setViewingNotice(null)} className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl hover:bg-slate-800 transition-all text-xs uppercase tracking-[0.2em]">
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );

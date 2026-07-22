@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Users, FileText, Download, User, Clock, ChevronRight } from 'lucide-react';
-import api from '../../services/api';
+import api, { getFileUrl } from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import Modal from '../../components/Modal';
 
@@ -45,12 +45,7 @@ const ParentNotices = () => {
     const handleDownload = (e, fileName) => {
         e.stopPropagation(); 
         if (!fileName) return;
-        
-        const fullUrl = fileName.startsWith('/') 
-            ? `http://localhost:5000${fileName}` 
-            : `http://localhost:5000/uploads/${fileName}`;
-            
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     if (loading && notices.length === 0) return <div className="p-10 text-slate-500 font-bold animate-pulse uppercase tracking-widest text-sm">Loading Notices...</div>;

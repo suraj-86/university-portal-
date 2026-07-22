@@ -37,16 +37,20 @@ const StudentNotices = () => {
                 if (filterType === 'Admin') return n.author_role === 'admin' && matchesSearch;
                 return matchesSearch;
             })
-            .sort((a, b) => (a.priority === 'High' ? -1 : 1));
+            .sort((a, b) => {
+                if (a.priority === 'High' && b.priority !== 'High') return -1;
+                if (a.priority !== 'High' && b.priority === 'High') return 1;
+                return new Date(b.date) - new Date(a.date);
+            });
     }, [filterType, searchTerm, notices]);
 
     const handleDownload = (e, fileName) => {
-        e.stopPropagation(); 
+        if (e) e.stopPropagation(); 
         if (!fileName) return;
         
-        const fullUrl = fileName.startsWith('/') 
-            ? `http://localhost:5000${fileName}` 
-            : `http://localhost:5000/uploads/${fileName}`;
+        // Strip out '/api' to target the base server root for static files
+        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
             
         window.open(fullUrl, '_blank');
     };

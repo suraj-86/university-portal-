@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Users, Bell, Megaphone, FileText, CheckSquare, Activity, Clock, MapPin } from 'lucide-react';
+import { BookOpen, Users, Bell, Megaphone, FileText, CheckSquare, Activity, Clock, MapPin, Download, X } from 'lucide-react';
 import api from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import useAuth from '../../hooks/useAuth';
+import Modal from '../../components/Modal';
 
 const TeacherDashboard = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [viewingNotice, setViewingNotice] = useState(null);
     const [dashboardData, setDashboardData] = useState({
         teacherName: '',
         stats: { totalSubjects: 0, totalStudents: 0, classesConducted: 0 },
@@ -28,6 +30,14 @@ const TeacherDashboard = () => {
                 });
         }
     }, [user]);
+
+    const handleDownload = (e, fileName) => {
+        if (e) e.stopPropagation();
+        if (!fileName) return;
+        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
+        window.open(fullUrl, '_blank');
+    };
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
@@ -134,7 +144,11 @@ const TeacherDashboard = () => {
                                 {dashboardData.notices.length > 0 ? (
                                     <div className="flex flex-col gap-2">
                                         {dashboardData.notices.map(notice => (
-                                            <div key={notice.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-start gap-4 group hover:bg-indigo-50 transition-colors">
+                                            <div 
+                                                key={notice.id} 
+                                                onClick={() => setViewingNotice(notice)}
+                                                className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-start gap-4 group hover:bg-indigo-50 transition-colors cursor-pointer"
+                                            >
                                                 <div className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${
                                                     notice.priority === 'High' 
                                                     ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' 
@@ -161,6 +175,46 @@ const TeacherDashboard = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {viewingNotice && (
+                <Modal isOpen={!!viewingNotice} onClose={() => setViewingNotice(null)} title="Notice Preview">
+                    <div className="flex flex-col h-full max-h-[80vh]">
+                        <div className="shrink-0 pb-4 border-b border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${viewingNotice.priority === 'High' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                                    {viewingNotice.priority} Priority
+                                </span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{viewingNotice.date}</span>
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 leading-tight capitalize">{viewingNotice.title}</h2>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto py-6 my-2 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner px-6">
+                            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap break-words font-medium">{viewingNotice.content || viewingNotice.title}</p>
+                        </div>
+                        
+                        <div className="shrink-0 pt-4 space-y-4">
+                            {viewingNotice.attachment_url && (
+                                <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={20} /></div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Attachment</p>
+                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={(e) => handleDownload(e, viewingNotice.attachment_url)} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
+                                        <Download size={18} />
+                                    </button>
+                                </div>
+                            )}
+                            <button onClick={() => setViewingNotice(null)} className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl hover:bg-slate-800 transition-all text-xs uppercase tracking-[0.2em]">
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );

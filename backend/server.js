@@ -10,7 +10,10 @@ const app = express();
 
 // 1. Update CORS to strictly allow your frontend URL and accept credentials (cookies)[cite: 7]
 app.use(cors({
-    origin: 'https://university-portal-flax-tau.vercel.app', // Must match your React app's URL exactly
+origin: [
+        'https://university-portal-flax-tau.vercel.app', 
+        'http://localhost:5173'
+    ],
     credentials: true // Required to send and receive HTTP-Only cookies
 }));
 
@@ -1833,50 +1836,30 @@ app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), 
     const userId = req.params.id;
 
     const sql = `
-        SELECT DISTINCT
+        SELECT 
             n.id,
             n.title,
             n.content,
             n.priority,
             n.attachment_url,
             DATE_FORMAT(n.created_at, '%b %d, %Y') AS date,
-            COALESCE(t.full_name, s.full_name, u.username) AS author_name,
-            u.role AS author_role
+            COALESCE(t.full_name, s_author.full_name, u.username, 'Admin') AS author_name,
+            COALESCE(u.role, 'admin') AS author_role
         FROM notices n
-        JOIN users u
-            ON n.posted_by = u.id
-        LEFT JOIN teachers t
-            ON u.id = t.user_id
-        LEFT JOIN students s
-            ON u.id = s.user_id
-        WHERE
-            n.target_role IN ('all', 'student')
-
-            OR u.role = 'admin'
-
-            OR n.subject_id IN (
-                SELECT ta.subject_id
-                FROM students st
-                JOIN subjects sub
-                    ON st.course_id = sub.course_id
-                   AND st.semester = sub.semester
-                JOIN teacher_assignments ta
-                    ON ta.subject_id = sub.id
-                WHERE st.user_id = ?
-            )
-
+        LEFT JOIN users u ON n.posted_by = u.id
+        LEFT JOIN teachers t ON u.id = t.user_id
+        LEFT JOIN students s_author ON u.id = s_author.user_id
+        WHERE n.target_role IN ('all', 'student')
         ORDER BY n.created_at DESC
     `;
 
-    db.query(sql, [userId], (err, data) => {
+    db.query(sql, (err, data) => {
         if (err) {
-            console.error(err);
-
+            console.error("Notice fetch error:", err);
             return res.status(500).json({
                 error: err.sqlMessage || err.message
             });
         }
-
         res.json(data || []);
     });
 });
@@ -2424,7 +2407,7 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     `;
 
     const noticesSql = `
-        SELECT id, title, 
+        SELECT id, title, content, attachment_url, 
                CASE 
                    WHEN DATE(created_at) = CURDATE() THEN 'Today'
                    WHEN DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 'Yesterday'
@@ -2476,6 +2459,8 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
                     const mappedNotices = noticesData.map(n => ({
                         id: n.id,
                         title: n.title,
+                        content: n.content,
+                        attachment_url: n.attachment_url,
                         date: n.date,
                         type: n.type === 'High' ? 'Alert' : (n.type === 'Low' ? 'General' : 'Academic'),
                         bg: n.type === 'High' ? 'bg-amber-50' : (n.type === 'Low' ? 'bg-indigo-50' : 'bg-blue-50'),

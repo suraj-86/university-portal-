@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Clock, Bell, Calendar, FileText, ChevronRight } from 'lucide-react';
+import { MapPin, Clock, Bell, Calendar, FileText, ChevronRight, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../../services/api';
+import Modal from '../../components/Modal';
 
 const StudentDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [dashboardData, setDashboardData] = useState(null);
+    const [viewingNotice, setViewingNotice] = useState(null);
 
     useEffect(() => {
         const fetchDashboard = async () => {
@@ -24,6 +26,17 @@ const StudentDashboard = () => {
         };
         fetchDashboard();
     }, []);
+
+    const handleDownload = (e, fileName) => {
+        if (e) e.stopPropagation(); 
+        if (!fileName) return;
+        
+        // Strip out '/api' to target the base server root for static files
+        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
+        
+        window.open(fullUrl, '_blank');
+    };
 
     if (loading || !dashboardData) {
         return <div className="min-h-screen flex items-center justify-center text-slate-500 font-bold uppercase tracking-widest bg-slate-50">Loading Dashboard...</div>;
@@ -139,14 +152,18 @@ const StudentDashboard = () => {
                     </div>
                     <div className="flex flex-col gap-4 flex-1">
                         {notices.length > 0 ? notices.map((notice) => (
-                            <div key={notice.id} className={`flex items-start gap-4 p-4 rounded-2xl border ${notice.bg} ${notice.border} transition-all hover:scale-[1.02] cursor-pointer`}>
+                            <div 
+                                key={notice.id} 
+                                onClick={() => setViewingNotice(notice)}
+                                className={`flex items-start gap-4 p-4 rounded-2xl border ${notice.bg} ${notice.border} transition-all hover:scale-[1.02] cursor-pointer`}
+                            >
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${notice.iconBg} ${notice.text}`}>
                                     {notice.type === "General" && <Bell size={20} />}
                                     {notice.type === "Academic" && <Calendar size={20} />}
                                     {notice.type === "Alert" && <FileText size={20} />}
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-slate-900 text-sm leading-tight mb-1.5">{notice.title}</h4>
+                                <div className="min-w-0 flex-1">
+                                    <h4 className="font-bold text-slate-900 text-sm leading-tight mb-1.5 truncate">{notice.title}</h4>
                                     <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
                                         <span className={notice.text}>{notice.type}</span>
                                         <span>•</span>
@@ -164,6 +181,64 @@ const StudentDashboard = () => {
                     </Link>
                 </div>
             </div>
+
+            {viewingNotice && (
+                <Modal 
+                    isOpen={!!viewingNotice} 
+                    onClose={() => setViewingNotice(null)} 
+                    title="Notice Preview"
+                >
+                    <div className="flex flex-col h-full max-h-[80vh]">
+                        <div className="shrink-0 pb-4 border-b border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${viewingNotice.type === 'Alert' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>
+                                    {viewingNotice.type} Priority
+                                </span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{viewingNotice.date}</span>
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 leading-tight capitalize">
+                                {viewingNotice.title}
+                            </h2>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto py-6 my-2 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner">
+                            <div className="px-6">
+                                <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap break-words font-medium">
+                                    {viewingNotice.content || viewingNotice.title}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div className="shrink-0 pt-4 space-y-4">
+                            {viewingNotice.attachment_url && (
+                                <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                            <FileText size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Attachment</p>
+                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={(e) => handleDownload(e, viewingNotice.attachment_url)}
+                                        className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+                                    >
+                                        <Download size={18} />
+                                    </button>
+                                </div>
+                            )}
+                            <button 
+                                onClick={() => setViewingNotice(null)}
+                                className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl hover:bg-slate-800 transition-all active:scale-95 text-xs uppercase tracking-[0.2em]"
+                            >
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };

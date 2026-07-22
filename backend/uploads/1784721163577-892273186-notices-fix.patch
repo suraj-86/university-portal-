@@ -1,0 +1,237 @@
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/backend/server.js university-portal--main/backend/server.js
+--- orig/university-portal--main/backend/server.js	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/backend/server.js	2026-07-22 10:23:11.641005872 +0000
+@@ -1852,8 +1852,6 @@
+         WHERE
+             n.target_role IN ('all', 'student')
+ 
+-            OR u.role = 'admin'
+-
+             OR n.subject_id IN (
+                 SELECT ta.subject_id
+                 FROM students st
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/frontend/package-lock.json university-portal--main/frontend/package-lock.json
+--- orig/university-portal--main/frontend/package-lock.json	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/frontend/package-lock.json	2026-07-22 10:23:30.102957472 +0000
+@@ -722,9 +722,6 @@
+       "cpu": [
+         "arm64"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -741,9 +738,6 @@
+       "cpu": [
+         "arm64"
+       ],
+-      "libc": [
+-        "musl"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -760,9 +754,6 @@
+       "cpu": [
+         "ppc64"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -779,9 +770,6 @@
+       "cpu": [
+         "s390x"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -798,9 +786,6 @@
+       "cpu": [
+         "x64"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -817,9 +802,6 @@
+       "cpu": [
+         "x64"
+       ],
+-      "libc": [
+-        "musl"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/frontend/src/components/attachment.jsx university-portal--main/frontend/src/components/attachment.jsx
+--- orig/university-portal--main/frontend/src/components/attachment.jsx	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/frontend/src/components/attachment.jsx	2026-07-22 10:20:02.944577612 +0000
+@@ -1,5 +1,6 @@
+ import React from 'react';
+ import { FileText, Download } from 'lucide-react';
++import { getFileUrl } from '../services/api';
+ 
+ const AttachmentBadge = ({ fileUrl, fileName, color = "indigo" }) => {
+     
+@@ -8,11 +9,7 @@
+         if (!fileUrl && !fileName) return alert("No attachment path found.");
+         
+         const path = fileUrl || fileName;
+-        const fullUrl = path.startsWith('/') 
+-            ? `http://localhost:5000${path}` 
+-            : `http://localhost:5000/uploads/${path}`;
+-            
+-        window.open(fullUrl, '_blank');
++        window.open(getFileUrl(path), '_blank');
+     };
+ 
+     const colorClasses = {
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/frontend/src/pages/admin/AdminNotices.jsx university-portal--main/frontend/src/pages/admin/AdminNotices.jsx
+--- orig/university-portal--main/frontend/src/pages/admin/AdminNotices.jsx	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/frontend/src/pages/admin/AdminNotices.jsx	2026-07-22 10:20:09.739389804 +0000
+@@ -118,6 +118,15 @@
+                 </span>
+             )
+         }, 
++        {
++            header: "Attachment",
++            accessor: "attachment_url",
++            cell: (row) => (
++                row.attachment_url
++                    ? <AttachmentBadge fileName={row.attachment_url} color="emerald" />
++                    : <span className="text-[11px] text-slate-300">—</span>
++            )
++        },
+         { header: "Date", accessor: "date" },
+         {
+             header: "Actions",
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/frontend/src/pages/parent/ParentNotices.jsx university-portal--main/frontend/src/pages/parent/ParentNotices.jsx
+--- orig/university-portal--main/frontend/src/pages/parent/ParentNotices.jsx	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/frontend/src/pages/parent/ParentNotices.jsx	2026-07-22 10:23:05.544681915 +0000
+@@ -1,6 +1,6 @@
+ import React, { useState, useEffect } from 'react';
+ import { Bell, Users, FileText, Download, User, Clock, ChevronRight } from 'lucide-react';
+-import api from '../../services/api';
++import api, { getFileUrl } from '../../services/api';
+ import useAuth from '../../hooks/useAuth';
+ import Modal from '../../components/Modal';
+ 
+@@ -45,12 +45,7 @@
+     const handleDownload = (e, fileName) => {
+         e.stopPropagation(); 
+         if (!fileName) return;
+-        
+-        const fullUrl = fileName.startsWith('/') 
+-            ? `http://localhost:5000${fileName}` 
+-            : `http://localhost:5000/uploads/${fileName}`;
+-            
+-        window.open(fullUrl, '_blank');
++        window.open(getFileUrl(fileName), '_blank');
+     };
+ 
+     if (loading && notices.length === 0) return <div className="p-10 text-slate-500 font-bold animate-pulse uppercase tracking-widest text-sm">Loading Notices...</div>;
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/frontend/src/pages/student/StudentNotices.jsx university-portal--main/frontend/src/pages/student/StudentNotices.jsx
+--- orig/university-portal--main/frontend/src/pages/student/StudentNotices.jsx	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/frontend/src/pages/student/StudentNotices.jsx	2026-07-22 10:22:57.393571018 +0000
+@@ -1,6 +1,6 @@
+ import React, { useState, useEffect, useMemo } from 'react';
+ import { Search, Calendar, FileText, Download, X, Megaphone, User, Clock, ChevronRight } from 'lucide-react';
+-import api from '../../services/api';
++import api, { getFileUrl } from '../../services/api';
+ import Card from '../../components/Card';
+ import Modal from '../../components/Modal';
+ import useAuth from '../../hooks/useAuth';
+@@ -37,18 +37,20 @@
+                 if (filterType === 'Admin') return n.author_role === 'admin' && matchesSearch;
+                 return matchesSearch;
+             })
+-            .sort((a, b) => (a.priority === 'High' ? -1 : 1));
++            // Keep the backend's newest-first order, just bubble High priority
++            // notices to the top. The old comparator ignored `b` and didn't
++            // account for equal priorities, so it silently scrambled the list
++            // instead of sorting it - new notices could end up buried anywhere.
++            .sort((a, b) => {
++                if (a.priority === b.priority) return 0;
++                return a.priority === 'High' ? -1 : 1;
++            });
+     }, [filterType, searchTerm, notices]);
+ 
+     const handleDownload = (e, fileName) => {
+         e.stopPropagation(); 
+         if (!fileName) return;
+-        
+-        const fullUrl = fileName.startsWith('/') 
+-            ? `http://localhost:5000${fileName}` 
+-            : `http://localhost:5000/uploads/${fileName}`;
+-            
+-        window.open(fullUrl, '_blank');
++        window.open(getFileUrl(fileName), '_blank');
+     };
+ 
+     return (
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/frontend/src/pages/teacher/TeacherNotices.jsx university-portal--main/frontend/src/pages/teacher/TeacherNotices.jsx
+--- orig/university-portal--main/frontend/src/pages/teacher/TeacherNotices.jsx	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/frontend/src/pages/teacher/TeacherNotices.jsx	2026-07-22 10:22:46.595551176 +0000
+@@ -1,6 +1,6 @@
+ import React, { useState, useEffect } from 'react';
+ import { Edit2, Trash2, Save, Paperclip, Bell, FileText, Send, Inbox, Megaphone, Download } from 'lucide-react';
+-import api from '../../services/api';
++import api, { getFileUrl } from '../../services/api';
+ import Card from '../../components/Card';
+ import Modal from '../../components/Modal';
+ import FormInput from '../../components/FormInput';
+@@ -112,10 +112,7 @@
+ 
+     const handleDownloadFile = (fileName) => {
+         if (!fileName) return;
+-        const fullUrl = fileName.startsWith('/') 
+-            ? `http://localhost:5000${fileName}` 
+-            : `http://localhost:5000/uploads/${fileName}`;
+-        window.open(fullUrl, '_blank');
++        window.open(getFileUrl(fileName), '_blank');
+     };
+ 
+     const AttachmentCard = ({ fileName }) => (
+diff -ru '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/university-portal--main/frontend/src/services/api.js university-portal--main/frontend/src/services/api.js
+--- orig/university-portal--main/frontend/src/services/api.js	2026-07-18 10:23:21.000000000 +0000
++++ university-portal--main/frontend/src/services/api.js	2026-07-22 10:19:57.085639614 +0000
+@@ -3,9 +3,25 @@
+ const api = axios.create({
+     baseURL: import.meta.env.VITE_API_BASE_URL,
+     withCredentials: true, // <-- NEW: This tells Axios to automatically send the HTTP-Only cookie
+-    headers: {
+-        'Content-Type': 'application/json',
+-    },
++    // NOTE: Do NOT set a default 'Content-Type': 'application/json' header here.
++    // When a FormData object (e.g. notice attachments) is posted, axios needs to be
++    // able to set its own 'multipart/form-data; boundary=...' header. If a JSON
++    // content-type is forced by default, axios instead JSON-stringifies the FormData
++    // and the file never actually reaches the server (req.file is always undefined),
++    // even though the text fields go through fine. Leaving this unset lets axios pick
++    // the correct content-type per-request automatically (JSON for plain objects,
++    // multipart for FormData).
+ });
+ 
++// The backend serves uploaded files (e.g. /uploads/xyz.pdf) from the API's root
++// domain, NOT under the '/api' path that VITE_API_BASE_URL points requests to.
++// This strips a trailing '/api' (if present) so attachment links work both in
++// local dev and in the deployed environment, instead of a hardcoded localhost URL.
++export const getFileUrl = (path) => {
++    if (!path) return '';
++    const apiBase = import.meta.env.VITE_API_BASE_URL || '';
++    const origin = apiBase.replace(/\/api\/?$/, '');
++    return path.startsWith('/') ? `${origin}${path}` : `${origin}/uploads/${path}`;
++};
++
+ export default api;
+\ No newline at end of file

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, Paperclip } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, Paperclip, FileText, Download } from 'lucide-react';
 import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
-import AttachmentBadge from '../../components/attachment';
 import useAuth from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -95,16 +94,26 @@ const AdminNotices = () => {
         setIsModalOpen(true);
     };
 
+    const handleDownload = (fileName) => {
+        if (!fileName) return;
+        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
+        window.open(fullUrl, '_blank');
+    };
+
     const columns = [
         { 
             header: "Notice Details", 
             accessor: "title",
             cell: (row) => (
-                <div onClick={(e) => { e.stopPropagation(); setViewingNotice(row); }} className="max-w-md py-1 cursor-pointer group/title">
-                    <div className="font-bold text-slate-900 group-hover/title:text-emerald-600 transition-colors">
-                        {row.title}
+                <div onClick={(e) => { e.stopPropagation(); setViewingNotice(row); }} className="max-w-md py-1 cursor-pointer group/title flex items-start gap-2">
+                    <div className="flex-1">
+                        <div className="font-bold text-slate-900 group-hover/title:text-emerald-600 transition-colors">
+                            {row.title}
+                        </div>
+                        <div className="text-[11px] text-slate-500 line-clamp-1">{row.content}</div>
                     </div>
-                    <div className="text-[11px] text-slate-500 line-clamp-1">{row.content}</div>
+                    {row.attachment_url && <Paperclip size={14} className="text-emerald-500 shrink-0 mt-1" />}
                 </div>
             )
         },
@@ -207,7 +216,15 @@ const AdminNotices = () => {
                             {viewingNotice.attachment_url && (
                                 <div className="pt-2">
                                     <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Attached Material:</p>
-                                    <AttachmentBadge fileName={viewingNotice.attachment_url} color="emerald" />
+                                    <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><FileText size={16} /></div>
+                                            <p className="text-xs font-bold text-slate-700 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                        </div>
+                                        <button onClick={() => handleDownload(viewingNotice.attachment_url)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
+                                            <Download size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             <button onClick={() => setViewingNotice(null)} className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 transition-all active:scale-95">
