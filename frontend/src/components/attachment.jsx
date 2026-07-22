@@ -2,32 +2,33 @@ import React from 'react';
 import { FileText, Download } from 'lucide-react';
 import { getFileUrl } from '../services/api';
 
-const AttachmentBadge = ({ fileUrl, fileName, color = "indigo" }) => {
-    
-    const handleDownload = (e) => {
-        e.stopPropagation();
-        if (!fileUrl && !fileName) return alert("No attachment path found.");
-        
-        const path = fileUrl || fileName;
-        window.open(getFileUrl(path), '_blank');
-    };
+const AttachmentCard = ({ fileName }) => {
+    if (!fileName) return null;
 
-    const colorClasses = {
-        indigo: "text-indigo-600 bg-indigo-50 border-indigo-100 hover:bg-indigo-100",
-        blue: "text-blue-600 bg-blue-50 border-blue-100 hover:bg-blue-100",
-        emerald: "text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-100"
+    const handleDownload = () => {
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     return (
-        <button 
-            onClick={handleDownload}
-            className={`flex items-center gap-2 text-[10px] font-bold ${colorClasses[color]} w-fit px-3 py-1.5 rounded-lg border transition-all cursor-pointer group`}
-        >
-            <FileText size={12} className="group-hover:scale-110 transition-transform" />
-            <span>{fileName ? fileName.replace('/uploads/', '') : fileUrl.replace('/uploads/', '')}</span>
-            <Download size={10} className="ml-1 opacity-50" />
-        </button>
+        <div className="flex items-center justify-between bg-white dark:bg-slate-800 w-full sm:w-80 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 mt-2 shadow-sm gap-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0">
+                    <FileText size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{fileName.replace('/uploads/', '')}</p>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-0.5">Document Attached</p>
+                </div>
+            </div>
+            <button 
+                onClick={handleDownload} 
+                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors shrink-0" 
+                title="Download Document"
+            >
+                <Download size={16} />
+            </button>
+        </div>
     );
 };
 
-export default AttachmentBadge;
+export default AttachmentCard;

@@ -40,18 +40,18 @@ const TeacherDashboard = () => {
     };
 
     return (
-        <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
+        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8">
-                <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-                    Welcome <span className="text-indigo-600">{dashboardData.teacherName || user?.username || 'Professor'}</span>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                    Welcome <span className="text-indigo-600 dark:text-indigo-400">{dashboardData.teacherName || user?.username || 'Professor'}</span>
                 </h2>
-                <p className="text-slate-500 mt-1">Here is your daily teaching overview and scheduled classes.</p>
+                <p className="text-slate-500 dark:text-slate-400 mt-1">Here is your daily teaching overview and scheduled classes.</p>
             </header>
 
             {loading ? (
                 <div className="flex flex-col justify-center items-center h-64 opacity-50">
-                    <Activity size={48} className="text-indigo-600 animate-pulse mb-4" />
-                    <p className="text-indigo-600 font-bold uppercase tracking-widest text-xs animate-pulse">Syncing Dashboard...</p>
+                    <Activity size={48} className="text-indigo-600 dark:text-indigo-400 animate-pulse mb-4" />
+                    <p className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-xs animate-pulse">Syncing Dashboard...</p>
                 </div>
             ) : (
                 <div className="animate-in fade-in duration-500">
@@ -59,18 +59,18 @@ const TeacherDashboard = () => {
                         <StatsWidget title="ASSIGNED SUBJECTS" value={dashboardData.stats.totalSubjects} icon={<BookOpen size={24} />} />
                         <StatsWidget title="TOTAL STUDENTS" value={dashboardData.stats.totalStudents} icon={<Users size={24} />} />
                         
-                        <div className="bg-white rounded-[24px] border border-slate-200 p-5 flex flex-col justify-center shadow-sm">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Quick Actions</h3>
+                        <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-center shadow-sm">
+                            <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Quick Actions</h3>
                             <div className="grid grid-cols-3 gap-3">
-                                <Link to="/teacher/attendance" className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Mark Attendance">
+                                <Link to="/teacher/attendance" className="bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Mark Attendance">
                                     <CheckSquare size={18} className="group-hover:scale-110 transition-transform"/>
                                     <span className="text-[10px] font-bold mt-1.5">Attendance</span>
                                 </Link>
-                                <Link to="/teacher/marks" className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Enter Grades">
+                                <Link to="/teacher/marks" className="bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Enter Grades">
                                     <FileText size={18} className="group-hover:scale-110 transition-transform"/>
                                     <span className="text-[10px] font-bold mt-1.5">Mark Grades</span>
                                 </Link>
-                                <Link to="/teacher/notices" className="bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Broadcast Notice">
+                                <Link to="/teacher/notices" className="bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-600 dark:text-amber-400 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Broadcast Notice">
                                     <Megaphone size={18} className="group-hover:scale-110 transition-transform"/>
                                     <span className="text-[10px] font-bold mt-1.5">Send Notice</span>
                                 </Link>
@@ -82,42 +82,42 @@ const TeacherDashboard = () => {
                         <div className="lg:col-span-2">
                             <div className="flex justify-between items-end px-1 mb-4">
                                 <div>
-                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Today's Timetable</h3>
-                                    <p className="text-xs font-bold text-slate-800 mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                                    <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Today's Timetable</h3>
+                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
                                 </div>
-                                <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-indigo-100">
+                                <span className="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-indigo-100 dark:border-indigo-900">
                                     {dashboardData.scheduledClasses.length} Sessions
                                 </span>
                             </div>
                             
-                            <div className="bg-white border border-slate-200 rounded-[28px] shadow-sm overflow-hidden">
+                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] shadow-sm overflow-hidden">
                                 {dashboardData.scheduledClasses.length > 0 ? (
-                                    <div className="divide-y divide-slate-100">
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
                                         {dashboardData.scheduledClasses.map((cls, idx) => (
-                                            <div key={idx} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors group">
+                                            <div key={idx} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
                                                 <div className="flex items-center gap-5">
-                                                    <div className="w-16 h-16 bg-white text-indigo-600 rounded-2xl flex flex-col items-center justify-center font-black border border-slate-200 group-hover:border-indigo-200 shadow-sm transition-colors shrink-0">
+                                                    <div className="w-16 h-16 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-2xl flex flex-col items-center justify-center font-black border border-slate-200 dark:border-slate-700 group-hover:border-indigo-200 shadow-sm transition-colors shrink-0">
                                                         <span className="text-sm">{cls.start_time.split(' ')[0]}</span>
-                                                        <span className="text-[10px] text-slate-400 group-hover:text-indigo-400">{cls.start_time.split(' ')[1]}</span>
+                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 group-hover:text-indigo-400">{cls.start_time.split(' ')[1]}</span>
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-bold text-slate-900 text-lg">
-                                                            {cls.subject_name} <span className="text-sm text-slate-400 font-medium">({cls.subject_code})</span>
+                                                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
+                                                            {cls.subject_name} <span className="text-sm text-slate-400 dark:text-slate-500 font-medium">({cls.subject_code})</span>
                                                         </h4>
                                                         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                                            <div className="flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
+                                                            <div className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md">
                                                                 <MapPin size={12} className="text-indigo-500"/> Room {cls.room_number}
                                                             </div>
-                                                            <div className="text-xs font-medium text-slate-500">
+                                                            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
                                                                 {cls.course_name} • Sem {cls.semester} • Ends at {cls.end_time}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 
-                                                <Link 
-                                                    to={`/teacher/attendance?subject=${cls.subject_id}`} 
-                                                    className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-indigo-600 hover:text-white transition-all shadow-sm shrink-0 active:scale-95"
+                                                <Link
+                                                    to={`/teacher/attendance?subject=${cls.subject_id}`}
+                                                    className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 font-bold text-sm hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 transition-all shadow-sm shrink-0 active:scale-95"
                                                 >
                                                     <CheckSquare size={18} /> Mark Attendance
                                                 </Link>
@@ -125,10 +125,10 @@ const TeacherDashboard = () => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-center py-16 bg-white flex flex-col items-center justify-center">
-                                        <Clock size={48} className="text-slate-200 mb-4" />
-                                        <h3 className="text-slate-600 font-black text-lg mb-1">Schedule Clear</h3>
-                                        <p className="text-slate-400 font-bold text-sm">You have no classes scheduled for today.</p>
+                                    <div className="text-center py-16 bg-white dark:bg-slate-900 flex flex-col items-center justify-center">
+                                        <Clock size={48} className="text-slate-200 dark:text-slate-700 mb-4" />
+                                        <h3 className="text-slate-600 dark:text-slate-300 font-black text-lg mb-1">Schedule Clear</h3>
+                                        <p className="text-slate-400 dark:text-slate-500 font-bold text-sm">You have no classes scheduled for today.</p>
                                     </div>
                                 )}
                             </div>
@@ -136,38 +136,38 @@ const TeacherDashboard = () => {
 
                         <div className="lg:col-span-1">
                             <div className="flex justify-between items-end px-1 mb-4">
-                                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Recent Updates</h3>
-                                <Link to="/teacher/notices" className="text-xs font-bold text-indigo-600 hover:underline">Inbox</Link>
+                                <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Recent Updates</h3>
+                                <Link to="/teacher/notices" className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">Inbox</Link>
                             </div>
                             
-                            <div className="bg-white border border-slate-200 rounded-[28px] shadow-sm overflow-hidden p-2">
+                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] shadow-sm overflow-hidden p-2">
                                 {dashboardData.notices.length > 0 ? (
                                     <div className="flex flex-col gap-2">
                                         {dashboardData.notices.map(notice => (
-                                            <div 
-                                                key={notice.id} 
+                                            <div
+                                                key={notice.id}
                                                 onClick={() => setViewingNotice(notice)}
-                                                className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-start gap-4 group hover:bg-indigo-50 transition-colors cursor-pointer"
+                                                className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl flex items-start gap-4 group hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
                                             >
                                                 <div className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${
                                                     notice.priority === 'High' 
-                                                    ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' 
-                                                    : 'bg-indigo-400'
+                                                        ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' 
+                                                        : 'bg-indigo-400'
                                                 }`}></div>
                                                 <div className="flex-1">
-                                                    <h4 className="font-bold text-slate-800 text-sm leading-snug group-hover:text-indigo-900 transition-colors line-clamp-2">
+                                                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm leading-snug group-hover:text-indigo-900 dark:group-hover:text-indigo-300 transition-colors line-clamp-2">
                                                         {notice.title}
                                                     </h4>
                                                     <div className="flex items-center gap-1.5 mt-2">
-                                                        <Bell size={10} className="text-slate-400" />
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{notice.date}</span>
+                                                        <Bell size={10} className="text-slate-400 dark:text-slate-500" />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">{notice.date}</span>
                                                     </div>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-center py-12 text-slate-400 font-bold text-sm">
+                                    <div className="text-center py-12 text-slate-400 dark:text-slate-500 font-bold text-sm">
                                         No recent updates.
                                     </div>
                                 )}
@@ -180,28 +180,28 @@ const TeacherDashboard = () => {
             {viewingNotice && (
                 <Modal isOpen={!!viewingNotice} onClose={() => setViewingNotice(null)} title="Notice Preview">
                     <div className="flex flex-col h-full max-h-[80vh]">
-                        <div className="shrink-0 pb-4 border-b border-slate-100">
+                        <div className="shrink-0 pb-4 border-b border-slate-100 dark:border-slate-800">
                             <div className="flex items-center justify-between mb-2">
-                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${viewingNotice.priority === 'High' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${viewingNotice.priority === 'High' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400' : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400'}`}>
                                     {viewingNotice.priority} Priority
                                 </span>
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{viewingNotice.date}</span>
+                                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{viewingNotice.date}</span>
                             </div>
-                            <h2 className="text-2xl font-black text-slate-900 leading-tight capitalize">{viewingNotice.title}</h2>
+                            <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight capitalize">{viewingNotice.title}</h2>
                         </div>
                         
-                        <div className="flex-1 overflow-y-auto py-6 my-2 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner px-6">
-                            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap break-words font-medium">{viewingNotice.content || viewingNotice.title}</p>
+                        <div className="flex-1 overflow-y-auto py-6 my-2 bg-slate-50/50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-inner px-6">
+                            <p className="text-slate-700 dark:text-slate-300 text-base leading-relaxed whitespace-pre-wrap break-words font-medium">{viewingNotice.content || viewingNotice.title}</p>
                         </div>
                         
                         <div className="shrink-0 pt-4 space-y-4">
                             {viewingNotice.attachment_url && (
-                                <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between shadow-sm">
+                                <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between shadow-sm">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={20} /></div>
+                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg"><FileText size={20} /></div>
                                         <div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Attachment</p>
-                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                            <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase leading-none mb-1">Attachment</p>
+                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
                                         </div>
                                     </div>
                                     <button onClick={(e) => handleDownload(e, viewingNotice.attachment_url)} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
@@ -209,7 +209,7 @@ const TeacherDashboard = () => {
                                     </button>
                                 </div>
                             )}
-                            <button onClick={() => setViewingNotice(null)} className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl hover:bg-slate-800 transition-all text-xs uppercase tracking-[0.2em]">
+                            <button onClick={() => setViewingNotice(null)} className="w-full bg-slate-900 dark:bg-slate-800 text-white font-black py-4 rounded-2xl hover:bg-slate-800 dark:hover:bg-slate-700 transition-all text-xs uppercase tracking-[0.2em]">
                                 Close Preview
                             </button>
                         </div>

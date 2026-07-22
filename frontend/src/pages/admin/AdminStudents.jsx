@@ -94,8 +94,8 @@ const AdminStudents = () => {
             accessor: "name",
             cell: (row) => (
                 <div>
-                    <div className="font-bold text-slate-900">{row.name}</div>
-                    <div className="text-[10px] text-slate-500">{row.email}</div>
+                    <div className="font-bold text-slate-900 dark:text-slate-100">{row.name}</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{row.email}</div>
                 </div>
             )
         },
@@ -106,10 +106,10 @@ const AdminStudents = () => {
             accessor: "actions",
             cell: (row) => (
                 <div className="flex justify-end gap-2">
-                    <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                    <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg">
                         <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDelete(row.user_id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                    <button onClick={() => handleDelete(row.user_id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg">
                         <Trash2 size={16} />
                     </button>
                 </div>
@@ -118,11 +118,11 @@ const AdminStudents = () => {
     ];
 
     return (
-        <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
+        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Student Directory</h2>
-                    <p className="text-slate-500 mt-1 font-medium">Manage enrollments and academic records.</p>
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Student Directory</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Manage enrollments and academic records.</p>
                 </div>
                 
                 <div className="relative w-full md:w-80">
@@ -132,7 +132,7 @@ const AdminStudents = () => {
                         placeholder="Search Name or Enrollment..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-200 outline-none shadow-sm transition-all"
+                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none shadow-sm transition-all"
                     />
                 </div>
                 <button 
@@ -151,7 +151,7 @@ const AdminStudents = () => {
 
             <Modal 
                 isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
+                onClose={() => setIsModalOpen(false)}
                 title={editingStudentId ? 'Edit Student Record' : 'Register New Student'}
             >
                 <form onSubmit={handleFormSubmit} className="space-y-6">
@@ -161,12 +161,12 @@ const AdminStudents = () => {
                         <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="suraj@email.com" required />
                         
                         <div className="space-y-1">
-                            <span className="mb-2 block text-sm font-medium text-slate-700">Assign Course</span>
+                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Assign Course</span>
                             <select 
                                 required
                                 value={formData.course_id} 
                                 onChange={(e) => setFormData({...formData, course_id: e.target.value})} 
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm focus:ring-2 focus:ring-sky-200 outline-none"
+                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm focus:ring-2 focus:ring-sky-200 outline-none"
                             >
                                 <option value="">-- Select Course --</option>
                                 {courses.map(course => (
@@ -178,8 +178,8 @@ const AdminStudents = () => {
                         </div>
                     </div>
 
-                    <div className="bg-blue-50/50 p-5 rounded-3xl border border-blue-100">
-                        <h4 className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <div className="bg-blue-50/50 dark:bg-blue-950/40 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/50">
+                        <h4 className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <ShieldCheck size={14} /> Account Security
                         </h4>
                         <Input 

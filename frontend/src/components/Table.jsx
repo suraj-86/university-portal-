@@ -1,114 +1,71 @@
-import { useMemo, useState, useEffect } from 'react'
-import StatusBadge from './StatusBadge' // Link to your new badge component
+import React, { useState } from 'react';
 
-const Table = ({ columns, data, pageSize = 5 }) => {
-  const [sortField, setSortField] = useState(columns?.[0]?.accessor ?? '')
-  const [sortOrder, setSortOrder] = useState('asc')
-  const [page, setPage] = useState(1)
+const Table = ({ columns, data, pageSize = 10 }) => {
+    const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    setPage(1)
-  }, [data, pageSize])
+    const totalPages = Math.ceil(data.length / pageSize);
+    const startIndex = (currentPage - 1) * pageSize;
+    const currentData = data.slice(startIndex, startIndex + pageSize);
 
-  const sortedData = useMemo(() => {
-    if (!sortField) return data
-    return [...data].sort((a, b) => {
-      const valueA = a[sortField]
-      const valueB = b[sortField]
+    return (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-all">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-900/80 text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                            {columns.map((col, idx) => (
+                                <th key={idx} className="p-4 font-black">
+                                    {col.header}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="text-sm divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                        {currentData.length > 0 ? (
+                            currentData.map((row, rowIdx) => (
+                                <tr key={rowIdx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                                    {columns.map((col, colIdx) => (
+                                        <td key={colIdx} className="p-4">
+                                            {col.cell ? col.cell(row) : row[col.accessor]}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={columns.length} className="p-8 text-center text-slate-400 dark:text-slate-500 font-bold">
+                                    No records found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
-      if (typeof valueA === 'number' && typeof valueB === 'number') {
-        return sortOrder === 'asc' ? valueA - valueB : valueB - valueA
-      }
-
-      return sortOrder === 'asc'
-        ? String(valueA).localeCompare(String(valueB))
-        : String(valueB).localeCompare(String(valueA))
-    })
-  }, [data, sortField, sortOrder])
-
-  const pageCount = Math.max(1, Math.ceil(sortedData.length / pageSize))
-  const currentRows = sortedData.slice((page - 1) * pageSize, page * pageSize)
-
-  const handleSort = (accessor) => {
-    if (sortField === accessor) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortField(accessor)
-      setSortOrder('asc')
-    }
-  }
-
-  return (
-    <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full border-collapse text-left text-sm">
-        <thead className="bg-slate-50 text-slate-600">
-          <tr>
-            {columns.map((column) => (
-              <th key={column.accessor} className="px-6 py-4 font-bold uppercase tracking-[0.12em] text-[10px]">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 hover:text-slate-900 transition-colors"
-                  onClick={() => handleSort(column.accessor)}
-                >
-                  {column.header}
-                  {sortField === column.accessor && (
-                    <span className="text-blue-500">{sortOrder === 'asc' ? '▲' : '▼'}</span>
-                  )}
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
-          {currentRows.length > 0 ? (
-            currentRows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="transition hover:bg-slate-50/50">
-                {columns.map((column) => (
-                  <td key={column.accessor} className="px-6 py-4 align-middle">
-                    {/* Professional Logic: If it's a status column, use StatusBadge */}
-                    {column.accessor === 'status' ? (
-                        <StatusBadge type={row[column.accessor]} />
-                    ) : (
-                        column.cell ? column.cell(row) : row[column.accessor]
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-400 italic">
-                No matching records found in the database.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      
-      {/* Pagination Footer */}
-      <div className="flex items-center justify-between gap-4 border-t border-slate-100 bg-slate-50/30 px-6 py-4 text-xs text-slate-500 font-bold uppercase tracking-wider">
-        <p>
-          Page <span className="text-slate-900">{page}</span> of <span className="text-slate-900">{pageCount}</span>
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            className="rounded-xl bg-white border border-slate-200 px-4 py-2 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            onClick={() => setPage((previous) => Math.max(previous - 1, 1))}
-            disabled={page === 1}
-          >
-            Previous
-          </button>
-          <button
-            className="rounded-xl bg-white border border-slate-200 px-4 py-2 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            onClick={() => setPage((next) => Math.min(next + 1, pageCount))}
-            disabled={page === pageCount}
-          >
-            Next
-          </button>
+            {/* Pagination footer if pages exceed 1 */}
+            {totalPages > 1 && (
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400">
+                    <span>Page {currentPage} of {totalPages}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
-      </div>
-    </div>
-  )
-}
+    );
+};
 
-export default Table
+export default Table;

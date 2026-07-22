@@ -6,12 +6,11 @@ import Input from '../../components/FormInput';
 import Card from '../../components/Card';
 
 const StudentSettings = () => {
-    const { user, login } = useAuth(); 
-    
+    const { user, login } = useAuth();
+      
     const [username, setUsername] = useState(user?.username || '');
     const [userMessage, setUserMessage] = useState({ text: '', type: '' });
     const [userLoading, setUserLoading] = useState(false);
-
     const [passData, setPassData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
     const [passMessage, setPassMessage] = useState({ text: '', type: '' });
     const [passLoading, setPassLoading] = useState(false);
@@ -24,7 +23,6 @@ const StudentSettings = () => {
         e.preventDefault();
         setUserMessage({ text: '', type: '' });
         setUserLoading(true);
-
         try {
             const response = await api.put(`/users/${user.id}/change-username`, { newUsername: username });
             setUserMessage({ text: response.data.message, type: 'success' });
@@ -38,16 +36,13 @@ const StudentSettings = () => {
     const handlePasswordSubmit = async (e) => {
         e.preventDefault();
         setPassMessage({ text: '', type: '' });
-
         if (passData.newPassword !== passData.confirmPassword) {
             return setPassMessage({ text: 'New passwords do not match.', type: 'error' });
         }
         if (passData.newPassword.length < 6) {
             return setPassMessage({ text: 'New password must be at least 6 characters.', type: 'error' });
         }
-
         setPassLoading(true);
-
         try {
             const response = await api.put(`/users/${user.id}/change-password`, {
                 currentPassword: passData.currentPassword,
@@ -63,32 +58,29 @@ const StudentSettings = () => {
     };
 
     return (
-        <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
+        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8">
-                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Account Settings</h2>
-                <p className="text-slate-500 mt-1 font-medium">Manage your security and profile preferences.</p>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Account Settings</h2>
+                <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Manage your security and profile preferences.</p>
             </header>
-
             <div className="max-w-2xl space-y-8">
                 
-                {/* --- CHANGE USERNAME CARD --- 
-                <Card className="p-8 border-slate-200 shadow-sm transition-all">
-                    <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                {/* --- CHANGE USERNAME CARD --- */}
+                <Card className="p-8 border-slate-200 dark:border-slate-800 shadow-sm transition-all bg-white dark:bg-slate-900">
+                    <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                        <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-xl">
                             <User size={24} />
                         </div>
                         <div>
-                            <h3 className="text-xl font-bold text-slate-900">Change Username</h3>
-                            <p className="text-sm text-slate-500">Update the username you use to log into the portal.</p>
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Change Username</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Update the username you use to log into the portal.</p>
                         </div>
                     </div>
-
                     {userMessage.text && (
-                        <div className={`p-4 rounded-xl mb-6 flex items-center gap-2 font-bold text-sm ${userMessage.type === 'error' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                        <div className={`p-4 rounded-xl mb-6 flex items-center gap-2 font-bold text-sm ${userMessage.type === 'error' ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900' : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900'}`}>
                             <AlertCircle size={18} /> {userMessage.text}
                         </div>
                     )}
-
                     <form onSubmit={handleUsernameSubmit} className="space-y-4">
                         <Input 
                             label="Login Username" 
@@ -99,7 +91,7 @@ const StudentSettings = () => {
                         />
                         <div className="pt-2 flex justify-end">
                             <button 
-                                type="submit" 
+                                type="submit"
                                 disabled={userLoading || username === user?.username}
                                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -107,27 +99,24 @@ const StudentSettings = () => {
                             </button>
                         </div>
                     </form>
-                </Card> 
-                */}
+                </Card>
 
                 {/* --- CHANGE PASSWORD CARD --- */}
-                <Card className="p-8 border-slate-200 shadow-sm transition-all">
-                    <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-                        <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                <Card className="p-8 border-slate-200 dark:border-slate-800 shadow-sm transition-all bg-white dark:bg-slate-900">
+                    <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                        <div className="p-3 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-xl">
                             <ShieldCheck size={24} />
                         </div>
                         <div>
-                            <h3 className="text-xl font-bold text-slate-900">Change Password</h3>
-                            <p className="text-sm text-slate-500">Ensure your account is using a long, random password to stay secure.</p>
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Change Password</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Ensure your account is using a long, random password to stay secure.</p>
                         </div>
                     </div>
-
                     {passMessage.text && (
-                        <div className={`p-4 rounded-xl mb-6 flex items-center gap-2 font-bold text-sm ${passMessage.type === 'error' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                        <div className={`p-4 rounded-xl mb-6 flex items-center gap-2 font-bold text-sm ${passMessage.type === 'error' ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900' : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900'}`}>
                             <AlertCircle size={18} /> {passMessage.text}
                         </div>
                     )}
-
                     <form onSubmit={handlePasswordSubmit} className="space-y-6">
                         <Input 
                             label="Current Password" 
@@ -153,12 +142,11 @@ const StudentSettings = () => {
                                 onChange={(e) => setPassData({...passData, confirmPassword: e.target.value})}
                             />
                         </div>
-
                         <div className="pt-4 flex justify-end">
                             <button 
-                                type="submit" 
+                                type="submit"
                                 disabled={passLoading}
-                                className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                                className="bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 border border-transparent dark:border-slate-700"
                             >
                                 <Save size={18} /> {passLoading ? 'Saving...' : 'Update Password'}
                             </button>
