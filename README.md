@@ -13,6 +13,7 @@ The **University Portal** is a comprehensive, full-stack College Management Syst
 * Secure JWT-based authentication supporting multiple roles: **Admin**, **Teacher**, **Student**, and **Parent**.
 * Protected routes ensuring role-restricted page access and data security.
 * Automated admin seeding (`seedAdmin.js`) for initial setup.
+* Dark Mode Toggle
 
 ### 2. **Admin Dashboard**
 * Full oversight of institutional operations.
@@ -46,7 +47,7 @@ The **University Portal** is a comprehensive, full-stack College Management Syst
 
 ### **Backend**
 * **Runtime**: Node.js & Express.js (`server.js`)
-* **Database**: MySQL (`database/college_ms (1).sql`)
+* **Database**: MySQL (`database/college_ms.sql`)
 * **Authentication**: JSON Web Tokens (JWT)
 * **File Uploads**: Multer support for handling document attachments (syllabi, notices, patches)
 
@@ -68,7 +69,7 @@ university-portal/
 │   ├── server.js           # Express application entry point
 │   └── package.json        # Backend dependencies
 ├── database/
-│   └── college_ms (1).sql  # MySQL database schema and initial data
+│   └── college_ms.sql  # MySQL database schema and initial data
 └── frontend/
     ├── public/             # Public assets, icons, and favicons
     ├── src/
@@ -84,19 +85,19 @@ university-portal/
     └── package.json        # Frontend dependencies
 ```
 
-> ## ⚙️ Installation & Setup
-> 
-> ### 1. Clone the Repository
+ ## ⚙️ Installation & Setup
+ 
+ ### 1. Clone the Repository
 > ```bash
-> git clone <repository-url>
+> git clone https://github.com/suraj-86/university-portal-.git
 > cd university-portal
 > ```
 > 
-> ### 2. Database Configuration
-> * Import the provided SQL dump (`database/college_ms (1).sql`) into your local MySQL server instance.
+ ### 2. Database Configuration
+> * Import the provided SQL dump (`database/college_ms.sql`) into your local MySQL server instance.
 > * Configure your database credentials in the backend environment configuration.
 > 
-> ### 3. Backend Setup
+ ### 3. Backend Setup
 > ```bash
 > cd backend
 > npm install
@@ -106,7 +107,7 @@ university-portal/
 > npm start
 > ```
 > 
-> ### 4. Frontend Setup
+ ### 4. Frontend Setup
 > ```bash
 > cd ../frontend
 > npm install
@@ -120,7 +121,7 @@ university-portal/
 
 The application utilizes a modern, distributed cloud architecture for optimal performance and scalability:
 
-* **Live Application:** [View on Vercel](https://your-vercel-deployment-link.vercel.app)
+* **Live Application:** [View on Vercel](https://university-portal-flax-tau.vercel.app/)
 * **Frontend:** Hosted on **Vercel** for fast global CDN delivery and CI/CD integration.
 * **Backend (API):** Hosted on **Render**, providing a robust and scalable environment for the Node.js/Express server.
 * **Database:** Hosted on **Aiven**, ensuring a secure, reliable, and managed MySQL database instance.
@@ -131,8 +132,8 @@ The application utilizes a modern, distributed cloud architecture for optimal pe
 
 This project was developed and is maintained by:
 
-* **Suraj** - [GitHub Profile](https://github.com/your-github-username)
-* **Patrika** - [GitHub Profile](https://github.com/patrika-github-username)
+* **Suraj** - [GitHub Profile](https://github.com/suraj-86)
+* **Patrika** - [GitHub Profile](https://github.com/patrika-123)
 
 ---
 
