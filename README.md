@@ -1,97 +1,145 @@
-# College Management System
-
-A full-stack College/University Management System with three role-based portals — **Admin**, **Teacher**, and **Student** — for managing courses, subjects, attendance, marks, fees, and campus notices.
-
-Built with **React (Vite)** on the frontend, **Express + MySQL** on the backend.
+# University Portal - Project Documentation & README
 
 ---
 
-## ✨ Features
-
-### Admin Portal
-- Dashboard with live system stats (students, faculty, courses, notices)
-- Student directory — add / edit / delete student records with course & password management
-- Faculty management — add / edit / delete teacher records
-- Course catalog management
-- Subject directory — assign subjects to courses/semesters and appoint teachers
-- Fee ledger overview — collection rate, outstanding dues, per-student breakdown
-- Payment transaction ledger
-- Campus notice board — post announcements targeted at students, teachers, or everyone
-
-### Teacher Portal
-- Dashboard with today's schedule and quick actions
-- My Subjects — view assigned subjects, enrollment counts, and schedule new classes
-- Attendance — mark daily attendance per session, view attendance history and past sheets
-- Marks Entry — enter/edit scores per assessment type (Assignment, Sessional, End Sem), gradebook ledger
-- Notices — broadcast messages to a specific class and view official/admin announcements
-
-### Student Portal
-- Dashboard — today's schedule, academic trajectory chart (CGPA), campus notices
-- Profile — view and edit personal/guardian details, profile picture
-- My Subjects — semester-wise subject listing with instructor info
-- Attendance — subject-wise attendance breakdown with defaulter warnings
-- Results — semester-wise scorecards with grade calculation
-- Fees — view fee ledger, pay dues, view payment/transaction history
-- Notices — searchable/filterable notice board
+## 📌 Project Overview
+The **University Portal** is a comprehensive, full-stack College Management System designed to streamline academic administration, student tracking, faculty operations, and parent engagement. It features role-based dashboards, secure authentication, real-time notices, attendance tracking, fee management, and results processing.
 
 ---
 
-## 🛠 Tech Stack
+## 🚀 Key Features & Modules
 
-**Frontend**
-- React 19 + Vite
-- React Router DOM v7
-- Tailwind CSS v4
-- Recharts (charts)
-- Lucide React (icons)
-- Axios
+### 1. **Authentication & Authorization**
+* Secure JWT-based authentication supporting multiple roles: **Admin**, **Teacher**, **Student**, and **Parent**.
+* Protected routes ensuring role-restricted page access and data security.
+* Automated admin seeding (`seedAdmin.js`) for initial setup.
 
-**Backend**
-- Node.js + Express 5
-- MySQL2
-- CORS
+### 2. **Admin Dashboard**
+* Full oversight of institutional operations.
+* Management interfaces for:
+  * **Courses & Subjects** (`AdminCourses.jsx`, `AdminSubjects.jsx`)
+  * **Users** (Students, Teachers, Parents) (`AdminStudents.jsx`, `AdminTeachers.jsx`, `AdminParents.jsx`)
+  * **Financials** (Fees, Payments, Transactions) (`AdminFees.jsx`, `AdminPayments.jsx`)
+  * **Announcements & Notices** (`AdminNotices.jsx`)
+  * **System Settings** (`AdminSettings.jsx`)
 
-**Database**
-- MySQL / MariaDB (schema provided as `database/college_ms.sql`)
+### 3. **Teacher Portal**
+* **Teacher Dashboard**: Centralized hub for educators.
+* **Attendance Tracking**: Log and review student attendance (`TeacherAttendance.jsx`).
+* **Marks & Grading**: Upload and update student examination results (`TeacherMarks.jsx`).
+* **Academics & Notices**: Manage subject allocations and view institutional notices (`TeacherSubjects.jsx`, `TeacherNotices.jsx`).
+* **Profile & Settings**: Manage personal educator credentials (`TeacherSettings.jsx`).
+
+### 4. **Student Portal**
+* **Student Dashboard**: Overview of current academic standing.
+* **Academic Records**: Check subject lists, semester results, and attendance reports (`StudentSubjects.jsx`, `StudentResults.jsx`, `StudentAttendance.jsx`).
+* **Fee Management**: View fee structures and payment histories (`StudentFees.jsx`).
+* **Communication & Profile**: Access official notices and manage personal profiles (`StudentNotices.jsx`, `StudentProfile.jsx`, `StudentSettings.jsx`).
+
+### 5. **Parent Portal**
+* **Parent Dashboard**: Monitor child's academic performance and activities.
+* **Tracking Tools**: View attendance records, examination results, fee statuses, and school notices (`ParentResults.jsx`, `ParentAttendance.jsx`, `ParentFees.jsx`, `ParentNotices.jsx`, `ParentProfile.jsx`).
+
+---
+
+## 🛠️ Technology Stack
+
+### **Backend**
+* **Runtime**: Node.js & Express.js (`server.js`)
+* **Database**: MySQL (`database/college_ms (1).sql`)
+* **Authentication**: JSON Web Tokens (JWT)
+* **File Uploads**: Multer support for handling document attachments (syllabi, notices, patches)
+
+### **Frontend**
+* **Framework**: React.js with Vite (`vite.config.js`)
+* **Routing**: React Router (`ProtectedRoute.jsx`, `DashboardLayout.jsx`)
+* **State Management**: Context API (`AuthContext.jsx`, `useAuth.jsx`)
+* **Styling & UI Components**: Custom modular UI components (Cards, Modals, Tables, Navigation bars, and Sidebars)
 
 ---
 
 ## 📁 Project Structure
 
-```
+```text
+university-portal/
 ├── backend/
-│   ├── server.js            # Express API server & all routes
-│   ├── package.json
-│   └── package-lock.json
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # Reusable UI (Table, Modal, Sidebar, Navbar, etc.)
-│   │   ├── context/         # AuthContext (login/logout/session)
-│   │   ├── hooks/           # useAuth
-│   │   ├── layouts/         # DashboardLayout (sidebar + navbar shell)
-│   │   ├── pages/
-│   │   │   ├── admin/
-│   │   │   ├── teacher/
-│   │   │   ├── student/
-│   │   │   └── auth/
-│   │   ├── routes/          # ProtectedRoute, AppRoutes
-│   │   ├── App.jsx          # Route definitions (active)
-│   │   └── main.jsx         # App entry point
-│   ├── index.html
-│   ├── vite.config.js
-│   └── package.json
-│
-└── database/
-    └── college_ms.sql       # Full MySQL schema
+│   ├── uploads/            # Document and file attachments
+│   ├── seedAdmin.js        # Initial admin seeding script
+│   ├── server.js           # Express application entry point
+│   └── package.json        # Backend dependencies
+├── database/
+│   └── college_ms (1).sql  # MySQL database schema and initial data
+└── frontend/
+    ├── public/             # Public assets, icons, and favicons
+    ├── src/
+    │   ├── components/     # Reusable UI components (Buttons, Modals, Tables, etc.)
+    │   ├── context/        # React Context providers (AuthContext)
+    │   ├── hooks/          # Custom hooks (useAuth)
+    │   ├── layouts/        # Dashboard layout wrappers
+    │   ├── pages/          # Role-specific views (Admin, Teacher, Student, Parent, Auth)
+    │   ├── routes/         # Route protection configuration
+    │   ├── services/       # API integration services (axios config)
+    │   ├── App.jsx         # Root application component
+    │   └── main.jsx        # Frontend entry point
+    └── package.json        # Frontend dependencies
 ```
+
+> ## ⚙️ Installation & Setup
+> 
+> ### 1. Clone the Repository
+> ```bash
+> git clone <repository-url>
+> cd university-portal
+> ```
+> 
+> ### 2. Database Configuration
+> * Import the provided SQL dump (`database/college_ms (1).sql`) into your local MySQL server instance.
+> * Configure your database credentials in the backend environment configuration.
+> 
+> ### 3. Backend Setup
+> ```bash
+> cd backend
+> npm install
+> # Seed the initial admin account
+> node seedAdmin.js
+> # Start the backend server
+> npm start
+> ```
+> 
+> ### 4. Frontend Setup
+> ```bash
+> cd ../frontend
+> npm install
+> # Run the development server
+> npm run dev
+> ```
+
+
+
+## ☁️ Deployment
+
+The application utilizes a modern, distributed cloud architecture for optimal performance and scalability:
+
+* **Live Application:** [View on Vercel](https://your-vercel-deployment-link.vercel.app)
+* **Frontend:** Hosted on **Vercel** for fast global CDN delivery and CI/CD integration.
+* **Backend (API):** Hosted on **Render**, providing a robust and scalable environment for the Node.js/Express server.
+* **Database:** Hosted on **Aiven**, ensuring a secure, reliable, and managed MySQL database instance.
+
+---
+
+## 👥 Team Members
+
+This project was developed and is maintained by:
+
+* **Suraj** - [GitHub Profile](https://github.com/your-github-username)
+* **Patrika** - [GitHub Profile](https://github.com/patrika-github-username)
 
 ---
 
 ## ⚙️ Prerequisites
 
 - Node.js **>= 20.0.0**
-- MySQL or MariaDB (e.g. via XAMPP)
+- MySQL(via XAMPP)
 - npm
 
 ---
