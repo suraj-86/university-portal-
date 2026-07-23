@@ -80,41 +80,41 @@ const AdminParents = () => {
     };
 
     const columns = [
-        { header: "Parent Name", accessor: "name", cell: (row) => <span className="font-bold text-slate-900">{row.name}</span> },
+        { header: "Parent Name", accessor: "name", cell: (row) => <span className="font-bold text-slate-900 dark:text-slate-100">{row.name}</span> },
         { 
             header: "Contact Info", 
             accessor: "contact", 
             cell: (row) => (
                 <div>
-                    <div className="text-xs text-slate-900 font-medium">{row.phone || 'No phone'}</div>
-                    <div className="text-[10px] text-slate-500">{row.email || 'No email'}</div>
+                    <div className="text-xs text-slate-900 dark:text-slate-200 font-medium">{row.phone || 'No phone'}</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{row.email || 'No email'}</div>
                 </div>
             ) 
         },
-        { header: "Username", accessor: "username", cell: (row) => <span className="text-slate-600 font-medium">{row.username}</span> },
+        { header: "Username", accessor: "username", cell: (row) => <span className="text-slate-600 dark:text-slate-300 font-medium">{row.username}</span> },
         { 
             header: "Linked Wards", 
             accessor: "student_name",
-            cell: (row) => <span className="font-bold text-indigo-600">{row.student_name || 'None'}</span>
+            cell: (row) => <span className="font-bold text-indigo-600 dark:text-indigo-400">{row.student_name || 'None'}</span>
         },
         {
             header: "Actions",
             accessor: "actions",
             cell: (row) => (
                 <div className="flex justify-end gap-2">
-                    <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
-                    <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                    <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg"><Edit2 size={16} /></button>
+                    <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg"><Trash2 size={16} /></button>
                 </div>
             )
         }
     ];
 
     return (
-        <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
+        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-900">Parent Accounts</h2>
-                    <p className="text-slate-500 mt-1">Manage parent access and link them to multiple students.</p>
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Parent Accounts</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Manage parent access and link them to multiple students.</p>
                 </div>
                 <button 
                     onClick={() => { 
@@ -139,10 +139,10 @@ const AdminParents = () => {
                     </div>
                     
                     <div className="space-y-2">
-                        <span className="block text-sm font-medium text-slate-700">Link Wards (Select Multiple)</span>
-                        <div className="max-h-40 overflow-y-auto border border-slate-300 rounded-2xl p-2 bg-white">
+                        <span className="block text-sm font-medium text-slate-700 dark:text-slate-300">Link Wards (Select Multiple)</span>
+                        <div className="max-h-40 overflow-y-auto border border-slate-300 dark:border-slate-700 rounded-2xl p-2 bg-white dark:bg-slate-900">
                             {students.map(s => (
-                                <label key={s.student_id} className="flex items-center gap-2 p-2 hover:bg-slate-50 cursor-pointer">
+                                <label key={s.student_id} className="flex items-center gap-2 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                                     <input 
                                         type="checkbox"
                                         checked={formData.student_ids.includes(s.student_id)}
@@ -151,24 +151,22 @@ const AdminParents = () => {
                                             setFormData(prev => ({
                                                 ...prev,
                                                 student_ids: e.target.checked 
-                                                    ? [...prev.student_ids, sId] 
+                                                    ? [...prev.student_ids, sId]
                                                     : prev.student_ids.filter(id => id !== sId)
                                             }));
                                         }}
                                     />
-                                    <span className="text-sm text-slate-700">{s.full_name} ({s.enrollment_number})</span>
+                                    <span className="text-sm text-slate-700 dark:text-slate-300">{s.full_name} ({s.enrollment_number})</span>
                                 </label>
                             ))}
                         </div>
                     </div>
-
-                    <div className="bg-blue-50/50 p-5 rounded-3xl border border-blue-100">
+                    <div className="bg-blue-50/50 dark:bg-blue-950/40 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/50">
                         <div className="grid grid-cols-2 gap-4">
                             <Input label="Username" value={formData.username} onChange={(e) => setFormData({...formData, username: e.target.value})} required disabled={!!editingParentId} />
                             {!editingParentId && <Input label="Password" type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required />}
                         </div>
                     </div>
-
                     <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg">
                         {editingParentId ? 'Save Changes' : 'Create Account'}
                     </button>

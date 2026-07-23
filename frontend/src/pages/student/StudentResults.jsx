@@ -1,192 +1,169 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Award, FileText, Download, TrendingUp, CheckCircle, GraduationCap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Award, BookOpen, Download, FileText, ChevronDown } from 'lucide-react';
 import api from '../../services/api';
-import StatsWidget from '../../components/StatsWidget';
-import Table from '../../components/Table';
-import toast from 'react-hot-toast';
+import useAuth from '../../hooks/useAuth';
 
 const StudentResults = () => {
-    const [allResults, setAllResults] = useState(null);
-    const [selectedSemester, setSelectedSemester] = useState(1);
+    const { user } = useAuth();
+    const userId = user?.id || 1;
+    
+    const [resultsData, setResultsData] = useState({});
     const [loading, setLoading] = useState(true);
+    const [selectedSemester, setSelectedSemester] = useState('1');
 
     useEffect(() => {
         const fetchResults = async () => {
             try {
-                const user = JSON.parse(localStorage.getItem('user'));
-                const userId = user ? user.id : 1; 
-                
                 const response = await api.get(`/student/${userId}/results`);
-                setAllResults(response.data);
-                
-                const availableSemesters = Object.keys(response.data).map(Number);
-                if (availableSemesters.length > 0) {
-                    setSelectedSemester(Math.max(...availableSemesters));
+                setResultsData(response.data || {});
+                const availableSemesters = Object.keys(response.data || {});
+                if (availableSemesters.length > 0 && !availableSemesters.includes(selectedSemester)) {
+                    setSelectedSemester(availableSemesters[0]);
                 }
             } catch (error) {
-                console.error("Network error:", error);
+                console.error("Error fetching results:", error);
             } finally {
                 setLoading(false);
             }
         };
         fetchResults();
-    }, []);
+    }, [userId]);
 
-    const currentResults = allResults && allResults[selectedSemester] ? allResults[selectedSemester] : [];
+    const semesters = Object.keys(resultsData).sort((a, b) => Number(a) - Number(b));
+    const currentSemSubjects = resultsData[selectedSemester] || [];
 
-    const stats = useMemo(() => {
-        if (!currentResults.length) return { avgPercent: "0.0", gpa: "0.0", totalCredits: 0 };
-        
-        let totalAchieved = 0;
-        let totalPossible = 0;
-        currentResults.forEach(curr => {
-            totalAchieved += curr.total;
-            totalPossible += curr.totalMax;
-        });
+    const totalScoreEarned = currentSemSubjects.reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
+    const totalMaxPossible = currentSemSubjects.reduce((acc, curr) => acc + (Number(curr.totalMax) || 100), 0);
+    const semPercentage = totalMaxPossible > 0 ? ((totalScoreEarned / totalMaxPossible) * 100).toFixed(1) : '0.0';
 
-        const avgPercent = totalPossible > 0 ? ((totalAchieved / totalPossible) * 100).toFixed(1) : "0.0";
-        const gpa = (avgPercent / 10).toFixed(1);
-        
-        return { avgPercent, gpa, totalCredits: currentResults.reduce((acc, curr) => acc + curr.credits, 0) };
-    }, [currentResults]);
-
-    const columns = [
-        { 
-            header: "Subject Detail", 
-            accessor: "subject", 
-            cell: (row) => (
-                <div className="flex items-center gap-3 py-1">
-                    <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
-                        {row.subject.charAt(0)}
-                    </div>
-                    <div>
-                        <p className="font-bold text-slate-900">{row.subject}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{row.credits} Credits</p>
-                    </div>
-                </div>
-            )
-        },
-        { 
-            header: "Mid-Term", 
-            accessor: "midTerm", 
-            cell: (row) => (
-                <span className="font-semibold text-slate-600">
-                    {row.midTerm}<span className="text-slate-400 text-xs">/{row.midTermMax || 0}</span>
-                </span>
-            ) 
-        },
-        { 
-            header: "Final Exam", 
-            accessor: "final", 
-            cell: (row) => (
-                <span className="font-semibold text-slate-600">
-                    {row.final}<span className="text-slate-400 text-xs">/{row.finalMax || 0}</span>
-                </span>
-            ) 
-        },
-        { 
-            header: "Total Score", 
-            accessor: "total", 
-            cell: (row) => {
-                const percentage = row.totalMax > 0 ? (row.total / row.totalMax) * 100 : 0;
-                return (
-                    <div className="flex flex-col gap-1.5">
-                        <span className="font-black text-slate-900">
-                            {row.total}<span className="text-slate-400 text-xs">/{row.totalMax || 0}</span>
-                        </span>
-                        <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${percentage}%` }}></div>
-                        </div>
-                    </div>
-                )
+    const calculateCGPA = () => {
+        if (semesters.length === 0) return '0.00';
+        let totalPercentSum = 0;
+        let count = 0;
+        semesters.forEach(sem => {
+            const subs = resultsData[sem];
+            if (subs && subs.length > 0) {
+                const earned = subs.reduce((a, c) => a + (Number(c.total) || 0), 0);
+                const max = subs.reduce((a, c) => a + (Number(c.totalMax) || 100), 0);
+                if (max > 0) {
+                    totalPercentSum += (earned / max) * 100;
+                    count++;
+                }
             }
-        },
-        { 
-            header: "Grade", 
-            accessor: "grade",
-            cell: (row) => (
-                <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black border tracking-wider uppercase ${
-                    row.grade.includes('A') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                    row.grade.includes('B') ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                    'bg-amber-50 text-amber-700 border-amber-100'
-                }`}>
-                    {row.grade}
-                </span>
-            )
-        }
-    ];
+        });
+        if (count === 0) return '0.00';
+        const avgPercent = totalPercentSum / count;
+        return (avgPercent / 9.5).toFixed(2);
+    };
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-slate-50">
-                <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-sm">Loading Results...</p>
-            </div>
-        );
+        return <div className="p-10 text-center font-semibold text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-950 min-h-screen">Loading academic results...</div>;
     }
 
-    const availableSemesters = allResults ? Object.keys(allResults).map(Number).sort() : [];
-
     return (
-        <div className="p-6 md:p-10 bg-slate-50 min-h-screen font-sans">
-            <header className="mb-10 flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6">
-                <div className="space-y-4">
-                    <div>
-                        <h2 className="text-4xl font-black text-slate-900 tracking-tight">Academic Results</h2>
-                        <p className="text-slate-500 font-medium mt-1">Detailed performance tracking across semesters.</p>
-                    </div>
-                    
-                    {availableSemesters.length > 0 ? (
-                        <div className="flex bg-white rounded-2xl p-1.5 border border-slate-200 shadow-sm w-fit overflow-x-auto">
-                            {availableSemesters.map((sem) => (
-                                <button 
-                                    key={sem}
-                                    onClick={() => setSelectedSemester(sem)}
-                                    className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
-                                        selectedSemester === sem ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    Semester {sem}
-                                </button>
-                            ))}
-                        </div>
-                    ) : null}
+        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
+            <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Academic Results</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Review your semester marksheets, internal assessments, and CGPA.</p>
                 </div>
-                <button 
-                    onClick={() => toast(`Downloading Marksheet for Sem ${selectedSemester}...`)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-8 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 text-sm w-full xl:w-auto"
-                >
-                    <Download size={18} /> Download Semester {selectedSemester} PDF
-                </button>
+                
+                {semesters.length > 0 && (
+                    <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Semester:</span>
+                        <select 
+                            value={selectedSemester} 
+                            onChange={(e) => setSelectedSemester(e.target.value)}
+                            className="text-sm font-bold text-slate-800 dark:text-slate-200 bg-transparent outline-none cursor-pointer"
+                        >
+                            {semesters.map(sem => (
+                                <option key={sem} value={sem} className="dark:bg-slate-900">
+                                    Semester {sem}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </header>
 
-            {availableSemesters.length === 0 ? (
-                <div className="bg-white p-10 rounded-[32px] border border-slate-200 text-center shadow-sm">
-                    <GraduationCap size={48} className="mx-auto text-slate-300 mb-4" />
-                    <h3 className="text-lg font-black text-slate-700">No Results Found</h3>
-                    <p className="text-sm text-slate-500 mt-1">There are no academic marks uploaded for your account yet.</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
+                        <Award size={20} />
+                    </div>
+                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Cumulative CGPA</p>
+                    <h3 className="text-3xl font-black text-slate-900 dark:text-slate-100">{calculateCGPA()} <span className="text-xs font-bold text-slate-400">/ 10.0</span></h3>
                 </div>
-            ) : (
-                <>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                        <StatsWidget title="SEMESTER GPA" value={stats.gpa} trend="Current Standings" icon={<GraduationCap size={24} />} />
-                        <StatsWidget title="PERCENTAGE" value={`${stats.avgPercent}%`} trend="Overall weighted" icon={<TrendingUp size={24} />} />
-                        <StatsWidget title="TOTAL CREDITS" value={stats.totalCredits} trend="For this semester" icon={<CheckCircle size={24} />} />
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4">
+                        <BookOpen size={20} />
                     </div>
+                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Semester Percentage</p>
+                    <h3 className="text-3xl font-black text-slate-900 dark:text-slate-100">{semPercentage}%</h3>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                    <div>
+                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Subjects Evaluated</p>
+                        <h3 className="text-3xl font-black text-slate-900 dark:text-slate-100">{currentSemSubjects.length}</h3>
+                    </div>
+                    <div className="mt-4">
+                        <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                            Status: Regular / Passed
+                        </span>
+                    </div>
+                </div>
+            </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="flex items-center justify-between px-2">
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Scorecard Ledger</h3>
-                                <div className="h-px bg-slate-200 flex-grow mx-6 hidden md:block"></div>
-                                <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">Sem {selectedSemester} Active</span>
-                            </div>
-                            <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm p-2">
-                                <Table columns={columns} data={currentResults} pageSize={10} />
-                            </div>
-                        </div>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+                    <div>
+                        <h3 className="font-bold text-slate-900 dark:text-slate-100">Semester {selectedSemester} Scorecard</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Detailed breakdown of internal and end-semester scores</p>
                     </div>
-                </>
-            )}
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 text-xs uppercase border-b border-slate-200 dark:border-slate-800">
+                                <th className="p-4 font-bold">Subject Name</th>
+                                <th className="p-4 font-bold text-center">Assignment</th>
+                                <th className="p-4 font-bold text-center">Sessional 1</th>
+                                <th className="p-4 font-bold text-center">Sessional 2</th>
+                                <th className="p-4 font-bold text-center">End Sem</th>
+                                <th className="p-4 font-bold text-center">Total</th>
+                                <th className="p-4 font-bold text-right">Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-sm divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                            {currentSemSubjects.map((sub, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                    <td className="p-4 font-bold text-slate-900 dark:text-slate-100">
+                                        {sub.subject}
+                                    </td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.assignment ?? '-'}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.sessional1 ?? '-'}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.sessional2 ?? '-'}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.endSem ?? '-'}</td>
+                                    <td className="p-4 text-center font-bold text-slate-900 dark:text-slate-100">{sub.total} <span className="text-xs text-slate-400">/ {sub.totalMax}</span></td>
+                                    <td className="p-4 text-right">
+                                        <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider 
+                                            ${sub.grade?.includes('A') ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900' : 
+                                              sub.grade === 'F' ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900' : 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900'}`}>
+                                            {sub.grade || 'N/A'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                            {currentSemSubjects.length === 0 && (
+                                <tr>
+                                    <td colSpan="7" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">No scorecards found for Semester {selectedSemester}.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 };

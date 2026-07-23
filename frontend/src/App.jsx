@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
@@ -48,38 +48,54 @@ import ParentNotices from './pages/parent/ParentNotices';
 import ParentSettings from './pages/parent/ParentSettings';
 
 function App() {
+  // Theme state synced with localStorage
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
   return (
     <AuthProvider>
       <BrowserRouter>
-<Toaster
-  position="top-center"
-  toastOptions={{
-    success: {
-      style: {
-        background: '#ecfdf5',
-        color: '#047857',
-        fontWeight: 600,
-        border: '1px solid #a7f3d0',
-      },
-      iconTheme: {
-        primary: '#059669',
-        secondary: '#ecfdf5',
-      },
-    },
-    error: {
-      style: {
-        background: '#fef2f2',
-        color: '#b91c1c',
-        fontWeight: 600,
-        border: '1px solid #fecaca',
-      },
-      iconTheme: {
-        primary: '#dc2626',
-        secondary: '#fef2f2',
-      },
-    },
-  }}
-/>
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            success: {
+              style: {
+                background: '#ecfdf5',
+                color: '#047857',
+                fontWeight: 600,
+                border: '1px solid #a7f3d0',
+              },
+              iconTheme: {
+                primary: '#059669',
+                secondary: '#ecfdf5',
+              },
+            },
+            error: {
+              style: {
+                background: '#fef2f2',
+                color: '#b91c1c',
+                fontWeight: 600,
+                border: '1px solid #fecaca',
+              },
+              iconTheme: {
+                primary: '#dc2626',
+                secondary: '#fef2f2',
+              },
+            },
+          }}
+        />
         <Routes>
           {/* Public Login Route */}
           <Route path="/" element={<Login />} />
@@ -127,7 +143,7 @@ function App() {
 
           </Route>
 
-          {/* Catch-All 404 Route (Outside the layout so it stays full-screen!) */}
+          {/* Catch-All 404 Route */}
           <Route path="*" element={<NotFound />} />
 
         </Routes>

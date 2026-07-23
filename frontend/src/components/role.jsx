@@ -1,48 +1,19 @@
-import React, { createContext, useContext } from 'react';
-import { useAuth } from '../context/AuthContext'; // Hook to get current user role
+import React from 'react';
 
-const RoleThemeContext = createContext();
-
-export const RoleProvider = ({ children }) => {
-    const { user } = useAuth(); // Assuming your user object has a 'role' property
-    const role = user?.role || 'student'; // Fallback to student theme
-
-    // Centralized theme configuration based on your UI Kit
-    const themes = {
-        admin: {
-            primary: "emerald-600",
-            hover: "emerald-700",
-            bg: "bg-emerald-50",
-            text: "text-emerald-700",
-            border: "border-emerald-100",
-            ring: "focus:ring-emerald-500"
-        },
-        teacher: {
-            primary: "indigo-600",
-            hover: "indigo-700",
-            bg: "bg-indigo-50",
-            text: "text-indigo-700",
-            border: "border-indigo-100",
-            ring: "focus:ring-indigo-500"
-        },
-        student: {
-            primary: "blue-600",
-            hover: "blue-700",
-            bg: "bg-blue-50",
-            text: "text-blue-700",
-            border: "border-blue-100",
-            ring: "focus:ring-blue-500"
-        }
+const RoleBadge = ({ role }) => {
+    const getRoleStyles = (r) => {
+        const lower = r?.toLowerCase();
+        if (lower === 'admin') return 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900';
+        if (lower === 'teacher' || lower === 'faculty') return 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900';
+        if (lower === 'student') return 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border-blue-100 dark:border-blue-900';
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700';
     };
 
-    const currentTheme = themes[role];
-
     return (
-        <RoleThemeContext.Provider value={{ role, theme: currentTheme }}>
-            {children}
-        </RoleThemeContext.Provider>
+        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border ${getRoleStyles(role)}`}>
+            {role}
+        </span>
     );
 };
 
-// Custom hook to use the theme in any component
-export const useRoleTheme = () => useContext(RoleThemeContext);
+export default RoleBadge;

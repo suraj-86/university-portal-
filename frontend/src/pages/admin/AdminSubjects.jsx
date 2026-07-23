@@ -89,8 +89,8 @@ const AdminSubjects = () => {
             accessor: "subject_name",
             cell: (row) => (
                 <div>
-                    <div className="font-bold text-slate-900">{row.subject_name}</div>
-                    <div className="text-[10px] text-slate-500 uppercase">{row.course_name}   Sem {row.semester}</div>
+                    <div className="font-bold text-slate-900 dark:text-slate-100">{row.subject_name}</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{row.course_name} • Sem {row.semester}</div>
                 </div>
             )
         },
@@ -100,10 +100,10 @@ const AdminSubjects = () => {
             accessor: "id",
             cell: (row) => (
                 <div className="flex justify-end gap-2">
-                    <button onClick={() => openEditModal(row)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg">
+                    <button onClick={() => openEditModal(row)} className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg">
                         <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                    <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg">
                         <Trash2 size={16} />
                     </button>
                 </div>
@@ -112,10 +112,13 @@ const AdminSubjects = () => {
     ];
 
     return (
-        <div className="p-6 md:p-10 bg-slate-50 min-h-screen">
+        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8 flex justify-between items-end">
-                <h2 className="text-3xl font-bold text-slate-900">Subject Directory</h2>
-                <button onClick={() => { setEditingSubId(null); setFormData({subject_code:'', subject_name:'', course_id:'', semester:'', subject_type:'Core', credits:3, teacher_id:''}); setIsModalOpen(true); }} className="bg-emerald-600 text-white font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Subject Directory</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Manage curriculum breakdown and teacher assignments.</p>
+                </div>
+                <button onClick={() => { setEditingSubId(null); setFormData({subject_code:'', subject_name:'', course_id:'', semester:'', subject_type:'Core', credits:3, teacher_id:''}); setIsModalOpen(true); }} className="bg-emerald-600 text-white font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-md">
                     <Plus size={18} /> Add Subject
                 </button>
             </header>
@@ -128,18 +131,17 @@ const AdminSubjects = () => {
                         <Input label="Subject Name" value={formData.subject_name} onChange={(e) => setFormData({...formData, subject_name: e.target.value})} required />
                         <Input label="Subject Code" value={formData.subject_code} onChange={(e) => setFormData({...formData, subject_code: e.target.value.toUpperCase()})} required />
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-700">Course</label>
-                            <select required value={formData.course_id} onChange={(e) => setFormData({...formData, course_id: e.target.value, semester: ''})} className="w-full rounded-2xl border border-slate-300 p-3 text-sm">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Course</label>
+                            <select required value={formData.course_id} onChange={(e) => setFormData({...formData, course_id: e.target.value, semester: ''})} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 p-3 text-sm outline-none">
                                 <option value="">Select Course</option>
                                 {courses.map(c => <option key={c.id} value={c.id}>{c.course_name}</option>)}
                             </select>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-700">Semester</label>
-                            <select required value={formData.semester} onChange={(e) => setFormData({...formData, semester: e.target.value})} className="w-full rounded-2xl border border-slate-300 p-3 text-sm">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Semester</label>
+                            <select required value={formData.semester} onChange={(e) => setFormData({...formData, semester: e.target.value})} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 p-3 text-sm outline-none">
                                 <option value="">Select Sem</option>
                                 {Array.from({ length: maxSemesters }, (_, i) => i + 1).map(num => (
                                     <option key={num} value={num}>Semester {num}</option>
@@ -147,15 +149,13 @@ const AdminSubjects = () => {
                             </select>
                         </div>
                     </div>
-
-                    <div className="bg-emerald-50/50 p-5 rounded-3xl border border-emerald-100">
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Appoint Teacher</label>
-                        <select required value={formData.teacher_id} onChange={(e) => setFormData({...formData, teacher_id: e.target.value})} className="w-full rounded-2xl border border-slate-300 p-3 text-sm">
+                    <div className="bg-emerald-50/50 dark:bg-emerald-950/40 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-900/50">
+                        <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Appoint Teacher</label>
+                        <select required value={formData.teacher_id} onChange={(e) => setFormData({...formData, teacher_id: e.target.value})} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 p-3 text-sm outline-none">
                             <option value="">Select Teacher</option>
                             {teachers.map(t => <option key={t.teacher_id} value={t.teacher_id}>{t.full_name}</option>)}
                         </select>
                     </div>
-
                     <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-4 rounded-2xl shadow-lg">
                         {editingSubId ? 'Update Assignment' : 'Create Subject'}
                     </button>
