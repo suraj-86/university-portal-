@@ -18,18 +18,22 @@ export const AuthProvider = ({ children }) => {
         initializeAuth();
     }, []);
 
+    // Global Login Function (Now only takes the user object)
     const login = (userObj) => {
-        localStorage.setItem('user', JSON.stringify(userObj));
+        localStorage.setItem('user', JSON.stringify(userObj)); // We still save the user details for the UI
         setUser(userObj);
     };
 
+    // Global Logout Function
     const logout = async () => {
         try {
+            // Call the backend to destroy the secure cookie
             await api.post('/logout'); 
         } catch (error) {
             console.error("Failed to clear cookie on backend", error);
         } finally {
-\            localStorage.removeItem('user');
+            // Clear the UI state regardless
+            localStorage.removeItem('user');
             setUser(null);
         }
     };
