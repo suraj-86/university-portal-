@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error("Failed to clear cookie on backend", error);
         } finally {
-\            localStorage.removeItem('user');
+            localStorage.removeItem('user');
             setUser(null);
         }
     };
