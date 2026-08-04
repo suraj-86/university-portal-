@@ -3,34 +3,38 @@ const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken'); // Added for JWT authentication[cite: 7]
+const cookieParser = require('cookie-parser'); // Added for secure cookies[cite: 7]
 
 const app = express();
 
+// 1. Update CORS to strictly allow your frontend URL and accept credentials (cookies)[cite: 7]
 app.use(cors({
 origin: [
         'https://university-portal-flax-tau.vercel.app', 
         'http://localhost:5173'
     ],
-    credentials: true
+    credentials: true // Required to send and receive HTTP-Only cookies
 }));
 
 app.use(express.json());
-app.use(cookieParser()); 
+app.use(cookieParser()); // Enable cookie parsing[cite: 7]
 
+// 2. Define a secret key for signing tokens (In production, move this to a .env file)
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_college_key_2026'; 
 
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Ensure the 'uploads' directory exists[cite: 7]
 const uploadDir = path.join(__dirname, "uploads");
 
 fs.mkdirSync(uploadDir, {
     recursive: true
 });
 
+// Set up Multer storage configuration[cite: 7]
 const storage = multer.diskStorage({
     destination(req, file, cb) {
         cb(null, uploadDir);
@@ -48,6 +52,7 @@ const upload = multer({
     storage
 });
 
+// Serve the uploads folder statically[cite: 7]
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ==========================================
@@ -251,6 +256,7 @@ app.put(
         try {
             const userId = Number(req.params.id);
 
+            // Only the account owner or an admin can change the password
             if (req.user.id !== userId && req.user.role !== "admin") {
                 return res.status(403).json({
                     success: false,
@@ -260,6 +266,7 @@ app.put(
 
             const { currentPassword, newPassword } = req.body;
 
+            // Validate input
             if (!currentPassword || !newPassword) {
                 return res.status(400).json({
                     success: false,
@@ -267,6 +274,7 @@ app.put(
                 });
             }
 
+            // Basic password policy
             if (newPassword.length < 8) {
                 return res.status(400).json({
                     success: false,
@@ -306,6 +314,7 @@ app.put(
                         });
                     }
 
+                    // Prevent reusing the same password
                     const samePassword = await bcrypt.compare(
                         newPassword,
                         results[0].password
@@ -360,6 +369,7 @@ app.put(
     (req, res) => {
         const userId = Number(req.params.id);
 
+        // Only the account owner or an admin can change the username
         if (req.user.id !== userId && req.user.role !== "admin") {
             return res.status(403).json({
                 success: false,
@@ -788,9 +798,12 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
                                     res.status(500).json({ error: err.message })
                                 );
                             }
+
+                            // Update login username
                             let userSql = "UPDATE users SET username = ? WHERE id = ?";
                             let params = [employee_id, userId];
 
+                            // Update password only if provided
                             if (password && password.trim() !== "") {
                                 const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -1445,6 +1458,7 @@ app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
     });
 });
 
+// Save Attendance[cite: 7]
 app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
     const { subject_id, date, students, marked_by } = req.body;
     if (
@@ -1523,6 +1537,7 @@ if (err) {
     });
 });
 
+// Get Students for a Subject (Attendance)[cite: 7]
 app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, res) => {
     if (!req.params.id) {
     return res.status(400).json({
