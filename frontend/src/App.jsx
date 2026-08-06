@@ -3,13 +3,11 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 
-// 1. Core & Layouts
 import Login from './pages/auth/Login';
 import DashboardLayout from './layouts/DashboardLayout';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './routes/ProtectedRoute';
 
-// 2. Student Pages
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentProfile from './pages/student/StudentProfile';
 import StudentAttendance from './pages/student/StudentAttendance';
@@ -19,7 +17,6 @@ import StudentResults from './pages/student/StudentResults';
 import StudentSubjects from './pages/student/StudentSubjects';
 import StudentSettings from './pages/student/StudentSettings';
 
-// 3. Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminStudents from './pages/admin/AdminStudents';
 import AdminTeachers from './pages/admin/AdminTeachers';
@@ -31,7 +28,6 @@ import AdminFees from './pages/admin/AdminFees';
 import AdminPayments from './pages/admin/AdminPayments';
 import AdminNotices from './pages/admin/AdminNotices';
 
-// 4. Teacher Pages
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import TeacherAttendance from './pages/teacher/TeacherAttendance';
 import TeacherMarks from './pages/teacher/TeacherMarks';
@@ -39,7 +35,6 @@ import TeacherSubjects from './pages/teacher/TeacherSubjects';
 import TeacherNotices from './pages/teacher/TeacherNotices';
 import TeacherSettings from './pages/teacher/TeacherSettings';
 
-// 5. Parent Pages
 import ParentDashboard from './pages/parent/ParentDashboard';
 import ParentProfile from './pages/parent/ParentProfile';
 import ParentFees from './pages/parent/ParentFees';
@@ -48,7 +43,6 @@ import ParentNotices from './pages/parent/ParentNotices';
 import ParentSettings from './pages/parent/ParentSettings';
 
 function App() {
-  // Theme state synced with localStorage
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
   });
@@ -97,13 +91,10 @@ function App() {
           }}
         />
         <Routes>
-          {/* Public Login Route */}
           <Route path="/" element={<Login />} />
 
-          {/* Protected Portal Routes (Wrapped in the Sidebar Layout) */}
           <Route element={<DashboardLayout />}>
 
-            {/* --- STUDENT ROUTES --- */}
             <Route path="/student-dashboard" element={<ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>} />
             <Route path="/student/profile" element={<ProtectedRoute role="student"><StudentProfile /></ProtectedRoute>} />
             <Route path="/student/attendance" element={<ProtectedRoute role="student"><StudentAttendance /></ProtectedRoute>} />
@@ -113,7 +104,6 @@ function App() {
             <Route path="/student/subjects" element={<ProtectedRoute role="student"><StudentSubjects /></ProtectedRoute>} />
             <Route path="/student/settings" element={<ProtectedRoute role="student"><StudentSettings /></ProtectedRoute>} />
 
-            {/* --- ADMIN ROUTES --- */}
             <Route path="/admin-dashboard" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/students" element={<ProtectedRoute role="admin"><AdminStudents /></ProtectedRoute>} />
             <Route path="/admin/teachers" element={<ProtectedRoute role="admin"><AdminTeachers /></ProtectedRoute>} />
@@ -125,7 +115,6 @@ function App() {
             <Route path="/admin/notices" element={<ProtectedRoute role="admin"><AdminNotices /></ProtectedRoute>} />
             <Route path="/admin/parents" element={<ProtectedRoute role="admin"><AdminParents /></ProtectedRoute>} />
 
-            {/* --- TEACHER ROUTES --- */}
             <Route path="/teacher-dashboard" element={<ProtectedRoute role="teacher"><TeacherDashboard /></ProtectedRoute>} />
             <Route path="/teacher/attendance" element={<ProtectedRoute role="teacher"><TeacherAttendance /></ProtectedRoute>} />
             <Route path="/teacher/marks" element={<ProtectedRoute role="teacher"><TeacherMarks /></ProtectedRoute>} />
@@ -133,7 +122,6 @@ function App() {
             <Route path="/teacher/notices" element={<ProtectedRoute role="teacher"><TeacherNotices /></ProtectedRoute>} />
             <Route path="/teacher/settings" element={<ProtectedRoute role="teacher"><TeacherSettings /></ProtectedRoute>} />
 
-            {/* --- PARENT ROUTES --- */}
             <Route path="/parent-dashboard" element={<ProtectedRoute role="parent"><ParentDashboard /></ProtectedRoute>} />
             <Route path="/parent/profile" element={<ProtectedRoute role="parent"><ParentProfile /></ProtectedRoute>} />
             <Route path="/parent/fees" element={<ProtectedRoute role="parent"><ParentFees /></ProtectedRoute>} />
@@ -143,7 +131,6 @@ function App() {
 
           </Route>
 
-          {/* Catch-All 404 Route */}
           <Route path="*" element={<NotFound />} />
 
         </Routes>
