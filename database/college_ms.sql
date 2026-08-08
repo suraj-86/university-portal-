@@ -236,11 +236,38 @@ CREATE TABLE `users` (
   `id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
   `password` varchar(255) NOT NULL,
-  `role` enum('admin','teacher','student') NOT NULL,
+  `role` enum('admin','teacher','student','parent') NOT NULL,
   `is_active` tinyint(1) DEFAULT 1,
   `last_login` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `parents`
+--
+
+CREATE TABLE `parents` (
+  `parent_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `full_name` varchar(100) NOT NULL,
+  `phone` varchar(20) NOT NULL,
+  `email` varchar(150) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `parent_student_map`
+--
+
+CREATE TABLE `parent_student_map` (
+  `id` int(11) NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `student_id` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 
 --
 -- Indexes for dumped tables
@@ -293,6 +320,23 @@ ALTER TABLE `notices`
   ADD PRIMARY KEY (`id`),
   ADD KEY `posted_by` (`posted_by`),
   ADD KEY `subject_id` (`subject_id`);
+
+--
+-- Indexes for table `parents`
+--
+ALTER TABLE `parents`
+  ADD PRIMARY KEY (`parent_id`),
+  ADD UNIQUE KEY `user_id` (`user_id`),
+  ADD UNIQUE KEY `email` (`email`);
+
+--
+-- Indexes for table `parent_student_map`
+--
+ALTER TABLE `parent_student_map`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_parent_student` (`parent_id`,`student_id`),
+  ADD KEY `student_id` (`student_id`);
+
 
 --
 -- Indexes for table `payments`
@@ -386,6 +430,19 @@ ALTER TABLE `notices`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `parents`
+--
+ALTER TABLE `parents`
+  MODIFY `parent_id` int(11) NOT NULL AUTO_INCREMENT;
+
+
+--
+-- AUTO_INCREMENT for table `parent_student_map`
+--
+ALTER TABLE `parent_student_map`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `payments`
 --
 ALTER TABLE `payments`
@@ -460,6 +517,20 @@ ALTER TABLE `marks`
 ALTER TABLE `notices`
   ADD CONSTRAINT `notices_ibfk_1` FOREIGN KEY (`posted_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `notices_ibfk_2` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `parents`
+--
+ALTER TABLE `parents`
+  ADD CONSTRAINT `parents_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `parent_student_map`
+--
+ALTER TABLE `parent_student_map`
+  ADD CONSTRAINT `parent_student_map_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parents` (`parent_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `parent_student_map_ibfk_2` FOREIGN KEY (`student_id`) REFERENCES `students` (`student_id`) ON DELETE CASCADE;
+
 
 --
 -- Constraints for table `payments`
