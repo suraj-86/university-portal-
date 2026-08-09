@@ -5,29 +5,37 @@ import useAuth from '../../hooks/useAuth';
 
 const StudentResults = () => {
     const { user } = useAuth();
-    const userId = user?.id || 1;
+    const userId = user?.id ;
     
     const [resultsData, setResultsData] = useState({});
     const [loading, setLoading] = useState(true);
-    const [selectedSemester, setSelectedSemester] = useState('1');
+    const [selectedSemester, setSelectedSemester] = useState(null);
 
-    useEffect(() => {
-        const fetchResults = async () => {
-            try {
-                const response = await api.get(`/student/${userId}/results`);
-                setResultsData(response.data || {});
-                const availableSemesters = Object.keys(response.data || {});
-                if (availableSemesters.length > 0 && !availableSemesters.includes(selectedSemester)) {
-                    setSelectedSemester(availableSemesters[0]);
-                }
-            } catch (error) {
-                console.error("Error fetching results:", error);
-            } finally {
-                setLoading(false);
+useEffect(() => {
+    if (!userId) return;
+
+    const fetchResults = async () => {
+        try {
+            const response = await api.get(`/student/${userId}/results`);
+            setResultsData(response.data || {});
+
+            const availableSemesters = Object.keys(response.data || {});
+
+            if (
+                availableSemesters.length > 0 &&
+                !availableSemesters.includes(selectedSemester)
+            ) {
+                setSelectedSemester(availableSemesters[0]);
             }
-        };
-        fetchResults();
-    }, [userId]);
+        } catch (error) {
+            console.error("Error fetching results:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    fetchResults();
+}, [userId]);
 
     const semesters = Object.keys(resultsData).sort((a, b) => Number(a) - Number(b));
     const currentSemSubjects = resultsData[selectedSemester] || [];

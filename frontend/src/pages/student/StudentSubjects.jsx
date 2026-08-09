@@ -7,32 +7,72 @@ const StudentSubjects = () => {
     const { user } = useAuth();
     const [subjectsData, setSubjectsData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [selectedSemester, setSelectedSemester] = useState(1);
+    const [selectedSemester, setSelectedSemester] = useState(null);
 
     useEffect(() => {
-        if (user?.id) {
-            const fetchSubjects = async () => {
-                try {
-                    setLoading(true);
-                    setSubjectsData(null);
-                    
-                    const response = await api.get(`/student/${user.id}/subjects?semester=${selectedSemester}`);
-                    setSubjectsData(response.data);
-                } catch (err) {
-                    console.error("Error fetching subjects:", err);
-                } finally {
-                    setLoading(false);
+        if (!user?.id) return;
+
+        let cancelled = false;
+
+        const initializeSemester = async () => {
+            try {
+                const response = await api.get(`/student/${user.id}/profile`);
+                const semesterText = response.data?.academic?.semester || '';
+                const currentSemester = Number(
+                    String(semesterText).replace(/[^0-9]/g, '')
+                );
+
+                if (!cancelled) {
+                    setSelectedSemester(
+                        Number.isInteger(currentSemester) && currentSemester > 0
+                            ? currentSemester
+                            : 1
+                    );
                 }
-            };
-            fetchSubjects();
-        }
-    }, [user, selectedSemester]);
+            } catch (err) {
+                console.error("Error loading student's current semester:", err);
+
+                if (!cancelled) {
+                    setSelectedSemester(1);
+                }
+            }
+        };
+
+        initializeSemester();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (!user?.id || selectedSemester === null) return;
+
+        const fetchSubjects = async () => {
+            try {
+                setLoading(true);
+                setSubjectsData(null);
+
+                const response = await api.get(
+                    `/student/${user.id}/subjects?semester=${selectedSemester}`
+                );
+                setSubjectsData(response.data);
+            } catch (err) {
+                console.error("Error fetching subjects:", err);
+                setSubjectsData(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchSubjects();
+    }, [user?.id, selectedSemester]);
 
     const subjects = subjectsData?.subjects || [];
     const totalCredits = subjectsData?.total_credits || 0;
     const semesters = subjectsData?.available_semesters || [1, 2, 3, 4];
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 dark:text-slate-500 font-bold uppercase animate-pulse bg-slate-50 dark:bg-slate-950">Loading curriculum...</div>;
+    if (loading || selectedSemester === null) return <div className="min-h-screen flex items-center justify-center text-slate-400 dark:text-slate-500 font-bold uppercase animate-pulse bg-slate-50 dark:bg-slate-950">Loading curriculum...</div>;
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-12 font-sans">

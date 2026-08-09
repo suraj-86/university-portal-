@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 const StudentFees = () => {
     const { user } = useAuth();
-    const userId = user?.id || 5;
+    const userId = user?.id;
     
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [dbFees, setDbFees] = useState([]);
@@ -34,9 +34,11 @@ const StudentFees = () => {
         }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, [userId]);
+useEffect(() => {
+    if (!userId) return;
+
+    fetchData();
+}, [userId]);
 
     const overallTotal = dbFees.reduce((sum, fee) => sum + Number(fee.total_fee), 0);
     const overallPaid = dbFees.reduce((sum, fee) => sum + Number(fee.paid_amount), 0);

@@ -11,7 +11,7 @@ import useAuth from '../../hooks/useAuth';
 
 const StudentAttendance = () => {
     const { user } = useAuth();
-    const [selectedSemester, setSelectedSemester] = useState(1);
+    const [selectedSemester, setSelectedSemester] = useState(null);
     const [selectedSubject, setSelectedSubject] = useState('All');
 
     const [logs, setLogs] = useState([]);
@@ -20,6 +20,42 @@ const StudentAttendance = () => {
 
     useEffect(() => {
         if (!user?.id) return;
+
+        let cancelled = false;
+
+        const initializeSemester = async () => {
+            try {
+                const response = await api.get(`/student/${user.id}/profile`);
+                const semesterText = response.data?.academic?.semester || '';
+                const currentSemester = Number(
+                    String(semesterText).replace(/[^0-9]/g, '')
+                );
+
+                if (!cancelled) {
+                    setSelectedSemester(
+                        Number.isInteger(currentSemester) && currentSemester > 0
+                            ? currentSemester
+                            : 1
+                    );
+                }
+            } catch (err) {
+                console.error("Error loading student's current semester:", err);
+
+                if (!cancelled) {
+                    setSelectedSemester(1);
+                }
+            }
+        };
+
+        initializeSemester();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (!user?.id || selectedSemester === null) return;
 
         setLoading(true);
 
@@ -40,7 +76,7 @@ const StudentAttendance = () => {
                 setSubjectsFromDb([]);
                 setLoading(false);
             });
-    }, [user, selectedSemester]);
+    }, [user?.id, selectedSemester]);
 
     const attendanceData = useMemo(() => {
         const subjects = subjectsFromDb.map((sub) => {
@@ -177,7 +213,7 @@ const StudentAttendance = () => {
                 </div>
             </header>
 
-            {loading ? (
+            {loading || selectedSemester === null ? (
                 <div className="rounded-[28px] border border-slate-200 bg-white py-24 text-center font-bold uppercase tracking-widest text-slate-400 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500">
                     Syncing Attendance Records...
                 </div>

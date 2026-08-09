@@ -136,7 +136,7 @@ const TeacherNotices = () => {
             <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
                 <div>
                     <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Communication Hub</h2>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Read university announcements and broadcast messages with attachments.</p>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Send class-specific notices and keep track of university announcements.</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <button 
@@ -170,8 +170,8 @@ const TeacherNotices = () => {
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Target Class</label>
                                     <select required value={targetClass} onChange={(e) => setTargetClass(e.target.value)} className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-200 outline-none transition-all">
-                                        <option value="" disabled>-- Select a Class --</option>
-                                        {myClasses.map(cls => <option key={cls.id} value={cls.id}>{cls.course_name} - {cls.subject_name}</option>)}
+                                        <option value="" disabled>-- Select Assigned Class --</option>
+                                        {myClasses.map(cls => <option key={cls.id} value={cls.id}>{cls.course_name} • Sem {cls.semester} • {cls.subject_name}</option>)}
                                     </select>
                                 </div>
                                 <FormInput label="Subject Line" type="text" required value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)} />
@@ -184,8 +184,9 @@ const TeacherNotices = () => {
                                     <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                                         <label className="flex flex-col items-center gap-2 cursor-pointer w-full py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center overflow-hidden px-4">
                                             <Paperclip size={20} className="text-indigo-400 shrink-0" />
-                                            {attachment ? <span className="text-indigo-600 dark:text-indigo-400 truncate max-w-full">{attachment.name}</span> : 'Click to Upload PDF'}
-                                            <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => setAttachment(e.target.files[0])} />
+                                            {attachment ? <span className="text-indigo-600 dark:text-indigo-400 truncate max-w-full">{attachment.name}</span> : 'Click to upload PDF, DOC or DOCX'}
+                                            <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => setAttachment(e.target.files?.[0] || null)} />
+                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 normal-case tracking-normal">Maximum file size: 5 MB</span>
                                         </label>
                                     </div>
                                 </div>
@@ -198,10 +199,20 @@ const TeacherNotices = () => {
 
                     <div className="lg:col-span-2 flex flex-col gap-4">
                         <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-2">Sent History</h3>
-                        {sentNotices.map(notice => (
+                        {sentNotices.length === 0 ? (
+                            <Card className="p-10 text-center border-dashed">
+                                <div className="mx-auto w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4">
+                                    <Bell size={22} />
+                                </div>
+                                <h4 className="font-bold text-slate-800 dark:text-slate-200">No notices sent yet</h4>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                    Choose an assigned class and send your first notice.
+                                </p>
+                            </Card>
+                        ) : sentNotices.map(notice => (
                             <Card key={notice.id} className="p-0 overflow-hidden group">
                                 <div className="p-5">
-                                    <div className="flex justify-between items-start mb-3">
+                                    <div className="flex justify-between items-start mb-3 gap-4">
                                         <div className="flex-1">
                                             <span className="inline-block bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md mb-2 border border-indigo-100 dark:border-indigo-900">
                                                 To: {notice.subject_name || 'Assigned Class'}
@@ -209,7 +220,7 @@ const TeacherNotices = () => {
                                             <h4 className="font-bold text-slate-900 dark:text-slate-100 text-lg flex items-center gap-2">{notice.title}</h4>
                                         </div>
                                         <div className="flex flex-col items-end min-w-[120px]">
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity mb-2">
+                                            <div className="flex gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity mb-2">
                                                 <button onClick={() => openEditModal(notice)} className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"><Edit2 size={16}/></button>
                                                 <button onClick={() => deleteNotice(notice.id)} className="p-1.5 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"><Trash2 size={16}/></button>
                                             </div>

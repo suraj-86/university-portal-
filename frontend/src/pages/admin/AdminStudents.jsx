@@ -176,6 +176,29 @@ const AdminStudents = () => {
                                 ))}
                             </select>
                         </div>
+                        <div className="space-y-1">
+                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                Semester
+                            </span>
+
+                            <select
+                                required
+                                value={formData.semester}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        semester: Number(e.target.value)
+                                    })
+                                }
+                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm focus:ring-2 focus:ring-sky-200 outline-none"
+                            >
+                                {Array.from({ length: 8 }, (_, index) => index + 1).map((semester) => (
+                                    <option key={semester} value={semester}>
+                                        Semester {semester}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="bg-blue-50/50 dark:bg-blue-950/40 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/50">

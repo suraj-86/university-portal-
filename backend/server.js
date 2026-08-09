@@ -44,15 +44,38 @@ const storage = multer.diskStorage({
     },
 
     filename(req, file, cb) {
+        const extension = path.extname(file.originalname).toLowerCase();
         const uniqueName =
-            `${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.originalname}`;
+            `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
 
         cb(null, uniqueName);
     }
 });
 
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(['.pdf', '.doc', '.docx']);
+const ALLOWED_UPLOAD_MIMES = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+]);
+
 const upload = multer({
-    storage
+    storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024
+    },
+    fileFilter(req, file, cb) {
+        const extension = path.extname(file.originalname).toLowerCase();
+
+        if (
+            !ALLOWED_UPLOAD_EXTENSIONS.has(extension) ||
+            !ALLOWED_UPLOAD_MIMES.has(file.mimetype)
+        ) {
+            return cb(new Error('Only PDF, DOC, and DOCX files up to 5 MB are allowed.'));
+        }
+
+        cb(null, true);
+    }
 });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -374,18 +397,19 @@ app.post("/api/login", async (req, res) => {
 });
 
 app.post("/api/logout", (req, res) => {
-
     res.clearCookie("token", {
         httpOnly: true,
-        secure: true,
-        sameSite: "none"
+        secure: process.env.NODE_ENV === "production",
+        sameSite:
+            process.env.NODE_ENV === "production"
+                ? "none"
+                : "lax"
     });
 
     res.json({
         success: true,
         message: "Logged out successfully"
     });
-
 });
 
 app.put(
@@ -1288,17 +1312,20 @@ app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
 app.get('/api/notices', verifyRole(['admin']), (req, res) => {
     const sql = `
         SELECT
-            id,
-            title,
-            content,
-            target_role,
-            priority,
-            attachment_url,
-            posted_by,
-            subject_id,
-            DATE_FORMAT(created_at,'%Y-%m-%d') AS date
-        FROM notices
-        ORDER BY created_at DESC
+            n.id,
+            n.title,
+            n.content,
+            n.target_role,
+            n.priority,
+            n.attachment_url,
+            n.posted_by,
+            COALESCE(t.full_name, u.username) AS posted_by_name,
+            n.subject_id,
+            DATE_FORMAT(n.created_at,'%Y-%m-%d') AS date
+        FROM notices n
+        LEFT JOIN users u ON n.posted_by = u.id
+        LEFT JOIN teachers t ON u.id = t.user_id
+        ORDER BY n.created_at DESC
     `;
 
     db.query(sql, (err, data) => {
@@ -1314,69 +1341,6 @@ app.get('/api/notices', verifyRole(['admin']), (req, res) => {
 });
 
 app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
-
-    const {
-        title,
-        content,
-        target_role,
-        posted_by,
-        subject_id = null,
-        priority = "Normal"
-    } = req.body;
-
-    if (!title || !content || !target_role || !posted_by) {
-        return res.status(400).json({
-            error: "Please fill all required fields."
-        });
-    }
-
-    const attachment_url = req.file
-        ? `/uploads/${req.file.filename}`
-        : (req.body.attachment_url || null);
-
-    const sql = `
-        INSERT INTO notices
-        (
-            title,
-            content,
-            target_role,
-            priority,
-            attachment_url,
-            posted_by,
-            subject_id
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    db.query(
-        sql,
-        [
-            title,
-            content,
-            target_role,
-            priority,
-            attachment_url,
-            posted_by,
-            subject_id
-        ],
-        (err, result) => {
-
-            if (err) {
-                console.error(err);
-                return res.status(500).json({
-                    error: err.message
-                });
-            }
-
-            res.json({
-                success: true,
-                id: result.insertId
-            });
-        }
-    );
-});
-app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
-
     const {
         title,
         content,
@@ -1391,96 +1355,293 @@ app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('att
         });
     }
 
-    const attachment_url = req.file
-        ? `/uploads/${req.file.filename}`
-        : req.body.attachment_url;
+    const authorId = req.user.id;
 
-    const sql = `
-        UPDATE notices
-        SET
-            title = ?,
-            content = ?,
-            target_role = ?,
-            priority = ?,
-            attachment_url = ?,
-            subject_id = ?
-        WHERE id = ?
-    `;
+    const continueCreate = () => {
+        const attachment_url = req.file
+            ? `/uploads/${req.file.filename}`
+            : (req.body.attachment_url || null);
 
-    db.query(
-        sql,
-        [
-            title,
-            content,
-            target_role,
-            priority,
-            attachment_url,
-            subject_id,
-            req.params.id
-        ],
-        (err) => {
+        const sql = `
+            INSERT INTO notices
+            (
+                title,
+                content,
+                target_role,
+                priority,
+                attachment_url,
+                posted_by,
+                subject_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `;
 
-            if (err) {
-                console.error(err);
-                return res.status(500).json({
-                    error: err.message
-                });
-            }
-
-            res.json({
-                success: true,
-                message: "Notice updated successfully."
-            });
-        }
-    );
-});
-app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
-
-    const noticeId = req.params.id;
-
-    db.query(
-        "SELECT attachment_url FROM notices WHERE id=?",
-        [noticeId],
-        (err, results) => {
-
-            if (err) {
-                console.error(err);
-                return res.status(500).json({
-                    error: err.message
-                });
-            }
-
-            const fileToDelete =
-                results.length > 0
-                    ? results[0].attachment_url
-                    : null;
-
-            db.query(
-                "DELETE FROM notices WHERE id=?",
-                [noticeId],
-                (err) => {
-
-                    if (err) {
-                        console.error(err);
-                        return res.status(500).json({
-                            error: err.message
-                        });
-                    }
-
-                    if (fileToDelete) {
-                        deleteFile(fileToDelete);
-                    }
-
-                    res.json({
-                        success: true,
-                        message: "Notice deleted successfully."
+        db.query(
+            sql,
+            [
+                title.trim(),
+                content.trim(),
+                target_role,
+                priority,
+                attachment_url,
+                authorId,
+                subject_id || null
+            ],
+            (err, result) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({
+                        error: err.message
                     });
                 }
-            );
+
+                res.json({
+                    success: true,
+                    id: result.insertId
+                });
+            }
+        );
+    };
+
+    if (req.user.role === 'admin') {
+        return continueCreate();
+    }
+
+    if (target_role !== 'student') {
+        return res.status(403).json({
+            error: "Teachers can only send notices to students."
+        });
+    }
+
+    if (!subject_id) {
+        return res.status(400).json({
+            error: "A target class/subject is required."
+        });
+    }
+
+    teacherOwnsSubject(req.user.id, subject_id, (err, owns) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                error: "Authorization check failed."
+            });
         }
-    );
+
+        if (!owns) {
+            return res.status(403).json({
+                error: "You are not assigned to this subject."
+            });
+        }
+
+        continueCreate();
+    });
 });
 
+app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
+    const {
+        title,
+        content,
+        target_role,
+        subject_id = null,
+        priority = "Normal"
+    } = req.body;
+
+    if (!title || !content || !target_role) {
+        return res.status(400).json({
+            error: "Please fill all required fields."
+        });
+    }
+
+    const noticeId = Number(req.params.id);
+
+    if (!Number.isInteger(noticeId) || noticeId <= 0) {
+        return res.status(400).json({
+            error: "Invalid notice identifier."
+        });
+    }
+
+    const continueUpdate = () => {
+        const attachment_url = req.file
+            ? `/uploads/${req.file.filename}`
+            : req.body.attachment_url;
+
+        const sql = `
+            UPDATE notices
+            SET
+                title = ?,
+                content = ?,
+                target_role = ?,
+                priority = ?,
+                attachment_url = ?,
+                subject_id = ?
+            WHERE id = ?
+        `;
+
+        db.query(
+            sql,
+            [
+                title.trim(),
+                content.trim(),
+                target_role,
+                priority,
+                attachment_url || null,
+                subject_id || null,
+                noticeId
+            ],
+            (err, result) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({
+                        error: err.message
+                    });
+                }
+
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({
+                        error: "Notice not found."
+                    });
+                }
+
+                res.json({
+                    success: true,
+                    message: "Notice updated successfully."
+                });
+            }
+        );
+    };
+
+    const authorizationSql = `
+        SELECT
+            n.id,
+            n.posted_by,
+            n.target_role,
+            n.subject_id
+        FROM notices n
+        WHERE n.id = ?
+        LIMIT 1
+    `;
+
+    db.query(authorizationSql, [noticeId], (err, rows) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                error: "Failed to verify notice ownership."
+            });
+        }
+
+        if (rows.length === 0) {
+            return res.status(404).json({
+                error: "Notice not found."
+            });
+        }
+
+        const notice = rows[0];
+
+        if (req.user.role === 'admin') {
+            return continueUpdate();
+        }
+
+        if (
+            Number(notice.posted_by) !== Number(req.user.id) ||
+            notice.target_role !== 'student'
+        ) {
+            return res.status(403).json({
+                error: "You can only edit notices created by your teacher account."
+            });
+        }
+
+        if (!subject_id) {
+            return res.status(400).json({
+                error: "A target class/subject is required."
+            });
+        }
+
+        teacherOwnsSubject(req.user.id, subject_id, (assignmentErr, owns) => {
+            if (assignmentErr) {
+                console.error(assignmentErr);
+                return res.status(500).json({
+                    error: "Authorization check failed."
+                });
+            }
+
+            if (!owns) {
+                return res.status(403).json({
+                    error: "You are not assigned to the selected subject."
+                });
+            }
+
+            continueUpdate();
+        });
+    });
+});
+
+app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
+    const noticeId = Number(req.params.id);
+
+    if (!Number.isInteger(noticeId) || noticeId <= 0) {
+        return res.status(400).json({
+            error: "Invalid notice identifier."
+        });
+    }
+
+    const ownershipSql = `
+        SELECT id, posted_by, target_role, attachment_url
+        FROM notices
+        WHERE id = ?
+        LIMIT 1
+    `;
+
+    db.query(ownershipSql, [noticeId], (err, results) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                error: err.message
+            });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({
+                error: "Notice not found."
+            });
+        }
+
+        const notice = results[0];
+
+        if (
+            req.user.role === 'teacher' &&
+            (
+                Number(notice.posted_by) !== Number(req.user.id) ||
+                notice.target_role !== 'student'
+            )
+        ) {
+            return res.status(403).json({
+                error: "You can only delete notices created by your teacher account."
+            });
+        }
+
+        db.query(
+            "DELETE FROM notices WHERE id=?",
+            [noticeId],
+            (deleteErr) => {
+                if (deleteErr) {
+                    console.error(deleteErr);
+                    return res.status(500).json({
+                        error: deleteErr.message
+                    });
+                }
+
+                if (notice.attachment_url) {
+                    deleteFile(notice.attachment_url);
+                }
+
+                res.json({
+                    success: true,
+                    message: "Notice deleted successfully."
+                });
+            }
+        );
+    });
+});
 
 app.get('/api/admin/dashboard-stats', verifyRole(['admin']), (req, res) => {
     const statsSql = `
@@ -1552,6 +1713,12 @@ app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), (req, res
 });
 
 app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
+    if (Number(req.params.id) !== Number(req.user.id)) {
+        return res.status(403).json({
+            error: "You are not authorized to view another teacher's notices."
+        });
+    }
+
     const sql = `
         SELECT n.*, DATE_FORMAT(n.created_at, '%Y-%m-%d') as date, 
                u.username as author, s.subject_name
@@ -1562,7 +1729,7 @@ app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
            OR n.posted_by = ?
         ORDER BY n.created_at DESC
     `;
-    db.query(sql, [req.params.id], (err, data) => {
+    db.query(sql, [req.user.id], (err, data) => {
         if (err) return res.status(500).json(err);
         res.json(data);
     });

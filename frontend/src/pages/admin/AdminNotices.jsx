@@ -35,18 +35,11 @@ const AdminNotices = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         
-        const adminId = user?.id; 
-        if (!adminId) {
-            toast.error("Session expired. Please log in again.");
-            return;
-        }
-
         const submitData = new FormData();
         submitData.append('title', formData.title);
         submitData.append('content', formData.content);
         submitData.append('target_role', formData.target_role);
         submitData.append('priority', formData.priority);
-        submitData.append('posted_by', adminId);
 
         if (attachmentFile) {
             submitData.append('attachment', attachmentFile);
@@ -113,6 +106,15 @@ const AdminNotices = () => {
                     </div>
                     {row.attachment_url && <Paperclip size={14} className="text-emerald-500 shrink-0 mt-1" />}
                 </div>
+            )
+        },
+        {
+            header: "Posted By",
+            accessor: "posted_by_name",
+            cell: (row) => (
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    {row.posted_by_name || row.posted_by || 'Unknown'}
+                </span>
             )
         },
         { header: "Target", accessor: "target_role" },
@@ -197,6 +199,9 @@ const AdminNotices = () => {
                                 {viewingNotice.priority} Priority
                             </span>
                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Posted: {viewingNotice.date}</span>
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                By: {viewingNotice.posted_by_name || viewingNotice.posted_by || 'Unknown'}
+                            </span>
                         </div>
                         
                         <h4 className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight break-words shrink-0">{viewingNotice.title}</h4>
