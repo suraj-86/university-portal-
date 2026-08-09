@@ -39,10 +39,12 @@ const menuConfig = {
   parent: [
     { name: 'Dashboard', path: '/parent-dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Ward Profile', path: '/parent/profile', icon: <User size={20} /> },
-    { name: 'Fees & Payments', path: '/parent/fees', icon: <DollarSign size={20} /> },
+    { name: 'Fees & Payments', path: '/parent/fees', icon: <DollarSign size={20} /> },  
+    { name: 'Attendance', path: '/parent/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Academic Results', path: '/parent/results', icon: <Award size={20} /> },
     { name: 'Campus Notices', path: '/parent/notices', icon: <Bell size={20} /> },
     { name: 'Settings', path: '/parent/settings', icon: <Settings size={20} /> }
+    
   ],
 };
 

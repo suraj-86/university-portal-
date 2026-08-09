@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, Paperclip, FileText, Download } from 'lucide-react';
-import api from '../../services/api';
+import api, { getFileUrl } from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
@@ -96,9 +96,7 @@ const AdminNotices = () => {
 
     const handleDownload = (fileName) => {
         if (!fileName) return;
-        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
-        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     const columns = [

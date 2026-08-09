@@ -41,6 +41,7 @@ import ParentFees from './pages/parent/ParentFees';
 import ParentResults from './pages/parent/ParentResults';
 import ParentNotices from './pages/parent/ParentNotices';
 import ParentSettings from './pages/parent/ParentSettings';
+import ParentAttendance from './pages/parent/ParentAttendance';
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -128,6 +129,7 @@ function App() {
             <Route path="/parent/results" element={<ProtectedRoute role="parent"><ParentResults /></ProtectedRoute>} />
             <Route path="/parent/notices" element={<ProtectedRoute role="parent"><ParentNotices /></ProtectedRoute>} />
             <Route path="/parent/settings" element={<ProtectedRoute role="parent"><ParentSettings /></ProtectedRoute>} />
+            <Route path="/parent/attendance" element={<ProtectedRoute role="parent"><ParentAttendance /></ProtectedRoute>} />
 
           </Route>
 

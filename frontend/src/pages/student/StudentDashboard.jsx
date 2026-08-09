@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Clock, Bell, Calendar, FileText, ChevronRight, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import api from '../../services/api';
+import api, { getFileUrl } from '../../services/api';
 import Modal from '../../components/Modal';
 
 const StudentDashboard = () => {
@@ -29,9 +29,7 @@ const StudentDashboard = () => {
     const handleDownload = (e, fileName) => {
         if (e) e.stopPropagation(); 
         if (!fileName) return;
-        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
-        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     if (loading || !dashboardData) {

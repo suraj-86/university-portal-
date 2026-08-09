@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, Users, Bell, Megaphone, FileText, CheckSquare, Activity, Clock, MapPin, Download, X } from 'lucide-react';
-import api from '../../services/api';
+import api, { getFileUrl } from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import useAuth from '../../hooks/useAuth';
 import Modal from '../../components/Modal';
@@ -34,9 +34,7 @@ const TeacherDashboard = () => {
     const handleDownload = (e, fileName) => {
         if (e) e.stopPropagation();
         if (!fileName) return;
-        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
-        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     return (

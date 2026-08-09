@@ -6,7 +6,7 @@ import Input from '../../components/FormInput';
 import Card from '../../components/Card';
 
 const StudentSettings = () => {
-    const { user, login } = useAuth();
+    const { user, updateUser } = useAuth();
       
     const [username, setUsername] = useState(user?.username || '');
     const [userMessage, setUserMessage] = useState({ text: '', type: '' });
@@ -25,6 +25,7 @@ const StudentSettings = () => {
         setUserLoading(true);
         try {
             const response = await api.put(`/users/${user.id}/change-username`, { newUsername: username });
+            updateUser({ username });
             setUserMessage({ text: response.data.message, type: 'success' });
         } catch (error) {
             setUserMessage({ text: error.response?.data?.error || 'Failed to update username.', type: 'error' });
@@ -39,8 +40,8 @@ const StudentSettings = () => {
         if (passData.newPassword !== passData.confirmPassword) {
             return setPassMessage({ text: 'New passwords do not match.', type: 'error' });
         }
-        if (passData.newPassword.length < 6) {
-            return setPassMessage({ text: 'New password must be at least 6 characters.', type: 'error' });
+        if (passData.newPassword.length < 8) {
+            return setPassMessage({ text: 'New password must be at least 8 characters.', type: 'error' });
         }
         setPassLoading(true);
         try {
@@ -65,7 +66,6 @@ const StudentSettings = () => {
             </header>
             <div className="max-w-2xl space-y-8">
                 
-                {/* --- CHANGE USERNAME CARD --- */}
                 <Card className="p-8 border-slate-200 dark:border-slate-800 shadow-sm transition-all bg-white dark:bg-slate-900">
                     <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
                         <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-xl">
@@ -101,7 +101,6 @@ const StudentSettings = () => {
                     </form>
                 </Card>
 
-                {/* --- CHANGE PASSWORD CARD --- */}
                 <Card className="p-8 border-slate-200 dark:border-slate-800 shadow-sm transition-all bg-white dark:bg-slate-900">
                     <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
                         <div className="p-3 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-xl">

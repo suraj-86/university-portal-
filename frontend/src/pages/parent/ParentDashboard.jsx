@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, DollarSign, Award, BookOpen, Clock, Bell, FileText, Calendar, CheckCircle2, Users, Download, X } from 'lucide-react';
-import api from '../../services/api';
+import api, { getFileUrl } from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import StatsWidget from '../../components/StatsWidget';
 import Card from '../../components/Card';
@@ -67,9 +67,7 @@ const ParentDashboard = () => {
     const handleDownload = (e, fileName) => {
         if (e) e.stopPropagation();
         if (!fileName) return;
-        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
-        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     if (loading && !wardSummary) {

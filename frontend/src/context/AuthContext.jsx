@@ -24,6 +24,15 @@ export const AuthProvider = ({ children }) => {
         setUser(userObj);
     };
 
+    const updateUser = (partialUpdate) => {
+        setUser((prev) => {
+            if (!prev) return prev;
+            const updated = { ...prev, ...partialUpdate };
+            localStorage.setItem('user', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
     
     const logout = async () => {
         try {
@@ -39,7 +48,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, logout, loading, updateUser }}>
             {!loading && children}
         </AuthContext.Provider>
     );

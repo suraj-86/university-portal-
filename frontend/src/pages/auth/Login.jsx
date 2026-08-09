@@ -36,6 +36,10 @@ const Login = () => {
         } catch (error) {
             if (error.response && error.response.status === 401) {
                 setErrorMessage('Invalid Username or Password. Please try again.');
+            } else if (error.response && error.response.status === 403) {
+                setErrorMessage(error.response.data?.message || 'This account has been deactivated. Contact the administrator.');
+            } else if (error.response && error.response.data?.message) {
+                setErrorMessage(error.response.data.message);
             } else {
                 setErrorMessage('Server connection failed. Is the backend running?');
             }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Calendar, FileText, Download, X, Megaphone, User, Clock, ChevronRight } from 'lucide-react';
-import api from '../../services/api';
+import api, { getFileUrl } from '../../services/api';
 import Card from '../../components/Card';
 import Modal from '../../components/Modal';
 import useAuth from '../../hooks/useAuth';
@@ -47,9 +47,7 @@ const StudentNotices = () => {
     const handleDownload = (e, fileName) => {
         if (e) e.stopPropagation(); 
         if (!fileName) return;
-        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
-        const fullUrl = fileName.startsWith('/') ? `${rawBaseUrl}${fileName}` : `${rawBaseUrl}/uploads/${fileName}`;
-        window.open(fullUrl, '_blank');
+        window.open(getFileUrl(fileName), '_blank');
     };
 
     return (

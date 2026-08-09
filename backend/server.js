@@ -3,38 +3,41 @@ const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken'); // Added for JWT authentication[cite: 7]
-const cookieParser = require('cookie-parser'); // Added for secure cookies[cite: 7]
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 
-// 1. Update CORS to strictly allow your frontend URL and accept credentials (cookies)[cite: 7]
 app.use(cors({
 origin: [
         'https://university-portal-flax-tau.vercel.app', 
         'http://localhost:5173'
     ],
-    credentials: true // Required to send and receive HTTP-Only cookies
+    credentials: true
 }));
 
 app.use(express.json());
-app.use(cookieParser()); // Enable cookie parsing[cite: 7]
+app.use(cookieParser());
 
-// 2. Define a secret key for signing tokens (In production, move this to a .env file)
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_college_key_2026'; 
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    console.error(
+        "❌ JWT_SECRET is not set. Refusing to start with an insecure default secret."
+    );
+    process.exit(1);
+}
 
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure the 'uploads' directory exists[cite: 7]
 const uploadDir = path.join(__dirname, "uploads");
 
 fs.mkdirSync(uploadDir, {
     recursive: true
 });
 
-// Set up Multer storage configuration[cite: 7]
 const storage = multer.diskStorage({
     destination(req, file, cb) {
         cb(null, uploadDir);
@@ -52,13 +55,9 @@ const upload = multer({
     storage
 });
 
-// Serve the uploads folder statically[cite: 7]
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ==========================================
-// DATABASE CONNECTION[cite: 7]
-// ==========================================
-const db = mysql.createConnection({
+const db = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
@@ -66,10 +65,26 @@ const db = mysql.createConnection({
     port: process.env.DB_PORT,
     ssl: {
         rejectUnauthorized: false
-    }
+    },
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-db.connect((err) => {
+const queryAsync = (sql, params = []) => {
+    return new Promise((resolve, reject) => {
+        db.query(sql, params, (err, results) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+
+            resolve(results);
+        });
+    });
+};
+
+db.getConnection((err, connection) => {
     if (err) {
         console.error(
             "❌ Database connection failed:",
@@ -82,11 +97,10 @@ db.connect((err) => {
     console.log(
         "✅ Successfully connected to MySQL"
     );
+
+    connection.release();
 });
 
-// ==========================================
-// ROLE-BASED AUTHORIZATION MIDDLEWARE
-// ==========================================
 const verifyRole = (allowedRoles = []) => {
     return (req, res, next) => {
         try {
@@ -126,14 +140,124 @@ const verifyRole = (allowedRoles = []) => {
     };
 };
 
-// ==========================================
-// LOGIN ROUTE
-// ==========================================
+const verifyStudentOwnership = async (req, res, next) => {
+    const requestedId = Number(req.params.id);
+
+    if (!Number.isInteger(requestedId) || requestedId <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid student identifier."
+        });
+    }
+
+    if (req.user.role === 'admin') {
+        return next();
+    }
+
+    if (req.user.role === 'student') {
+        if (Number(req.user.id) === requestedId) {
+            return next();
+        }
+
+        return res.status(403).json({
+            success: false,
+            error: "You are not authorized to access this student's records."
+        });
+    }
+
+    if (req.user.role === 'parent') {
+        const sql = `
+            SELECT s.user_id
+            FROM parent_student_map psm
+            INNER JOIN parents p ON p.parent_id = psm.parent_id
+            INNER JOIN students s ON s.student_id = psm.student_id
+            WHERE p.user_id = ?
+              AND s.user_id = ?
+            LIMIT 1
+        `;
+
+        try {
+            const rows = await queryAsync(sql, [
+                req.user.id,
+                requestedId
+            ]);
+
+            if (rows.length === 0) {
+                return res.status(403).json({
+                    success: false,
+                    error: "This student is not linked to your parent account."
+                });
+            }
+
+            return next();
+        } catch (error) {
+            console.error(
+                "Student ownership SQL error:",
+                error.sqlMessage || error.message
+            );
+
+            return res.status(500).json({
+                success: false,
+                error: "Authorization check failed.",
+                details: error.sqlMessage || error.message
+            });
+        }
+    }
+
+    return res.status(403).json({
+        success: false,
+        error: "You are not authorized to access this student's records."
+    });
+};
+
+const teacherOwnsSubject = (teacherUserId, subjectId, callback) => {
+    const sql = `
+        SELECT 1
+        FROM teacher_assignments ta
+        JOIN teachers t ON ta.teacher_id = t.teacher_id
+        WHERE t.user_id = ? AND ta.subject_id = ?
+        LIMIT 1
+    `;
+    db.query(sql, [teacherUserId, subjectId], (err, rows) => {
+        if (err) return callback(err, false);
+        callback(null, rows.length > 0);
+    });
+};
+
+const withTransaction = (res, workFn) => {
+    db.getConnection((connErr, connection) => {
+        if (connErr) {
+            console.error(connErr);
+            return res.status(500).json({ error: "Failed to acquire a database connection." });
+        }
+
+        connection.beginTransaction((err) => {
+            if (err) {
+                connection.release();
+                return res.status(500).json({ error: "Transaction failed to start" });
+            }
+
+            const db = {
+                query: (...args) => connection.query(...args),
+                commit: (cb) => connection.commit((commitErr) => {
+                    connection.release();
+                    cb(commitErr);
+                }),
+                rollback: (cb) => connection.rollback(() => {
+                    connection.release();
+                    cb();
+                })
+            };
+
+            workFn(db);
+        });
+    });
+};
+
 app.post("/api/login", async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Validate request
         if (!username || !password) {
             return res.status(400).json({
                 success: false,
@@ -147,6 +271,7 @@ app.post("/api/login", async (req, res) => {
                 u.username,
                 u.password,
                 u.role,
+                u.is_active,
                 COALESCE(
                     t.full_name,
                     s.full_name,
@@ -192,6 +317,13 @@ app.post("/api/login", async (req, res) => {
                 });
             }
 
+            if (user.is_active === 0) {
+                return res.status(403).json({
+                    success: false,
+                    message: "This account has been deactivated. Contact the administrator."
+                });
+            }
+
             const token = jwt.sign(
                 {
                     id: user.id,
@@ -214,6 +346,17 @@ app.post("/api/login", async (req, res) => {
             });
 
             delete user.password;
+            delete user.is_active;
+
+            db.query(
+                "UPDATE users SET last_login = NOW() WHERE id = ?",
+                [user.id],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error("Failed to update last_login:", updateErr.message);
+                    }
+                }
+            );
 
             return res.json({
                 success: true,
@@ -230,7 +373,6 @@ app.post("/api/login", async (req, res) => {
     }
 });
 
-// LOGOUT ROUTE
 app.post("/api/logout", (req, res) => {
 
     res.clearCookie("token", {
@@ -246,9 +388,6 @@ app.post("/api/logout", (req, res) => {
 
 });
 
-// ==========================================
-// CHANGE PASSWORD
-// ==========================================
 app.put(
     "/api/users/:id/change-password",
     verifyRole(["admin", "teacher", "student", "parent"]),
@@ -256,7 +395,6 @@ app.put(
         try {
             const userId = Number(req.params.id);
 
-            // Only the account owner or an admin can change the password
             if (req.user.id !== userId && req.user.role !== "admin") {
                 return res.status(403).json({
                     success: false,
@@ -266,7 +404,6 @@ app.put(
 
             const { currentPassword, newPassword } = req.body;
 
-            // Validate input
             if (!currentPassword || !newPassword) {
                 return res.status(400).json({
                     success: false,
@@ -274,7 +411,6 @@ app.put(
                 });
             }
 
-            // Basic password policy
             if (newPassword.length < 8) {
                 return res.status(400).json({
                     success: false,
@@ -314,7 +450,6 @@ app.put(
                         });
                     }
 
-                    // Prevent reusing the same password
                     const samePassword = await bcrypt.compare(
                         newPassword,
                         results[0].password
@@ -360,16 +495,12 @@ app.put(
         }
     }
 );
-// ==========================================
-// CHANGE USERNAME
-// ==========================================
 app.put(
     "/api/users/:id/change-username",
     verifyRole(["admin", "teacher", "student", "parent"]),
     (req, res) => {
         const userId = Number(req.params.id);
 
-        // Only the account owner or an admin can change the username
         if (req.user.id !== userId && req.user.role !== "admin") {
             return res.status(403).json({
                 success: false,
@@ -443,9 +574,6 @@ app.put(
     }
 );
 
-// ==========================================
-//DELETE FILE FUNCTION
-// ==========================================
 
 const deleteFile = (filePath) => {
 
@@ -477,9 +605,6 @@ const deleteFile = (filePath) => {
 
 };
 
-// ==========================================
-// STUDENT MANAGEMENT ROUTES[cite: 7]
-// ==========================================
 
 app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
     const sql = `
@@ -503,9 +628,7 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed to start" });
-
+    withTransaction(res, (db) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'student')";
         db.query(userSql, [roll, hashedPassword], (err, userResult) => {
             if (err) {
@@ -553,13 +676,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
         });
     }
 
-    db.beginTransaction((err) => {
-        if (err) {
-            return res.status(500).json({
-                error: "Transaction failed."
-            });
-        }
-
+    withTransaction(res, (db) => {
         db.query(
             "SELECT user_id FROM students WHERE student_id = ?",
             [req.params.id],
@@ -656,9 +773,6 @@ app.delete('/api/students/:id', verifyRole(['admin']), (req, res) => {
     });
 });
 
-// ==========================================
-// TEACHER MANAGEMENT ROUTES[cite: 7]
-// ==========================================
 
 app.get('/api/teachers', verifyRole(['admin']), (req, res) => {
     const sql = "SELECT * FROM teachers";
@@ -675,7 +789,8 @@ if (
     !email ||
     !employee_id ||
     !department ||
-    !designation
+    !designation ||
+    !password
 ) {
     return res.status(400).json({
         error: "Please fill all required fields."
@@ -683,9 +798,7 @@ if (
 }
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed" });
-
+    withTransaction(res, (db) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'teacher')";
         db.query(userSql, [employee_id, hashedPassword], (err, userResult) => {
             if (err) return db.rollback(() => res.status(400).json({ error: "Employee ID (Username) already exists." }));
@@ -740,14 +853,7 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
     }
 
     try {
-        db.beginTransaction((err) => {
-            if (err) {
-                return res.status(500).json({
-                    error: "Transaction failed to start."
-                });
-            }
-
-            // Get user_id for this teacher
+        withTransaction(res, (db) => {
             db.query(
                 "SELECT user_id FROM teachers WHERE teacher_id = ?",
                 [req.params.id],
@@ -768,7 +874,6 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
 
                     const userId = result[0].user_id;
 
-                    // Update teacher profile
                     const teacherSql = `
                         UPDATE teachers
                         SET
@@ -799,11 +904,9 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
                                 );
                             }
 
-                            // Update login username
                             let userSql = "UPDATE users SET username = ? WHERE id = ?";
                             let params = [employee_id, userId];
 
-                            // Update password only if provided
                             if (password && password.trim() !== "") {
                                 const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -850,11 +953,7 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
 });
 
 app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
-    db.beginTransaction((err) => {
-        if (err) {
-            return res.status(500).json({ error: "Transaction failed." });
-        }
-
+    withTransaction(res, (db) => {
         const getUserSql = "SELECT user_id FROM teachers WHERE teacher_id = ?";
 
         db.query(getUserSql, [req.params.id], (err, result) => {
@@ -909,9 +1008,6 @@ app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
     });
 });
 
-// ==========================================
-// COURSE MANAGEMENT ROUTES[cite: 7]
-// ==========================================
 
 app.get('/api/courses', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
     const sql = "SELECT * FROM courses";
@@ -960,9 +1056,6 @@ app.delete('/api/courses/:id', verifyRole(['admin']), (req, res) => {
     });
 });
 
-// ==========================================
-// SUBJECT MANAGEMENT ROUTES[cite: 7]
-// ==========================================
 
 app.get('/api/subjects', verifyRole(['admin', 'teacher']), (req, res) => {
     const sql = `
@@ -1004,9 +1097,7 @@ app.put('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     const subjectId = req.params.id;
     const { subject_code, subject_name, course_id, semester, subject_type, credits, teacher_id } = req.body;
 
-    db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction Error" });
-
+    withTransaction(res, (db) => {
         const subSql = "UPDATE subjects SET course_id=?, semester=?, subject_code=?, subject_name=?, subject_type=?, credits=? WHERE id=?";
         db.query(subSql, [course_id, semester, subject_code, subject_name, subject_type, credits, subjectId], (err) => {
             if (err) return db.rollback(() => res.status(500).json(err));
@@ -1032,9 +1123,41 @@ app.delete('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     });
 });
 
-// ==========================================
-// PARENT MANAGEMENT ROUTES (ADMIN)[cite: 7]
-// ==========================================
+const getParentWard = (parentUserId, studentId, callback) => {
+    const sql = `
+        SELECT
+            s.student_id,
+            s.user_id,
+            s.full_name,
+            s.enrollment_number,
+            s.semester,
+            s.course_id,
+            c.course_name
+        FROM students s
+        JOIN courses c
+            ON s.course_id = c.id
+        JOIN parent_student_map psm
+            ON psm.student_id = s.student_id
+        JOIN parents p
+            ON p.parent_id = psm.parent_id
+        WHERE p.user_id = ?
+          AND s.student_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [parentUserId, studentId], (err, rows) => {
+        if (err) {
+            console.error("Parent ward lookup error:", err);
+            return callback(err, null);
+        }
+
+        if (rows.length === 0) {
+            return callback(null, null);
+        }
+
+        callback(null, rows[0]);
+    });
+};
 
 app.get('/api/parents', verifyRole(['admin']), (req, res) => {
     const sql = `
@@ -1080,9 +1203,7 @@ if (!Array.isArray(student_ids) || student_ids.length === 0) {
 }
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed" });
-
+    withTransaction(res, (db) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'parent')";
         db.query(userSql, [username, hashedPassword], (err, userResult) => {      
             if (err) return db.rollback(() => res.status(400).json({ error: "Username already exists" }));
@@ -1127,9 +1248,7 @@ if (!Array.isArray(student_ids) || student_ids.length === 0) {
     });
 }
     
-    db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed" });
-
+    withTransaction(res, (db) => {
         db.query("UPDATE parents SET full_name = ?, phone = ?, email = ? WHERE parent_id = ?", [full_name, phone, email, parentId], (err) => {
             if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
             
@@ -1165,11 +1284,8 @@ app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
     });
 });
 
-// ==========================================
-// CAMPUS NOTICE ROUTES[cite: 7]
-// ==========================================
 
-app.get('/api/notices', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
+app.get('/api/notices', verifyRole(['admin']), (req, res) => {
     const sql = `
         SELECT
             id,
@@ -1365,9 +1481,6 @@ app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
     );
 });
 
-// ==========================================
-// ADMIN DASHBOARD[cite: 7]
-// ==========================================
 
 app.get('/api/admin/dashboard-stats', verifyRole(['admin']), (req, res) => {
     const statsSql = `
@@ -1414,9 +1527,6 @@ if (err) {
     });
 });
 
-// ==========================================
-// TEACHER NOTICE & CLASS ROUTES[cite: 7]
-// ==========================================
 
 app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), (req, res) => {
     const sql = `
@@ -1458,13 +1568,13 @@ app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
     });
 });
 
-// Save Attendance[cite: 7]
 app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
-    const { subject_id, date, students, marked_by } = req.body;
+    const { subject_id, date, students } = req.body;
+    const marked_by = req.user.id;
+
     if (
     !subject_id ||
     !date ||
-    !marked_by ||
     !Array.isArray(students)
 ) {
     return res.status(400).json({
@@ -1487,8 +1597,27 @@ if (err) {
     return res.status(500).json({
         error: "Teacher lookup failed"
     });
-}        
+}
+
+if (teacherData.length === 0) {
+    return res.status(404).json({
+        error: "No teacher record found for this account."
+    });
+}
+
         const actualTeacherId = teacherData[0].teacher_id;
+
+        const checkAssignmentSql = `SELECT 1 FROM teacher_assignments WHERE teacher_id = ? AND subject_id = ? LIMIT 1`;
+
+        db.query(checkAssignmentSql, [actualTeacherId, subject_id], (err, assignmentRows) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "Assignment check failed" });
+            }
+
+            if (assignmentRows.length === 0) {
+                return res.status(403).json({ error: "You are not assigned to this subject." });
+            }
 
         const checkClassSql = `SELECT id FROM daily_classes WHERE subject_id = ? AND class_date = ?`;
 
@@ -1534,16 +1663,18 @@ if (err) {
                 });
             }
         });
+        });
     });
 });
 
-// Get Students for a Subject (Attendance)[cite: 7]
 app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, res) => {
     if (!req.params.id) {
     return res.status(400).json({
         error: "Subject ID is required."
     });
 }
+
+    const runQuery = () => {
     const sql = `
         SELECT 
             st.student_id, 
@@ -1567,6 +1698,22 @@ if (err) {
     status: "Absent"
 }));
         res.json(studentsWithStatus);
+    });
+    };
+
+    if (req.user.role === 'admin') {
+        return runQuery();
+    }
+
+    teacherOwnsSubject(req.user.id, req.params.id, (err, owns) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Authorization check failed." });
+        }
+        if (!owns) {
+            return res.status(403).json({ error: "You are not assigned to this subject." });
+        }
+        runQuery();
     });
 });
 
@@ -1602,26 +1749,41 @@ app.get('/api/teacher/:id/attendance-history', verifyRole(['teacher']), (req, re
 });
 
 app.get('/api/attendance/class/:classId', verifyRole(['teacher']), (req, res) => {
-    const sql = `
-        SELECT 
-            st.enrollment_number as roll, 
-            st.full_name as name, 
-            a.status 
-        FROM attendance a
-        JOIN students st ON a.student_id = st.student_id
-        WHERE a.daily_class_id = ?
-        ORDER BY st.full_name ASC
+    const ownershipSql = `
+        SELECT dc.id
+        FROM daily_classes dc
+        JOIN teachers t ON dc.teacher_id = t.teacher_id
+        WHERE dc.id = ? AND t.user_id = ?
     `;
 
-    db.query(sql, [req.params.classId], (err, data) => {
-        if (err) return res.status(500).json({ error: "Failed to load details" });
-        res.json(data);
+    db.query(ownershipSql, [req.params.classId, req.user.id], (ownErr, ownRows) => {
+        if (ownErr) {
+            console.error(ownErr);
+            return res.status(500).json({ error: "Authorization check failed." });
+        }
+
+        if (ownRows.length === 0) {
+            return res.status(403).json({ error: "You are not authorized to view this class." });
+        }
+
+        const sql = `
+            SELECT 
+                st.enrollment_number as roll, 
+                st.full_name as name, 
+                a.status 
+            FROM attendance a
+            JOIN students st ON a.student_id = st.student_id
+            WHERE a.daily_class_id = ?
+            ORDER BY st.full_name ASC
+        `;
+
+        db.query(sql, [req.params.classId], (err, data) => {
+            if (err) return res.status(500).json({ error: "Failed to load details" });
+            res.json(data);
+        });
     });
 });
 
-// ==========================================
-// MARKS MANAGEMENT ROUTES[cite: 7]
-// ==========================================
 
 app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
     const { subject_id, exam_type } = req.query;
@@ -1630,6 +1792,17 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
         error: "Subject and exam type are required."
     });
 }
+
+    teacherOwnsSubject(req.user.id, subject_id, (ownErr, owns) => {
+        if (ownErr) {
+            console.error(ownErr);
+            return res.status(500).json({ error: "Authorization check failed." });
+        }
+
+        if (!owns) {
+            return res.status(403).json({ error: "You are not assigned to this subject." });
+        }
+
     const sql = `
         SELECT m.student_id as id, st.enrollment_number as enrollment, st.full_name as name, m.score, m.max_score
         FROM marks m
@@ -1646,21 +1819,33 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
 }
         res.json(data);
     });
+    });
 });
 
 app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
-    const { subject_id, exam_type, max_score, marks, uploaded_by_user_id } = req.body;
+    const { subject_id, exam_type, max_score, marks } = req.body;
+    const uploaded_by_user_id = req.user.id;
+
     if (
     !subject_id ||
     !exam_type ||
     !max_score ||
-    !uploaded_by_user_id ||
     !Array.isArray(marks)
 ) {
     return res.status(400).json({
         error: "Invalid marks data."
     });
 }
+
+    teacherOwnsSubject(req.user.id, subject_id, (ownErr, owns) => {
+        if (ownErr) {
+            console.error(ownErr);
+            return res.status(500).json({ error: "Authorization check failed." });
+        }
+
+        if (!owns) {
+            return res.status(403).json({ error: "You are not assigned to this subject." });
+        }
 
     const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
     db.query(getTeacherSql, [uploaded_by_user_id], (err, teacherData) => {
@@ -1669,6 +1854,12 @@ app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
 
     return res.status(500).json({
         error: "teacher lookup failed"
+    });
+}
+
+if (teacherData.length === 0) {
+    return res.status(404).json({
+        error: "No teacher record found for this account."
     });
 }
 
@@ -1697,6 +1888,7 @@ app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
 }
             res.json({ success: true });
         });
+    });
     });
 });
 
@@ -1829,10 +2021,7 @@ app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
     });
 });
 
-// ==========================================
-// STUDENT / PARENT DATA ROUTES[cite: 7]
-// ==========================================
-app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
 
     const sql = `
@@ -1849,11 +2038,17 @@ app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), 
         LEFT JOIN users u ON n.posted_by = u.id
         LEFT JOIN teachers t ON u.id = t.user_id
         LEFT JOIN students s_author ON u.id = s_author.user_id
+        LEFT JOIN subjects sub ON n.subject_id = sub.id
+        JOIN students st ON st.user_id = ?
         WHERE n.target_role IN ('all', 'student')
+          AND (
+              n.subject_id IS NULL
+              OR (sub.course_id = st.course_id AND sub.semester = st.semester)
+          )
         ORDER BY n.created_at DESC
     `;
 
-    db.query(sql, (err, data) => {
+    db.query(sql, [userId], (err, data) => {
         if (err) {
             console.error("Notice fetch error:", err);
             return res.status(500).json({
@@ -1865,59 +2060,138 @@ app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), 
 });
 
 app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => {
-    const userId = req.params.id;
-    const requestedStudentId = req.query.student_id; 
+    const parentUserId = Number(req.params.id);
+
+    if (!Number.isInteger(parentUserId) || parentUserId <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid parent identifier."
+        });
+    }
+
+    if (parentUserId !== Number(req.user.id)) {
+        return res.status(403).json({
+            success: false,
+            error: "You are not authorized to access this parent's records."
+        });
+    }
+
+    const requestedStudentId = req.query.student_id
+        ? Number(req.query.student_id)
+        : null;
+
+    if (req.query.student_id && (!Number.isInteger(requestedStudentId) || requestedStudentId <= 0)) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid student identifier."
+        });
+    }
 
     const childSql = `
-        SELECT s.student_id, s.user_id, s.full_name, s.enrollment_number, s.semester, c.course_name
+        SELECT
+            s.student_id,
+            s.user_id,
+            s.full_name,
+            s.enrollment_number,
+            s.semester,
+            s.course_id,
+            c.course_name
         FROM students s
-        JOIN courses c ON s.course_id = c.id
-        JOIN parent_student_map psm ON s.student_id = psm.student_id
-        JOIN parents p ON psm.parent_id = p.parent_id
+        INNER JOIN courses c ON c.id = s.course_id
+        INNER JOIN parent_student_map psm ON psm.student_id = s.student_id
+        INNER JOIN parents p ON p.parent_id = psm.parent_id
         WHERE p.user_id = ?
+        ORDER BY s.full_name ASC
     `;
 
-    db.query(childSql, [userId], (err, children) => {
+    db.query(childSql, [parentUserId], (err, children) => {
         if (err) {
-            console.error(err);
+            console.error("Parent wards SQL error:", err.sqlMessage || err.message);
             return res.status(500).json({
-                error: "Failed to load child information"
+                success: false,
+                error: "Failed to load child information.",
+                details: err.sqlMessage || err.message
             });
         }
-        if (children.length === 0) return res.json({ message: "No children linked to this parent record." });
+
+        if (!children || children.length === 0) {
+            return res.json({
+                allWards: [],
+                childProfile: null,
+                summaryMetrics: {
+                    attendanceRate: 0,
+                    totalDues: 0,
+                    classAverage: 0
+                },
+                message: "No children linked to this parent record."
+            });
+        }
 
         let targetStudent = children[0];
-        if (requestedStudentId) {
-            const found = children.find(c => c.student_id == requestedStudentId);
-            if (found) targetStudent = found;
+
+        if (requestedStudentId !== null) {
+            targetStudent = children.find(
+                child => Number(child.student_id) === requestedStudentId
+            );
+
+            if (!targetStudent) {
+                return res.status(403).json({
+                    success: false,
+                    error: "This student is not linked to your parent account."
+                });
+            }
         }
 
         const metricsSql = `
-            SELECT 
-                (SELECT ROUND((SUM(CASE WHEN status='Present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) 
-                 FROM attendance WHERE student_id = ?) as attendanceRate,
-                (SELECT SUM(total_fee - paid_amount) FROM fees WHERE student_id = ?) as totalDues,
-                (SELECT ROUND(AVG(score), 1) FROM marks WHERE student_id = ?) as classAverage
+            SELECT
+                COALESCE((
+                    SELECT ROUND(
+                        (SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)) * 100,
+                        1
+                    )
+                    FROM attendance a
+                    WHERE a.student_id = ?
+                ), 0) AS attendanceRate,
+                COALESCE((
+                    SELECT SUM(f.total_fee - f.paid_amount)
+                    FROM fees f
+                    WHERE f.student_id = ?
+                ), 0) AS totalDues,
+                COALESCE((
+                    SELECT ROUND(AVG(m.score), 1)
+                    FROM marks m
+                    WHERE m.student_id = ?
+                ), 0) AS classAverage
         `;
 
-        db.query(metricsSql, [targetStudent.student_id, targetStudent.student_id, targetStudent.student_id], (err, metrics) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({
-                    error: "Failed to load summary metrics"
+        db.query(
+            metricsSql,
+            [targetStudent.student_id, targetStudent.student_id, targetStudent.student_id],
+            (metricsErr, metrics) => {
+                if (metricsErr) {
+                    console.error("Parent metrics SQL error:", metricsErr.sqlMessage || metricsErr.message);
+                    return res.status(500).json({
+                        success: false,
+                        error: "Failed to load summary metrics.",
+                        details: metricsErr.sqlMessage || metricsErr.message
+                    });
+                }
+
+                return res.json({
+                    allWards: children,
+                    childProfile: targetStudent,
+                    summaryMetrics: metrics[0] || {
+                        attendanceRate: 0,
+                        totalDues: 0,
+                        classAverage: 0
+                    }
                 });
             }
-
-            res.json({
-                allWards: children, 
-                childProfile: targetStudent,
-                summaryMetrics: metrics[0] || { attendanceRate: 0, totalDues: 0, classAverage: 0 }
-            });
-        });
+        );
     });
 });
 
-app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
 
     const sql = `
@@ -1982,7 +2256,7 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
     });
 });
 
-app.get('/api/student/:id/subjects-list', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/subjects-list', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
     if (!semester) {
@@ -2006,7 +2280,7 @@ app.get('/api/student/:id/subjects-list', verifyRole(['student', 'parent', 'admi
     });
 });
 
-app.get('/api/student/:id/attendance-logs', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/attendance-logs', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
     if (!semester) {
@@ -2031,7 +2305,7 @@ app.get('/api/student/:id/attendance-logs', verifyRole(['student', 'parent', 'ad
     });
 });
 
-app.get('/api/student/:id/subjects', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/subjects', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
     const semester = req.query.semester;
 
@@ -2062,7 +2336,7 @@ app.get('/api/student/:id/subjects', verifyRole(['student', 'parent', 'admin']),
     });
 });
 
-app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
     
     const sql = `
@@ -2076,7 +2350,7 @@ app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
     `;
     
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: err.sqlMessage || err.message });
         if (data.length === 0) return res.status(404).json({ message: "Student not found" });
 
         const dbStudent = data[0];
@@ -2115,9 +2389,6 @@ app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
     });
 });
 
-// ==========================================
-// FEE & PAYMENT MANAGEMENT ROUTES[cite: 7]
-// ==========================================
 
 app.get('/api/admin/fees', verifyRole(['admin']), (req, res) => {
     const sql = `
@@ -2139,7 +2410,7 @@ app.get('/api/admin/fees', verifyRole(['admin']), (req, res) => {
     });
 });
 
-app.get('/api/student/:id/fees', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/fees', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
     const sql = `
         SELECT f.* FROM fees f
@@ -2148,12 +2419,12 @@ app.get('/api/student/:id/fees', verifyRole(['student', 'parent', 'admin']), (re
         ORDER BY f.due_date ASC
     `;
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: err.sqlMessage || err.message });
         res.json(data || []);
     });
 });
 
-app.get('/api/student/:id/payments', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/payments', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
     const sql = `
         SELECT p.*, f.fee_type
@@ -2164,7 +2435,7 @@ app.get('/api/student/:id/payments', verifyRole(['student', 'parent', 'admin']),
         ORDER BY p.payment_date DESC
     `;
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: err.sqlMessage || err.message });
         res.json(data || []);
     });
 });
@@ -2181,9 +2452,68 @@ app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res)
     });
 }
 
-    db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Transaction failed to initialize." });
+    const authorizeFeeSql = `
+        SELECT s.user_id
+        FROM fees f
+        JOIN students s ON f.student_id = s.student_id
+        WHERE f.id = ?
+    `;
 
+    db.query(authorizeFeeSql, [fee_id], (authErr, feeOwnerRows) => {
+        if (authErr) {
+            console.error(authErr);
+            return res.status(500).json({ error: "Failed to verify fee ownership." });
+        }
+
+        if (feeOwnerRows.length === 0) {
+            return res.status(404).json({ error: "Fee record not found." });
+        }
+
+        const feeOwnerUserId = feeOwnerRows[0].user_id;
+
+        const proceed = () => processPayment(req, res, fee_id, amount_paid, payment_method, transaction_reference, processed_by);
+
+        if (req.user.role === 'admin') {
+            return proceed();
+        }
+
+        if (req.user.role === 'student') {
+            if (req.user.id !== feeOwnerUserId) {
+                return res.status(403).json({ error: "You are not authorized to pay this fee." });
+            }
+            return proceed();
+        }
+
+        if (req.user.role === 'parent') {
+            const parentCheckSql = `
+                SELECT 1
+                FROM parent_student_map psm
+                JOIN parents p ON psm.parent_id = p.parent_id
+                JOIN students s ON psm.student_id = s.student_id
+                WHERE p.user_id = ? AND s.user_id = ?
+                LIMIT 1
+            `;
+
+            return db.query(parentCheckSql, [req.user.id, feeOwnerUserId], (linkErr, linkRows) => {
+                if (linkErr) {
+                    console.error(linkErr);
+                    return res.status(500).json({ error: "Failed to verify fee ownership." });
+                }
+
+                if (linkRows.length === 0) {
+                    return res.status(403).json({ error: "This fee does not belong to your linked child." });
+                }
+
+                return proceed();
+            });
+        }
+
+        return res.status(403).json({ error: "You are not authorized to pay this fee." });
+    });
+});
+
+function processPayment(req, res, fee_id, amount_paid, payment_method, transaction_reference, processed_by) {
+    withTransaction(res, (db) => {
         const insertPaymentSql = `
             INSERT INTO payments (fee_id, amount_paid, payment_method, transaction_reference, processed_by, payment_date)
             VALUES (?, ?, ?, ?, ?, NOW())
@@ -2213,7 +2543,7 @@ const newPaid = Math.min(
             });
         });
     });
-});
+}
 
 app.get('/api/admin/payments', verifyRole(['admin']), (req, res) => {
     const sql = `
@@ -2345,7 +2675,7 @@ app.delete('/api/fees/:id', verifyRole(['admin']), (req, res) => {
     });
 });
 
-app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
     
     const { 
@@ -2384,7 +2714,7 @@ app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
     });
 });
 
-app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'admin']), (req, res) => {
+app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, (req, res) => {
     const userId = req.params.id;
 
     const profileSql = `
@@ -2401,22 +2731,28 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
         FROM daily_classes dc
         JOIN subjects sub ON dc.subject_id = sub.id
         JOIN teachers t ON dc.teacher_id = t.teacher_id
-        JOIN students st ON sub.course_id = st.course_id AND sub.semester = sub.semester
+        JOIN students st ON sub.course_id = st.course_id AND sub.semester = st.semester
         WHERE st.user_id = ? AND dc.class_date = CURDATE()
         ORDER BY dc.start_time ASC
     `;
 
     const noticesSql = `
-        SELECT id, title, content, attachment_url, 
+        SELECT n.id, n.title, n.content, n.attachment_url, 
                CASE 
-                   WHEN DATE(created_at) = CURDATE() THEN 'Today'
-                   WHEN DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 'Yesterday'
-                   ELSE DATE_FORMAT(created_at, '%b %d') 
+                   WHEN DATE(n.created_at) = CURDATE() THEN 'Today'
+                   WHEN DATE(n.created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 'Yesterday'
+                   ELSE DATE_FORMAT(n.created_at, '%b %d') 
                END as date,
-               priority as type
-        FROM notices
-        WHERE target_role IN ('all', 'student')
-        ORDER BY created_at DESC
+               n.priority as type
+        FROM notices n
+        LEFT JOIN subjects sub ON n.subject_id = sub.id
+        JOIN students st ON st.user_id = ?
+        WHERE n.target_role IN ('all', 'student')
+          AND (
+              n.subject_id IS NULL
+              OR (sub.course_id = st.course_id AND sub.semester = st.semester)
+          )
+        ORDER BY n.created_at DESC
         LIMIT 3
     `;
 
@@ -2444,7 +2780,7 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
                 return res.status(500).json({ error: "Classes fetch failed" });
             }
 
-            db.query(noticesSql, (err, noticesData) => {
+            db.query(noticesSql, [userId], (err, noticesData) => {
                 if (err) {
                     console.error(err);
                     return res.status(500).json({ error: "Notices fetch failed" });
@@ -2483,7 +2819,6 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     });
 });
 
-// --- START THE SERVER ---
 const PORT = process.env.PORT || 5000;
 process.on("uncaughtException", err => {
     console.error(err);
