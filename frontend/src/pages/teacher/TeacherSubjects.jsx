@@ -46,8 +46,6 @@ const TeacherSubjects = () => {
                     name: sub.subject_name,
                     course: sub.course_name,
                     semester: sub.semester,
-                    type: sub.type || 'Theory',
-                    credits: sub.credits || 4,
                     enrolled_students: sub.enrolled_count
                 }));
                 setAssignedSubjects(formattedData);
@@ -137,16 +135,10 @@ const TeacherSubjects = () => {
                                     <span className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm">
                                         {subject.code}
                                     </span>
-                                    <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                                        {subject.type}
-                                    </span>
                                 </div>
                                 <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors relative z-10">
                                     {subject.name}
                                 </h3>
-                                <p className="text-slate-500 dark:text-slate-400 font-bold text-xs relative z-10">
-                                    {subject.course} • Sem {subject.semester} • {subject.credits} Credits
-                                </p>
                             </div>
                             
                             <div className="p-6 grow flex justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
