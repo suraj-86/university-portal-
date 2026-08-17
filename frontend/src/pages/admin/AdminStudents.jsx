@@ -14,7 +14,7 @@ const AdminStudents = () => {
     const [editingStudentId, setEditingStudentId] = useState(null);
     
     const [formData, setFormData] = useState({
-        name: '', email: '', roll: '', course_id: '', semester: 1, password: ''
+        name: '', email: '', enrollment_number: '', roll_number: '', course_id: '', semester: 1, password: ''
     });
 
     const fetchData = async () => {
@@ -28,7 +28,8 @@ const AdminStudents = () => {
                 id: s.student_id,
                 user_id: s.user_id,
                 course_id: s.course_id,
-                roll: s.enrollment_number,
+                enrollment_number: s.enrollment_number,
+                roll_number: s.roll_number || '',
                 name: s.full_name,
                 email: s.email,
                 course: s.course_name || "N/A", 
@@ -48,7 +49,8 @@ const AdminStudents = () => {
 
     const filteredStudents = students.filter(s => 
         s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        s.roll.toLowerCase().includes(searchTerm.toLowerCase())
+        s.enrollment_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.roll_number.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleFormSubmit = async (e) => {
@@ -88,7 +90,8 @@ const AdminStudents = () => {
     };
 
     const columns = [
-        { header: "Enrollment No", accessor: "roll" },
+        { header: "Roll No.", accessor: "roll_number" },
+        { header: "Enrollment No.", accessor: "enrollment_number" },
         { 
             header: "Student Name", 
             accessor: "name",
@@ -138,7 +141,7 @@ const AdminStudents = () => {
                 <button 
                     onClick={() => { 
                         setEditingStudentId(null); 
-                        setFormData({name:'', email:'', roll:'', course_id:'', semester:1, password:''}); 
+                        setFormData({name:'', email:'', enrollment_number:'', roll_number:'', course_id:'', semester:1, password:''}); 
                         setIsModalOpen(true); 
                     }}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
@@ -156,9 +159,10 @@ const AdminStudents = () => {
             >
                 <form onSubmit={handleFormSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label="Full Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Suraj Kumar" required />
-                        <Input label="Enrollment No." value={formData.roll} onChange={(e) => setFormData({...formData, roll: e.target.value})} placeholder="ENR2026" required />
-                        <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="suraj@email.com" required />
+                        <Input label="Full Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Full Name" required />
+                        <Input label="Enrollment No." value={formData.enrollment_number} onChange={(e) => setFormData({...formData, enrollment_number: e.target.value})} placeholder="AC-000/00" required />
+                        <Input label="Roll No." value={formData.roll_number} onChange={(e) => setFormData({...formData, roll_number: e.target.value})} placeholder="e.g. 0000000" />
+                        <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="email.com" required />
                         
                         <div className="space-y-1">
                             <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Assign Course</span>

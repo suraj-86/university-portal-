@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Download } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../services/api';
 
 const AdminPayments = () => {
@@ -6,6 +8,22 @@ const AdminPayments = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [methodFilter, setMethodFilter] = useState('All');
+
+    const downloadReceipt = async (paymentId) => {
+        try {
+            const response = await api.get(`/payments/${paymentId}/receipt`, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `payment-receipt-${paymentId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            toast.error(error.response?.data?.error || 'Unable to download receipt.');
+        }
+    };
 
     useEffect(() => {
         const fetchPayments = async () => {
@@ -24,7 +42,8 @@ const AdminPayments = () => {
     const filteredPayments = payments.filter(payment => {
         const matchesSearch = payment.transaction_reference.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                payment.student_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                               payment.enrollment.toLowerCase().includes(searchTerm.toLowerCase());
+                               payment.enrollment.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               (payment.roll_number || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesMethod = methodFilter === 'All' || payment.payment_method === methodFilter;
         return matchesSearch && matchesMethod;
     });
@@ -65,6 +84,7 @@ const AdminPayments = () => {
                                 <th className="p-4 font-bold">Student Details</th>
                                 <th className="p-4 font-bold">Method</th>
                                 <th className="p-4 font-bold">Amount Paid</th>
+                                <th className="p-4 font-bold">Receipt</th>
                             </tr>
                         </thead>
                         <tbody className="text-sm divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
@@ -76,10 +96,11 @@ const AdminPayments = () => {
                                     </td>
                                     <td className="p-4">
                                         <div className="font-bold text-slate-800 dark:text-slate-200">{payment.student_name}</div>
-                                        <div className="text-xs text-slate-500 dark:text-slate-400">{payment.enrollment}</div>
+                                        <div className="text-xs text-slate-500 dark:text-slate-400">Roll: {payment.roll_number || 'Not Assigned'}</div>
                                     </td>
                                     <td className="p-4 text-slate-600 dark:text-slate-300 font-medium">{payment.payment_method}</td>
                                     <td className="p-4 font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(payment.amount_paid)}</td>
+                                    <td className="p-4"><button type="button" onClick={() => downloadReceipt(payment.id)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"><Download size={14} /> Receipt</button></td>
                                 </tr>
                             ))}
                         </tbody>

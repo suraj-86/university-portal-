@@ -301,7 +301,7 @@ const TeacherAttendance = () => {
 
     const markingColumns = [
         {
-            header: 'Enrollment No.',
+            header: 'Roll No.',
             accessor: 'roll',
         },
         {
@@ -411,7 +411,7 @@ const TeacherAttendance = () => {
 
     const historyDetailColumns = [
         {
-            header: 'Enrollment No.',
+            header: 'Roll No.',
             accessor: 'roll',
         },
         {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, GraduationCap } from 'lucide-react';
+import { Plus, Edit2, Trash2, GraduationCap, Search } from 'lucide-react';
 import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 
 const AdminCourses = () => {
     const [courses, setCourses] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCourseId, setEditingCourseId] = useState(null);
     const [formData, setFormData] = useState({
@@ -90,6 +91,13 @@ const AdminCourses = () => {
         }
     ];
 
+    const filteredCourses = courses.filter(course => {
+        const term = searchTerm.toLowerCase();
+        return course.course_code.toLowerCase().includes(term) ||
+            course.course_name.toLowerCase().includes(term) ||
+            course.department.toLowerCase().includes(term);
+    });
+
     const openEditModal = (course) => {
         setEditingCourseId(course.id);
         setFormData({ ...course });
@@ -98,10 +106,20 @@ const AdminCourses = () => {
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
-            <header className="mb-8 flex justify-between items-end">
+            <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
                 <div>
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Course Catalog</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Manage degree programs and academic structures.</p>
+                </div>
+                <div className="relative w-full md:w-80">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search course, code, or department..."
+                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-cyan-200 outline-none shadow-sm"
+                    />
                 </div>
                 <button 
                     onClick={() => { 
@@ -115,7 +133,7 @@ const AdminCourses = () => {
                 </button>
             </header>
 
-            <Table columns={columns} data={courses} pageSize={5} />
+            <Table columns={columns} data={filteredCourses} pageSize={5} />
 
             <Modal 
                 isOpen={isModalOpen} 

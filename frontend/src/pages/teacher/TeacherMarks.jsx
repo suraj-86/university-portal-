@@ -73,12 +73,12 @@ const TeacherMarks = () => {
             const marksData = marksRes.data;
             const mergedRoster = rosterData.map(student => {
                 const uniqueId = student.student_id || student.id;
-                const rollNo = student.roll || student.enrollment;
+                const rollNo = student.roll || '';
                 const existingMark = marksData.find(m => (m.student_id || m.id) === uniqueId);
                 return {
                     ...student,
                     id: uniqueId,
-                    enrollment: rollNo, 
+                    roll_number: rollNo, 
                     score: existingMark ? existingMark.score : ''
                 };
             });
@@ -151,14 +151,14 @@ const TeacherMarks = () => {
     };
 
     const rosterColumns = [
-        { header: "Roll", accessor: "enrollment", cell: (row) => <span className="font-bold text-slate-500 dark:text-slate-400">{row.enrollment}</span> },
+        { header: "Roll No.", accessor: "roll_number", cell: (row) => <span className="font-bold text-slate-500 dark:text-slate-400">{row.roll_number || 'Not Assigned'}</span> },
         { 
             header: "Student Name", 
             accessor: "name",
             cell: (row) => (
                 <div>
                     <div className="font-bold text-slate-900 dark:text-slate-100">{row.name}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">{row.enrollment}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">{row.roll_number || 'Not Assigned'}</div>
                 </div>
             )
         },
@@ -193,7 +193,7 @@ const TeacherMarks = () => {
     ];
 
     const viewOnlyColumns = [
-        { header: "Roll", accessor: "enrollment", cell: (row) => <span className="font-bold text-slate-500 dark:text-slate-400">{row.enrollment}</span> },
+        { header: "Roll No.", accessor: "roll_number", cell: (row) => <span className="font-bold text-slate-500 dark:text-slate-400">{row.roll_number || 'Not Assigned'}</span> },
         { header: "Student Name", accessor: "name", cell: (row) => <span className="font-bold text-slate-900 dark:text-slate-100">{row.name}</span> },
         { header: "Score", accessor: "score", cell: (row) => <span className="font-bold text-indigo-600 dark:text-indigo-400">{row.score} / {selectedLedgerRecord?.max}</span> },
         { header: "Grade", accessor: "grade", cell: (row) => <span className="font-black text-slate-700 dark:text-slate-300">{calculateGrade(row.score, selectedLedgerRecord?.max)}</span> }

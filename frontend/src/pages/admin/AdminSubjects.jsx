@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, UserCheck, BookOpen } from 'lucide-react';
+import { Plus, Edit2, Trash2, UserCheck, BookOpen, Search } from 'lucide-react';
 import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 
 const AdminSubjects = () => {
     const [subjects, setSubjects] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
     const [courses, setCourses] = useState([]);
     const [teachers, setTeachers] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -71,6 +72,14 @@ const AdminSubjects = () => {
         setIsModalOpen(true);
     };
 
+    const filteredSubjects = subjects.filter(subject => {
+        const term = searchTerm.toLowerCase();
+        return subject.subject_code.toLowerCase().includes(term) ||
+            subject.subject_name.toLowerCase().includes(term) ||
+            (subject.course_name || '').toLowerCase().includes(term) ||
+            (subject.teacher_name || '').toLowerCase().includes(term);
+    });
+
     const handleDelete = async (id) => {
         if (window.confirm("Delete subject?")) {
             try {
@@ -113,17 +122,21 @@ const AdminSubjects = () => {
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
-            <header className="mb-8 flex justify-between items-end">
+            <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
                 <div>
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Subject Directory</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Manage curriculum breakdown and teacher assignments.</p>
+                </div>
+                <div className="relative w-full md:w-80">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search subject, code, course, or teacher..." className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-200 outline-none shadow-sm" />
                 </div>
                 <button onClick={() => { setEditingSubId(null); setFormData({subject_code:'', subject_name:'', course_id:'', semester:'', subject_type:'Core', credits:3, teacher_id:''}); setIsModalOpen(true); }} className="bg-emerald-600 text-white font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-md">
                     <Plus size={18} /> Add Subject
                 </button>
             </header>
 
-            <Table columns={columns} data={subjects} pageSize={5} />
+            <Table columns={columns} data={filteredSubjects} pageSize={5} />
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingSubId ? 'Edit Subject' : 'New Subject'}>
                 <form onSubmit={handleFormSubmit} className="space-y-6">

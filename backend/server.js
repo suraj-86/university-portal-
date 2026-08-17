@@ -644,8 +644,8 @@ ORDER BY students.student_id DESC
 });
 
 app.post('/api/students', verifyRole(['admin']), async (req, res) => { 
-    const { name, email, roll, password, semester, course_id } = req.body;
-    if (!name || !email || !roll || !password || !course_id) {
+    const { name, email, enrollment_number, roll_number, password, semester, course_id } = req.body;
+    if (!name || !email || !enrollment_number || !password || !course_id) {
         return res.status(400).json({
             error: "Please fill all required fields."
         });
@@ -654,24 +654,24 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 
     withTransaction(res, (db) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'student')";
-        db.query(userSql, [roll, hashedPassword], (err, userResult) => {
+        db.query(userSql, [enrollment_number, hashedPassword], (err, userResult) => {
             if (err) {
                 console.error(err);
 
                 return db.rollback(() =>
                    res.status(500).json({
-                   error: "Username (Roll No) already exists in users table."
+                   error: "Enrollment No. already exists in users table."
                 })
              );
             }
 
             const userId = userResult.insertId;
             const studentSql = `
-                INSERT INTO students (user_id, course_id, enrollment_number, full_name, email, semester, admission_date, status) 
-                VALUES (?, ?, ?, ?, ?, ?, CURDATE(), 'Active')
+                INSERT INTO students (user_id, course_id, enrollment_number, roll_number, full_name, email, semester, admission_date, status) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'Active')
             `;
             
-            db.query(studentSql, [userId, course_id, roll, name, email, semester || 1], (err, result) => {
+            db.query(studentSql, [userId, course_id, enrollment_number, roll_number || null, name, email, semester || 1], (err, result) => {
                if (err) {
     console.error(err);
 
@@ -692,9 +692,9 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 });
 
 app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
-    const { name, email, roll, semester, course_id, password } = req.body;
+    const { name, email, enrollment_number, roll_number, semester, course_id, password } = req.body;
 
-    if (!name || !email || !roll || !course_id) {
+    if (!name || !email || !enrollment_number || !course_id) {
         return res.status(400).json({
             error: "Please fill all required fields."
         });
@@ -727,6 +727,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
                         full_name = ?,
                         email = ?,
                         enrollment_number = ?,
+                        roll_number = ?,
                         semester = ?,
                         course_id = ?
                     WHERE student_id = ?
@@ -734,7 +735,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
 
                 db.query(
                     studentSql,
-                    [name, email, roll, semester, course_id, req.params.id],
+                    [name, email, enrollment_number, roll_number || null, semester, course_id, req.params.id],
                     async (err) => {
                         if (err) {
                             return db.rollback(() =>
@@ -743,7 +744,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
                         }
 
                         let userSql = "UPDATE users SET username = ? WHERE id = ?";
-                        let params = [roll, userId];
+                        let params = [enrollment_number, userId];
 
                         if (password && password.trim() !== "") {
                             const hashedPassword = await bcrypt.hash(password, 10);
@@ -754,7 +755,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
                                 WHERE id = ?
                             `;
 
-                            params = [roll, hashedPassword, userId];
+                            params = [enrollment_number, hashedPassword, userId];
                         }
 
                         db.query(userSql, params, (err) => {
@@ -1153,6 +1154,7 @@ const getParentWard = (parentUserId, studentId, callback) => {
             s.student_id,
             s.user_id,
             s.full_name,
+            s.roll_number,
             s.enrollment_number,
             s.semester,
             s.course_id,
@@ -1845,7 +1847,7 @@ app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, re
     const sql = `
         SELECT 
             st.student_id, 
-            st.enrollment_number AS roll, 
+            st.roll_number AS roll,
             st.full_name AS name
         FROM students st
         JOIN subjects sub ON st.course_id = sub.course_id AND st.semester = sub.semester
@@ -1935,7 +1937,7 @@ app.get('/api/attendance/class/:classId', verifyRole(['teacher']), (req, res) =>
 
         const sql = `
             SELECT 
-                st.enrollment_number as roll, 
+                st.roll_number as roll, 
                 st.full_name as name, 
                 a.status 
             FROM attendance a
@@ -1971,7 +1973,7 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
         }
 
     const sql = `
-        SELECT m.student_id as id, st.enrollment_number as enrollment, st.full_name as name, m.score, m.max_score
+        SELECT m.student_id as id, st.roll_number as roll, st.roll_number as roll_number, st.full_name as name, m.score, m.max_score
         FROM marks m
         JOIN students st ON m.student_id = st.student_id
         WHERE m.subject_id = ? AND m.exam_type = ?
@@ -2259,6 +2261,7 @@ app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => 
             s.student_id,
             s.user_id,
             s.full_name,
+            s.roll_number,
             s.enrollment_number,
             s.semester,
             s.course_id,
@@ -2537,6 +2540,7 @@ app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
                 profile_picture: dbStudent.profile_picture_url 
             },
             academic: {
+                roll_no: dbStudent.roll_number,
                 enrollment_no: dbStudent.enrollment_number,
                 course: dbStudent.course_name,
                 semester: `Semester ${dbStudent.semester}`,
@@ -2712,9 +2716,141 @@ const newPaid = Math.min(
     });
 }
 
+
+function createPaymentReceiptPdf(receipt) {
+    const clean = (value) => String(value ?? 'N/A')
+        .replace(/\\/g, '\\\\')
+        .replace(/\(/g, '\\(')
+        .replace(/\)/g, '\\)')
+        .replace(/[^\x20-\x7E]/g, '?');
+
+    const lines = [
+        ['University Portal', 20],
+        ['Payment Receipt', 15],
+        ['----------------------------------------------', 11],
+        [`Receipt ID: ${receipt.id}`, 11],
+        [`Transaction Reference: ${receipt.transaction_reference}`, 11],
+        [`Payment Date: ${receipt.payment_date}`, 11],
+        ['', 11],
+        [`Student Name: ${receipt.student_name}`, 11],
+        [`Roll No: ${receipt.roll_number || 'Not Assigned'}`, 11],
+        [`Course: ${receipt.course_name}`, 11],
+        [`Semester: ${receipt.semester}`, 11],
+        ['', 11],
+        [`Fee Type: ${receipt.fee_type}`, 11],
+        [`Payment Method: ${receipt.payment_method}`, 11],
+        [`Amount Paid: INR ${Number(receipt.amount_paid || 0).toLocaleString('en-IN')}`, 12],
+        ['Status: Payment Successful', 11],
+        ['', 11],
+        ['This is a system-generated payment receipt.', 9]
+    ];
+
+    let content = 'BT\n';
+    let y = 760;
+    lines.forEach(([line, size], index) => {
+        if (index === 1) y -= 34;
+        else if (index > 1) y -= (index === 2 ? 28 : 24);
+        content += `/F1 ${size} Tf 50 ${y} Td (${clean(line)}) Tj\n`;
+    });
+    content += 'ET';
+
+    const objects = [];
+    objects.push('<< /Type /Catalog /Pages 2 0 R >>');
+    objects.push('<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>');
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    objects.push(`<< /Length ${Buffer.byteLength(content, 'utf8')} >>\nstream\n${content}\nendstream`);
+
+    let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
+    const offsets = [0];
+    objects.forEach((object, index) => {
+        offsets.push(Buffer.byteLength(pdf, 'binary'));
+        pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    });
+
+    const xrefOffset = Buffer.byteLength(pdf, 'binary');
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += '0000000000 65535 f \n';
+    for (let i = 1; i <= objects.length; i++) {
+        pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+    return Buffer.from(pdf, 'binary');
+}
+
+
+app.get('/api/payments/:id/receipt', verifyRole(['student', 'parent', 'admin']), async (req, res) => {
+    const paymentId = Number(req.params.id);
+
+    if (!Number.isInteger(paymentId) || paymentId <= 0) {
+        return res.status(400).json({ error: "Invalid payment identifier." });
+    }
+
+    const sql = `
+        SELECT
+            p.id,
+            p.transaction_reference,
+            p.payment_date,
+            p.amount_paid,
+            p.payment_method,
+            f.fee_type,
+            s.user_id AS student_user_id,
+            s.full_name AS student_name,
+            s.roll_number,
+            s.semester,
+            c.course_name
+        FROM payments p
+        JOIN fees f ON p.fee_id = f.id
+        JOIN students s ON f.student_id = s.student_id
+        JOIN courses c ON s.course_id = c.id
+        WHERE p.id = ?
+        LIMIT 1
+    `;
+
+    try {
+        const rows = await queryAsync(sql, [paymentId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "Payment not found." });
+        }
+
+        const payment = rows[0];
+
+        if (req.user.role === 'student' && Number(req.user.id) !== Number(payment.student_user_id)) {
+            return res.status(403).json({ error: "You are not authorized to access this receipt." });
+        }
+
+        if (req.user.role === 'parent') {
+            const parentRows = await queryAsync(`
+                SELECT 1
+                FROM parent_student_map psm
+                JOIN parents p ON p.parent_id = psm.parent_id
+                JOIN students s ON s.student_id = psm.student_id
+                WHERE p.user_id = ? AND s.user_id = ?
+                LIMIT 1
+            `, [req.user.id, payment.student_user_id]);
+
+            if (parentRows.length === 0) {
+                return res.status(403).json({ error: "You are not authorized to access this receipt." });
+            }
+        }
+
+        const pdf = createPaymentReceiptPdf(payment);
+        const safeReference = String(payment.transaction_reference || payment.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="payment-receipt-${safeReference}.pdf"`);
+        res.setHeader('Content-Length', pdf.length);
+        return res.send(pdf);
+    } catch (error) {
+        console.error("Payment receipt error:", error);
+        return res.status(500).json({ error: "Failed to generate payment receipt." });
+    }
+});
+
 app.get('/api/admin/payments', verifyRole(['admin']), (req, res) => {
     const sql = `
-        SELECT p.*, s.full_name as student_name, s.enrollment_number as enrollment
+        SELECT p.*, s.full_name as student_name, s.enrollment_number as enrollment, s.roll_number
         FROM payments p
         JOIN fees f ON p.fee_id = f.id
         JOIN students s ON f.student_id = s.student_id
@@ -2885,7 +3021,7 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     const userId = req.params.id;
 
     const profileSql = `
-        SELECT s.full_name, c.course_name, s.semester, s.email, s.enrollment_number as student_id
+        SELECT s.full_name, c.course_name, s.semester, s.email, s.roll_number, s.student_id
         FROM students s
         JOIN courses c ON s.course_id = c.id
         WHERE s.user_id = ?

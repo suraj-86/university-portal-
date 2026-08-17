@@ -87,6 +87,23 @@ useEffect(() => {
         }
     };
 
+
+    const downloadReceipt = async (paymentId) => {
+        try {
+            const response = await api.get(`/payments/${paymentId}/receipt`, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `payment-receipt-${paymentId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            toast.error(error.response?.data?.error || 'Unable to download receipt.');
+        }
+    };
+
     const closeModal = () => {
         setIsPaymentModalOpen(false);
         setPaymentStep(1);
@@ -193,21 +210,21 @@ useEffect(() => {
                     </div>
                     <div className="p-6 flex flex-col gap-4">
                         {dbPayments.map((txn) => (
-                            <div key={txn.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-slate-300 transition-all">
-                                <div className="flex items-center gap-4">
+                            <div key={txn.id} className="flex items-center justify-between gap-4 p-4 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-slate-300 transition-all">
+                                <div className="flex items-center gap-4 min-w-0">
                                     <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-900">
                                         <CheckCircle2 size={20} />
                                     </div>
-                                    <div>
-                                        <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">{txn.transaction_reference}</p>
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{txn.transaction_reference}</p>
                                         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
                                             {new Date(txn.payment_date).toLocaleDateString('en-IN')} • {txn.payment_method} • <span className="font-bold text-slate-700 dark:text-slate-300">{txn.fee_type}</span>
                                         </p>
                                     </div>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right shrink-0">
                                     <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{Number(txn.amount_paid).toLocaleString()}</span>
-                                    <button className="flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1 uppercase tracking-wider">
+                                    <button type="button" onClick={() => downloadReceipt(txn.id)} className="flex items-center justify-end gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1 uppercase tracking-wider hover:text-blue-700">
                                         <Download size={12} /> Receipt
                                     </button>
                                 </div>

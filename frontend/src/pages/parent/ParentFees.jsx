@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, CheckCircle2, Users } from 'lucide-react';
+import { FileText, CheckCircle2, Users, Download } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import Table from '../../components/Table';
@@ -45,6 +45,23 @@ const ParentFees = () => {
         fetchFinancials();
     }, [user, selectedWardId]);
 
+
+    const downloadReceipt = async (paymentId) => {
+        try {
+            const response = await api.get(`/payments/${paymentId}/receipt`, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `payment-receipt-${paymentId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            toast.error(error.response?.data?.error || 'Unable to download receipt.');
+        }
+    };
+
     const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
     const feeColumns = [
@@ -57,7 +74,8 @@ const ParentFees = () => {
     const paymentColumns = [
         { header: "Ref ID / Date", accessor: "ref", cell: (row) => <div><span className="font-bold text-slate-900 dark:text-slate-100">{row.transaction_reference}</span><span className="text-xs text-slate-500 dark:text-slate-400 block">{new Date(row.payment_date).toLocaleDateString('en-IN')}</span></div> },
         { header: "Method", accessor: "payment_method", cell: (row) => <span className="font-medium text-slate-600 dark:text-slate-300">{row.payment_method}</span> },
-        { header: "Amount Paid", accessor: "amount_paid", cell: (row) => <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.amount_paid)}</span> }
+        { header: "Amount Paid", accessor: "amount_paid", cell: (row) => <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.amount_paid)}</span> },
+        { header: "Receipt", accessor: "receipt", cell: (row) => <button type="button" onClick={() => downloadReceipt(row.id)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"><Download size={14} /> Receipt</button> }
     ];
 
     if (loading && fees.length === 0) return <div className="p-10 text-slate-500 dark:text-slate-400 font-bold animate-pulse uppercase tracking-widest text-sm bg-slate-50 dark:bg-slate-950 min-h-screen">Loading Financials...</div>;

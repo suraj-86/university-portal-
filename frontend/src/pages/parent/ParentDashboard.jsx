@@ -6,6 +6,7 @@ import StatsWidget from '../../components/StatsWidget';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
+import toast from 'react-hot-toast';
 
 const ParentDashboard = () => {
     const { user } = useAuth();
@@ -79,6 +80,23 @@ const ParentDashboard = () => {
     }
 
     const { childProfile, summaryMetrics } = wardSummary;
+
+    const downloadReceipt = async (paymentId) => {
+        try {
+            const response = await api.get(`/payments/${paymentId}/receipt`, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `payment-receipt-${paymentId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            toast.error(error.response?.data?.error || 'Unable to download receipt.');
+        }
+    };
+
     const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
     const feeColumns = [
@@ -91,7 +109,8 @@ const ParentDashboard = () => {
     const paymentColumns = [
         { header: "Ref ID / Date", accessor: "ref", cell: (row) => <div><span className="font-bold text-slate-900 dark:text-slate-100">{row.transaction_reference}</span><span className="text-xs text-slate-500 dark:text-slate-400 block">{new Date(row.payment_date).toLocaleDateString('en-IN')}</span></div> },
         { header: "Method", accessor: "payment_method", cell: (row) => <span className="font-medium text-slate-600 dark:text-slate-300">{row.payment_method}</span> },
-        { header: "Amount Paid", accessor: "amount_paid", cell: (row) => <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.amount_paid)}</span> }
+        { header: "Amount Paid", accessor: "amount_paid", cell: (row) => <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.amount_paid)}</span> },
+        { header: "Receipt", accessor: "receipt", cell: (row) => <button type="button" onClick={() => downloadReceipt(row.id)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"><Download size={14} /> Receipt</button> }
     ];
 
     const flattenedResults = Object.keys(wardDetails.results).flatMap(sem => 
@@ -143,7 +162,7 @@ const ParentDashboard = () => {
                         {childProfile.course_name} • Semester {childProfile.semester}
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 font-medium text-sm mt-1">
-                        Enrollment Number: {childProfile.enrollment_number}
+                        Roll No: {childProfile.roll_number || 'Not Assigned'}
                     </p>
                 </div>
             </Card>

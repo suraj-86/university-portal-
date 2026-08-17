@@ -96,8 +96,8 @@ const StudentProfile = () => {
                             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">{studentData.academic.semester}</p>
                             <div className="mt-6 flex justify-center gap-3">
                                 <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-lg text-left">
-                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Enrollment No.</p>
-                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 tracking-wide">{studentData.academic.enrollment_no}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Roll No.</p>
+                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 tracking-wide">{studentData.academic.roll_no || 'Not Assigned'}</p>
                                 </div>
                                 <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-lg text-left">
                                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Batch</p>
