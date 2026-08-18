@@ -660,7 +660,7 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 
                 return db.rollback(() =>
                    res.status(500).json({
-                   error: "Enrollment No. already exists in users table."
+                   error: "Enrollment No. already exists. "
                 })
              );
             }
@@ -2106,7 +2106,7 @@ app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), (req, res) => {
         const statsSql = `
             SELECT 
                 (SELECT COUNT(*) FROM teacher_assignments WHERE teacher_id = ?) as totalSubjects,
-                (SELECT COUNT(st.student_id) FROM students st 
+                (SELECT COUNT(DISTINCT st.student_id) FROM students st 
                  JOIN subjects sub ON st.course_id = sub.course_id 
                  JOIN teacher_assignments ta ON sub.id = ta.subject_id 
                  WHERE ta.teacher_id = ?) as totalStudents

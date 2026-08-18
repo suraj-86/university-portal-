@@ -263,7 +263,7 @@ const Login = () => {
                         </div>
 
                         <p className="mt-4 text-[11px] text-slate-500">
-                            {elapsedSeconds}s elapsed
+                            {elapsedSeconds}s
                         </p>
 
                         <style>{`
