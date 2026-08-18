@@ -645,7 +645,7 @@ ORDER BY students.student_id DESC
 
 app.post('/api/students', verifyRole(['admin']), async (req, res) => { 
     const { name, email, enrollment_number, roll_number, password, semester, course_id } = req.body;
-    if (!name || !email || !enrollment_number || !password || !course_id) {
+    if (!name || !enrollment_number || !password || !course_id) {
         return res.status(400).json({
             error: "Please fill all required fields."
         });
@@ -671,7 +671,7 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
                 VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'Active')
             `;
             
-            db.query(studentSql, [userId, course_id, enrollment_number, roll_number || null, name, email, semester || 1], (err, result) => {
+            db.query(studentSql, [userId, course_id, enrollment_number, roll_number || null, name, email || null, semester || 1], (err, result) => {
                if (err) {
     console.error(err);
 
@@ -694,7 +694,7 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
     const { name, email, enrollment_number, roll_number, semester, course_id, password } = req.body;
 
-    if (!name || !email || !enrollment_number || !course_id) {
+    if (!name || !enrollment_number || !course_id) {
         return res.status(400).json({
             error: "Please fill all required fields."
         });

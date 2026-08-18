@@ -161,8 +161,8 @@ const AdminStudents = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input label="Full Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Full Name" required />
                         <Input label="Enrollment No." value={formData.enrollment_number} onChange={(e) => setFormData({...formData, enrollment_number: e.target.value})} placeholder="AC-000/00" required />
-                        <Input label="Roll No." value={formData.roll_number} onChange={(e) => setFormData({...formData, roll_number: e.target.value})} placeholder="e.g. 0000000" />
-                        <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="email.com" required />
+                        <Input label="Roll No." value={formData.roll_number} onChange={(e) => setFormData({...formData, roll_number: e.target.value})} placeholder="e.g. 0000000" required />
+                        <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="email.com" />
                         
                         <div className="space-y-1">
                             <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Assign Course</span>
