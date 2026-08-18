@@ -2718,63 +2718,235 @@ const newPaid = Math.min(
 
 
 function createPaymentReceiptPdf(receipt) {
-    const clean = (value) => String(value ?? 'N/A')
-        .replace(/\\/g, '\\\\')
-        .replace(/\(/g, '\\(')
-        .replace(/\)/g, '\\)')
-        .replace(/[^\x20-\x7E]/g, '?');
+    const clean = (value) =>
+        String(value ?? 'N/A')
+            .replace(/\\/g, '\\\\')
+            .replace(/\(/g, '\\(')
+            .replace(/\)/g, '\\)')
+            .replace(/[^\x20-\x7E]/g, '?');
 
-    const lines = [
-        ['University Portal', 20],
-        ['Payment Receipt', 15],
-        ['----------------------------------------------', 11],
-        [`Receipt ID: ${receipt.id}`, 11],
-        [`Transaction Reference: ${receipt.transaction_reference}`, 11],
-        [`Payment Date: ${receipt.payment_date}`, 11],
-        ['', 11],
-        [`Student Name: ${receipt.student_name}`, 11],
-        [`Roll No: ${receipt.roll_number || 'Not Assigned'}`, 11],
-        [`Course: ${receipt.course_name}`, 11],
-        [`Semester: ${receipt.semester}`, 11],
-        ['', 11],
-        [`Fee Type: ${receipt.fee_type}`, 11],
-        [`Payment Method: ${receipt.payment_method}`, 11],
-        [`Amount Paid: INR ${Number(receipt.amount_paid || 0).toLocaleString('en-IN')}`, 12],
-        ['Status: Payment Successful', 11],
-        ['', 11],
-        ['This is a system-generated payment receipt.', 9]
-    ];
+    const formatDate = (value) => {
+        if (!value) return 'N/A';
 
-    let content = 'BT\n';
-    let y = 760;
-    lines.forEach(([line, size], index) => {
-        if (index === 1) y -= 34;
-        else if (index > 1) y -= (index === 2 ? 28 : 24);
-        content += `/F1 ${size} Tf 50 ${y} Td (${clean(line)}) Tj\n`;
-    });
-    content += 'ET';
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return String(value);
+        }
+
+        return date.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    };
+
+    const amount = Number(receipt.amount_paid || 0).toLocaleString('en-IN');
+
+
+    const text = (font, size, x, y, value) =>
+        `BT\n/${font} ${size} Tf\n1 0 0 1 ${x} ${y} Tm\n(${clean(value)}) Tj\nET\n`;
+
+    const line = (x1, y1, x2, y2) =>
+        `${x1} ${y1} m\n${x2} ${y2} l\nS\n`;
+
+    let content = '';
+
+
+    content += text('F2', 22, 50, 785, 'University Portal');
+    content += text('F1', 12, 50, 765, 'Payment Receipt');
+
+    content += line(50, 748, 545, 748);
+
+
+    content += text(
+        'F1',
+        10,
+        50,
+        720,
+        `Receipt ID: ${receipt.id}`
+    );
+
+    content += text(
+        'F1',
+        10,
+        50,
+        700,
+        `Transaction Reference: ${receipt.transaction_reference}`
+    );
+
+    content += text(
+        'F1',
+        10,
+        50,
+        680,
+        `Payment Date: ${formatDate(receipt.payment_date)}`
+    );
+
+
+    content += text('F2', 13, 50, 640, 'Student Details');
+
+    content += line(50, 628, 545, 628);
+
+    content += text(
+        'F1',
+        11,
+        50,
+        605,
+        `Student Name: ${receipt.student_name}`
+    );
+
+    content += text(
+        'F1',
+        11,
+        50,
+        580,
+        `Roll No: ${receipt.roll_number || 'Not Assigned'}`
+    );
+
+    content += text(
+        'F1',
+        11,
+        50,
+        555,
+        `Course: ${receipt.course_name}`
+    );
+
+    content += text(
+        'F1',
+        11,
+        50,
+        530,
+        `Semester: ${receipt.semester}`
+    );
+
+
+    content += text('F2', 13, 50, 490, 'Payment Details');
+
+    content += line(50, 478, 545, 478);
+
+    content += text(
+        'F1',
+        11,
+        50,
+        450,
+        `Fee Type: ${receipt.fee_type}`
+    );
+
+    content += text(
+        'F1',
+        11,
+        50,
+        425,
+        `Payment Method: ${receipt.payment_method}`
+    );
+
+    content += text(
+        'F2',
+        14,
+        50,
+        385,
+        `Amount Paid: INR ${amount}`
+    );
+
+    content += text(
+        'F2',
+        11,
+        50,
+        355,
+        'Status: Payment Successful'
+    );
+
+
+    content += line(50, 325, 545, 325);
+
+    content += text(
+        'F1',
+        9,
+        50,
+        300,
+        'This is a system-generated payment receipt.'
+    );
+
+    content += text(
+        'F1',
+        9,
+        50,
+        282,
+        'Please keep this receipt for your records.'
+    );
+
 
     const objects = [];
-    objects.push('<< /Type /Catalog /Pages 2 0 R >>');
-    objects.push('<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
-    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>');
-    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-    objects.push(`<< /Length ${Buffer.byteLength(content, 'utf8')} >>\nstream\n${content}\nendstream`);
+
+    objects.push(
+        '<< /Type /Catalog /Pages 2 0 R >>'
+    );
+
+    objects.push(
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>'
+    );
+
+    objects.push(
+        '<< /Type /Page ' +
+        '/Parent 2 0 R ' +
+        '/MediaBox [0 0 595 842] ' +
+        '/Resources << ' +
+            '/Font << ' +
+                '/F1 4 0 R ' +
+                '/F2 5 0 R ' +
+            '>> ' +
+        '>> ' +
+        '/Contents 6 0 R >>'
+    );
+
+    objects.push(
+        '<< /Type /Font ' +
+        '/Subtype /Type1 ' +
+        '/BaseFont /Helvetica >>'
+    );
+
+    objects.push(
+        '<< /Type /Font ' +
+        '/Subtype /Type1 ' +
+        '/BaseFont /Helvetica-Bold >>'
+    );
+
+    objects.push(
+        `<< /Length ${Buffer.byteLength(content, 'utf8')} >>\n` +
+        `stream\n${content}endstream`
+    );
+
 
     let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
+
     const offsets = [0];
+
     objects.forEach((object, index) => {
-        offsets.push(Buffer.byteLength(pdf, 'binary'));
-        pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+        offsets.push(
+            Buffer.byteLength(pdf, 'binary')
+        );
+
+        pdf += `${index + 1} 0 obj\n`;
+        pdf += `${object}\n`;
+        pdf += 'endobj\n';
     });
 
     const xrefOffset = Buffer.byteLength(pdf, 'binary');
-    pdf += `xref\n0 ${objects.length + 1}\n`;
-    pdf += '0000000000 65535 f \n';
+
+    pdf += `xref\n`;
+    pdf += `0 ${objects.length + 1}\n`;
+    pdf += `0000000000 65535 f \n`;
+
     for (let i = 1; i <= objects.length; i++) {
         pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
     }
-    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+    pdf += `trailer\n`;
+    pdf += `<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
+    pdf += `startxref\n`;
+    pdf += `${xrefOffset}\n`;
+    pdf += `%%EOF`;
 
     return Buffer.from(pdf, 'binary');
 }
