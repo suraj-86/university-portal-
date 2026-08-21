@@ -11,7 +11,8 @@ const app = express();
 app.use(cors({
 origin: [
         'https://university-portal-flax-tau.vercel.app', 
-        'http://localhost:5173'
+        'http://localhost:5173',
+        'http://localhost:8081'
     ],
     credentials: true
 }));
@@ -127,7 +128,15 @@ db.getConnection((err, connection) => {
 const verifyRole = (allowedRoles = []) => {
     return (req, res, next) => {
         try {
-            const token = req.cookies.token;
+            let token = req.cookies.token;
+
+            if (!token) {
+                const authHeader = req.headers.authorization;
+
+                if (authHeader && authHeader.startsWith("Bearer ")) {
+                    token = authHeader.substring(7);
+                }
+            }
 
             if (!token) {
                 return res.status(401).json({
@@ -381,10 +390,16 @@ app.post("/api/login", async (req, res) => {
                 }
             );
 
-            return res.json({
-                success: true,
-                user
-            });
+            const response = {
+    success: true,
+    user
+};
+
+if (req.headers["x-client"] === "mobile") {
+    response.token = token;
+}
+
+return res.json(response);
         });
     } catch (error) {
         console.error(error);
