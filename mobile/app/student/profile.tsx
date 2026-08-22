@@ -390,14 +390,6 @@ export default function StudentProfile() {
             </Pressable>
 
             <View>
-              <Text
-                style={[
-                  styles.eyebrow,
-                  { color: colors.primary },
-                ]}
-              >
-                UNIVERSITY PORTAL
-              </Text>
 
               <Text
                 style={[

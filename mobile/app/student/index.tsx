@@ -275,14 +275,6 @@ export default function StudentDashboard() {
         {/* Welcome */}
         <View style={styles.welcomeSection}>
           <View style={styles.welcomeText}>
-            <Text
-              style={[
-                styles.eyebrow,
-                { color: colors.primary },
-              ]}
-            >
-              UNIVERSITY PORTAL
-            </Text>
 
             <Text
               style={[
@@ -293,15 +285,6 @@ export default function StudentDashboard() {
               Welcome, {firstName} 👋
             </Text>
 
-            <Text
-              style={[
-                styles.welcomeSubtitle,
-                { color: colors.muted },
-              ]}
-            >
-              Here is your academic overview
-              for today.
-            </Text>
           </View>
 
           <View
@@ -498,7 +481,6 @@ export default function StudentDashboard() {
           />
         </View>
 
-        {/* Upcoming Classes */}
         <SectionHeader
           title="Upcoming Classes"
           subtitle="Next scheduled sessions"
@@ -533,7 +515,6 @@ export default function StudentDashboard() {
           )}
         </View>
 
-        {/* Academic Trajectory */}
         <SectionHeader
           title="Academic Trajectory"
           subtitle="CGPA progression"
@@ -692,7 +673,6 @@ export default function StudentDashboard() {
           )}
         </View>
 
-        {/* Campus Board */}
         <SectionHeader
           title="Campus Board"
           subtitle="Latest university notices"
@@ -745,9 +725,7 @@ export default function StudentDashboard() {
               { color: colors.muted },
             ]}
           >
-            Full notice viewing and
-            attachments will be available
-            in the Notices module.
+            Open the Campus Board to view all recent notices and announcements.
           </Text>
         </View>
 
