@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import api from '../../services/api';
@@ -52,6 +52,7 @@ type DashboardData = {
 };
 
 export default function StudentDashboard() {
+  const router = useRouter();
   const { isDark } = useAppTheme();
 
   const [dashboardData, setDashboardData] =
@@ -691,6 +692,7 @@ export default function StudentDashboard() {
                   )}
                   notice={notice}
                   colors={colors}
+                  onPress={() => router.push('/student/notices')}
                 />
               ))
           ) : (
@@ -702,7 +704,9 @@ export default function StudentDashboard() {
           )}
         </View>
 
-        <View
+        <Pressable
+          onPress={() => router.push('/student/notices')}
+          android_ripple={{ color: colors.border }}
           style={[
             styles.futureNotice,
             {
@@ -727,7 +731,7 @@ export default function StudentDashboard() {
           >
             Open the Campus Board to view all recent notices and announcements.
           </Text>
-        </View>
+        </Pressable>
 
         <View style={styles.bottomSpace} />
       </ScrollView>
@@ -965,9 +969,11 @@ function ClassCard({
 function NoticeCard({
   notice,
   colors,
+  onPress,
 }: {
   notice: Notice;
   colors: any;
+  onPress: () => void;
 }) {
   let icon: keyof typeof Ionicons.glyphMap =
     'notifications-outline';
@@ -981,7 +987,9 @@ function NoticeCard({
   }
 
   return (
-    <View
+    <Pressable
+      onPress={onPress}
+      android_ripple={{ color: colors.primarySoft }}
       style={[
         styles.noticeCard,
         {
@@ -1036,7 +1044,7 @@ function NoticeCard({
         size={18}
         color={colors.muted}
       />
-    </View>
+    </Pressable>
   );
 }
 
