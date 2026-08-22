@@ -69,7 +69,6 @@ const StudentSubjects = () => {
     }, [user?.id, selectedSemester]);
 
     const subjects = subjectsData?.subjects || [];
-    const totalCredits = subjectsData?.total_credits || 0;
     const semesters = subjectsData?.available_semesters || [1, 2, 3, 4];
 
     if (loading || selectedSemester === null) return <div className="min-h-screen flex items-center justify-center text-slate-400 dark:text-slate-500 font-bold uppercase animate-pulse bg-slate-50 dark:bg-slate-950">Loading curriculum...</div>;
@@ -111,10 +110,6 @@ const StudentSubjects = () => {
                         <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center text-lg border border-indigo-100 dark:border-indigo-900">
                             <GraduationCap size={20} />
                         </div>
-                        <div>
-                            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Credits</p>
-                            <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{totalCredits}</p>
-                        </div>
                     </div>
                 </div>
 
@@ -134,9 +129,6 @@ const StudentSubjects = () => {
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                         {subject.name}
                                     </h3>
-                                    <p className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest">
-                                        {subject.credits} Credits
-                                    </p>
                                 </div>
                             </div>
                             
