@@ -391,15 +391,17 @@ app.post("/api/login", async (req, res) => {
             );
 
             const response = {
-    success: true,
-    user
-};
+                success: true,
+                user
+            };
 
-if (req.headers["x-client"] === "mobile") {
-    response.token = token;
-}
+            const clientType = String(req.headers["x-client"] || "").toLowerCase();
 
-return res.json(response);
+            if (clientType === "mobile") {
+                response.token = token;
+            }
+
+            return res.json(response);
         });
     } catch (error) {
         console.error(error);

@@ -1,24 +1,73 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider as NavigationThemeProvider,
+} from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ThemeProvider, useAppTheme } from '@/context/ThemeContext';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function AppNavigation() {
+  const { isDark } = useAppTheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <NavigationThemeProvider
+      value={isDark ? DarkTheme : DefaultTheme}
+    >
       <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        {/* Login */}
+        <Stack.Screen
+          name="index"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        {/* Student */}
+        <Stack.Screen
+          name="student"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        {/* Teacher */}
+        <Stack.Screen
+          name="teacher"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        {/* Parent */}
+        <Stack.Screen
+          name="parent"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        {/* Existing modal */}
+        <Stack.Screen
+          name="modal"
+          options={{
+            presentation: 'modal',
+            title: 'Modal',
+          }}
+        />
       </Stack>
-      <StatusBar style="auto" />
+
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </NavigationThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <AppNavigation />
     </ThemeProvider>
   );
 }

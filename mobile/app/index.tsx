@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -11,10 +12,12 @@ import {
   View,
 } from 'react-native';
 
-import api from '../../services/api';
-import { setItem } from '../../services/storage';
+import api from '../services/api';
+import { setItem } from '../services/storage';
 
 export default function HomeScreen() {
+  const router = useRouter();
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -56,12 +59,32 @@ export default function HomeScreen() {
       }
 
       await setItem('authToken', token);
-
-      setUser(user);
-      setLoggedIn(true);
+      await setItem('authUser', JSON.stringify(user));
 
       console.log('LOGIN SUCCESS:', response.data);
       console.log('TOKEN STORED');
+
+      const role = String(user?.role || '').toLowerCase();
+
+if (role === 'student') {
+  router.replace('/student');
+  return;
+}
+
+if (role === 'parent') {
+  router.replace('/parent');
+  return;
+}
+
+if (role === 'teacher') {
+  router.replace('/teacher');
+  return;
+}
+
+      Alert.alert(
+        'Mobile access unavailable',
+        'The administrator portal is available on desktop only.'
+      );
     } catch (error: any) {
       console.log(
         'LOGIN ERROR:',
