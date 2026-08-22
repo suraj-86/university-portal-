@@ -106,11 +106,6 @@ const StudentSubjects = () => {
                             <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{subjects.length}</p>
                         </div>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 px-6 py-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-4">
-                        <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center text-lg border border-indigo-100 dark:border-indigo-900">
-                            <GraduationCap size={20} />
-                        </div>
-                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -129,6 +124,7 @@ const StudentSubjects = () => {
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                         {subject.name}
                                     </h3>
+
                                 </div>
                             </div>
                             
