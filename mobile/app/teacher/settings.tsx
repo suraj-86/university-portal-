@@ -1,416 +1,1237 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import api from '../../services/api';
-import { getItem } from '../../services/storage';
+import {
+  getItem,
+  removeItem,
+  setItem,
+} from '../../services/storage';
 import { useAppTheme } from '../../context/ThemeContext';
 
-type Subject = {
+type User = {
   id: number | string;
-  subject_code?: string | null;
-  subject_name?: string | null;
-  course_name?: string | null;
-  semester?: number | string | null;
-  credits?: number | string | null;
-  enrolled_count?: number | string | null;
+  username?: string;
+  full_name?: string;
+  role?: string;
 };
 
 type Colors = {
   background: string;
   card: string;
-  soft: string;
+  secondary: string;
+  border: string;
   text: string;
   muted: string;
   subtle: string;
-  border: string;
   primary: string;
   primarySoft: string;
   success: string;
-  warning: string;
   danger: string;
+  dangerSoft: string;
 };
 
-const todayISO = () => {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+type Message = {
+  text: string;
+  type: 'success' | 'error' | '';
 };
 
-const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+export default function TeacherSettings() {
+  const { isDark, toggleTheme } = useAppTheme();
 
-export default function TeacherSubjects() {
-  const { isDark } = useAppTheme();
+  const colors: Colors = isDark
+    ? {
+        background: '#050817',
+        card: '#101525',
+        secondary: '#151D31',
+        border: '#202A42',
+        text: '#F8FAFC',
+        muted: '#94A3B8',
+        subtle: '#66728B',
+        primary: '#1764FF',
+        primarySoft: '#172554',
+        success: '#18D7A0',
+        danger: '#EF4444',
+        dangerSoft: '#3B1111',
+      }
+    : {
+        background: '#F8FAFC',
+        card: '#FFFFFF',
+        secondary: '#F1F5F9',
+        border: '#E2E8F0',
+        text: '#0F172A',
+        muted: '#64748B',
+        subtle: '#94A3B8',
+        primary: '#1764FF',
+        primarySoft: '#EFF6FF',
+        success: '#10B981',
+        danger: '#DC2626',
+        dangerSoft: '#FEF2F2',
+      };
 
-  const colors: Colors = {
-    background: isDark ? '#050817' : '#F8FAFC',
-    card: isDark ? '#101525' : '#FFFFFF',
-    soft: isDark ? '#151D31' : '#F8FAFC',
-    text: isDark ? '#F8FAFC' : '#0F172A',
-    muted: isDark ? '#94A3B8' : '#64748B',
-    subtle: isDark ? '#66728B' : '#94A3B8',
-    border: isDark ? '#202A42' : '#E2E8F0',
-    primary: '#1764FF',
-    primarySoft: isDark ? '#172554' : '#EFF6FF',
-    success: '#18D7A0',
-    warning: '#F59E0B',
-    danger: '#EF4444',
-  };
+  const [user, setUser] = useState<User | null>(null);
 
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
-  const [teacherId, setTeacherId] = useState<number | string | null>(null);
-
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
-  const [schedule, setSchedule] = useState({
-    date: todayISO(),
-    startTime: '09:00',
-    endTime: '10:00',
-    room: '',
+  const [username, setUsername] = useState('');
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameMessage, setUsernameMessage] = useState<Message>({
+    text: '',
+    type: '',
   });
-  const [scheduling, setScheduling] = useState(false);
 
-  const loadSubjects = useCallback(async (showLoader = true) => {
+  const [notificationsEnabled, setNotificationsEnabled] =
+    useState(true);
+
+  const [showPasswordForm, setShowPasswordForm] =
+    useState(false);
+
+  const [currentPassword, setCurrentPassword] =
+    useState('');
+
+  const [newPassword, setNewPassword] =
+    useState('');
+
+  const [confirmPassword, setConfirmPassword] =
+    useState('');
+
+  const [changingPassword, setChangingPassword] =
+    useState(false);
+
+  const [passwordMessage, setPasswordMessage] =
+    useState<Message>({
+      text: '',
+      type: '',
+    });
+
+  const [showLogoutModal, setShowLogoutModal] =
+    useState(false);
+
+  const [loggingOut, setLoggingOut] =
+    useState(false);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  /*
+   * Load the authenticated teacher from local storage.
+   *
+   * This matches the existing mobile authentication flow,
+   * which stores authUser after login.
+   */
+  const loadSettings = async () => {
     try {
-      if (showLoader) setLoading(true);
-      setError('');
+      setLoading(true);
 
-      const rawUser = await getItem('authUser');
-      if (!rawUser) throw new Error('Your session could not be restored. Please sign in again.');
+      const storedUser = await getItem('authUser');
 
-      const user = JSON.parse(rawUser);
-      if (!user?.id) throw new Error('Teacher account information is unavailable.');
+      if (!storedUser) {
+        throw new Error(
+          'Your session could not be restored. Please sign in again.'
+        );
+      }
 
-      setTeacherId(user.id);
+      const parsedUser = JSON.parse(storedUser);
 
-      const response = await api.get(`/teacher/${user.id}/assigned-subjects`);
-      setSubjects(Array.isArray(response.data) ? response.data : []);
-    } catch (err: any) {
-      console.error('TEACHER SUBJECTS ERROR:', err?.response?.data || err?.message);
-      setSubjects([]);
-      setError(
-        err?.response?.data?.error ||
-          err?.response?.data?.message ||
-          err?.message ||
-          'Unable to load your assigned subjects.'
+      if (!parsedUser?.id) {
+        throw new Error(
+          'Teacher account information is unavailable.'
+        );
+      }
+
+      setUser(parsedUser);
+      setUsername(parsedUser.username || '');
+
+      const storedNotifications =
+        await getItem('teacherNotificationsEnabled');
+
+      if (storedNotifications !== null) {
+        setNotificationsEnabled(
+          storedNotifications === 'true'
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        'TEACHER SETTINGS LOAD ERROR:',
+        error?.message || error
       );
+
+      setUsernameMessage({
+        text:
+          error?.message ||
+          'Unable to load your account settings.',
+        type: 'error',
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    loadSubjects();
-  }, [loadSubjects]);
+    loadSettings();
+  }, []);
 
-  const filteredSubjects = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return subjects;
-
-    return subjects.filter((subject) =>
-      [subject.subject_name, subject.subject_code, subject.course_name, String(subject.semester ?? '')]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
-    );
-  }, [search, subjects]);
-
-  const totalStudents = useMemo(
-    () => subjects.reduce((sum, subject) => sum + Number(subject.enrolled_count || 0), 0),
-    [subjects]
-  );
-
-  const openSchedule = (subject: Subject) => {
-    setSelectedSubject(subject);
-    setSchedule({ date: todayISO(), startTime: '09:00', endTime: '10:00', room: '' });
-    setScheduleOpen(true);
+  const refresh = () => {
+    setRefreshing(true);
+    loadSettings();
   };
 
-  const closeSchedule = () => {
-    if (scheduling) return;
-    setScheduleOpen(false);
-    setSelectedSubject(null);
-  };
-
-  const submitSchedule = async () => {
-    if (!teacherId || !selectedSubject) return;
-
-    const date = schedule.date.trim();
-    const startTime = schedule.startTime.trim();
-    const endTime = schedule.endTime.trim();
-    const room = schedule.room.trim();
-
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert('Invalid date', 'Use the date format YYYY-MM-DD.');
+  /*
+   * Username update
+   *
+   * This uses the same endpoint as the web TeacherSettings page:
+   * PUT /users/:id/change-username
+   */
+  const handleUsernameSubmit = async () => {
+    if (!user?.id) {
+      setUsernameMessage({
+        text: 'Unable to identify your account.',
+        type: 'error',
+      });
       return;
     }
 
-    if (!validTime(startTime) || !validTime(endTime)) {
-      Alert.alert('Invalid time', 'Use 24-hour time such as 09:00 or 14:30.');
+    const nextUsername = username.trim();
+
+    if (!nextUsername) {
+      setUsernameMessage({
+        text: 'Username cannot be empty.',
+        type: 'error',
+      });
       return;
     }
 
-    if (startTime >= endTime) {
-      Alert.alert('Invalid schedule', 'End time must be later than start time.');
-      return;
-    }
-
-    if (!room) {
-      Alert.alert('Room required', 'Enter the room or venue for this class.');
+    if (nextUsername === String(user.username || '')) {
       return;
     }
 
     try {
-      setScheduling(true);
+      setSavingUsername(true);
 
-      await api.post('/teacher/schedule-class', {
-        userId: teacherId,
-        subjectId: selectedSubject.id,
-        date,
-        startTime,
-        endTime,
-        room,
+      setUsernameMessage({
+        text: '',
+        type: '',
       });
 
-      Alert.alert('Class scheduled', `${selectedSubject.subject_name || 'Class'} has been scheduled successfully.`);
-      closeSchedule();
-    } catch (err: any) {
-      console.error('TEACHER SCHEDULE ERROR:', err?.response?.data || err?.message);
-      Alert.alert(
-        'Unable to schedule class',
-        err?.response?.data?.error || err?.response?.data?.message || 'Something went wrong. Please try again.'
+      const response = await api.put(
+        `/users/${user.id}/change-username`,
+        {
+          newUsername: nextUsername,
+        }
       );
+
+      const updatedUser = {
+        ...user,
+        username: nextUsername,
+      };
+
+      await setItem(
+        'authUser',
+        JSON.stringify(updatedUser)
+      );
+
+      setUser(updatedUser);
+      setUsername(nextUsername);
+
+      setUsernameMessage({
+        text:
+          response.data?.message ||
+          'Username updated successfully.',
+        type: 'success',
+      });
+    } catch (error: any) {
+      console.error(
+        'TEACHER USERNAME UPDATE ERROR:',
+        error?.response?.data ||
+          error?.message ||
+          error
+      );
+
+      setUsernameMessage({
+        text:
+          error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          'Failed to update username.',
+        type: 'error',
+      });
     } finally {
-      setScheduling(false);
+      setSavingUsername(false);
     }
   };
 
-  const renderHeader = () => (
-    <>
-      <View style={styles.pageHeader}>
-        <View style={[styles.headerIcon, { backgroundColor: colors.primarySoft }]}>
-          <Ionicons name="book-outline" size={22} color={colors.primary} />
-        </View>
-        <View style={styles.headerText}>
-          <Text style={[styles.title, { color: colors.text }]}>My Subjects</Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>Manage your assigned curriculum and classes.</Text>
-        </View>
-      </View>
+  /*
+   * Notification preference is local to this device.
+   */
+  const handleNotificationToggle = async (
+    value: boolean
+  ) => {
+    setNotificationsEnabled(value);
 
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.statIcon, { backgroundColor: colors.primarySoft }]}>
-            <Ionicons name="book-outline" size={20} color={colors.primary} />
-          </View>
-          <Text style={[styles.statLabel, { color: colors.muted }]}>ASSIGNED SUBJECTS</Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>{subjects.length}</Text>
-        </View>
+    try {
+      await setItem(
+        'teacherNotificationsEnabled',
+        String(value)
+      );
+    } catch (error) {
+      console.error(
+        'TEACHER NOTIFICATION PREFERENCE ERROR:',
+        error
+      );
+    }
+  };
 
-        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.statIcon, { backgroundColor: isDark ? '#063B34' : '#ECFDF5' }]}>
-            <Ionicons name="people-outline" size={20} color={colors.success} />
-          </View>
-          <Text style={[styles.statLabel, { color: colors.muted }]}>TOTAL STUDENTS</Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>{totalStudents}</Text>
-        </View>
-      </View>
+  /*
+   * Password update
+   *
+   * This matches the web TeacherSettings implementation:
+   * PUT /users/:id/change-password
+   */
+  const handleChangePassword = async () => {
+    setPasswordMessage({
+      text: '',
+      type: '',
+    });
 
-      <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Ionicons name="search-outline" size={19} color={colors.subtle} />
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search your subjects..."
-          placeholderTextColor={colors.subtle}
-          style={[styles.searchInput, { color: colors.text }]}
-          autoCapitalize="none"
-          returnKeyType="search"
+    if (
+      !currentPassword ||
+      !newPassword ||
+      !confirmPassword
+    ) {
+      setPasswordMessage({
+        text: 'Please fill in all password fields.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordMessage({
+        text:
+          'New password must be at least 8 characters.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({
+        text: 'New passwords do not match.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!user?.id) {
+      setPasswordMessage({
+        text: 'Unable to identify your account.',
+        type: 'error',
+      });
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+
+      const response = await api.put(
+        `/users/${user.id}/change-password`,
+        {
+          currentPassword,
+          newPassword,
+        }
+      );
+
+      setPasswordMessage({
+        text:
+          response.data?.message ||
+          'Password successfully updated!',
+        type: 'success',
+      });
+
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPasswordForm(false);
+    } catch (error: any) {
+      console.error(
+        'TEACHER PASSWORD UPDATE ERROR:',
+        error?.response?.data ||
+          error?.message ||
+          error
+      );
+
+      setPasswordMessage({
+        text:
+          error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          'Failed to update password.',
+        type: 'error',
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  /*
+   * Logout
+   *
+   * The teacher drawer already uses local auth cleanup,
+   * so we keep the same authentication flow here.
+   */
+  const performLogout = async () => {
+    try {
+      setLoggingOut(true);
+
+      try {
+        await api.post('/logout');
+      } catch (error) {
+        /*
+         * Server logout failure should not prevent local
+         * session cleanup.
+         */
+        console.log(
+          'Server logout request failed:',
+          error
+        );
+      }
+
+      await removeItem('authToken');
+      await removeItem('authUser');
+
+      setShowLogoutModal(false);
+
+      router.replace('/');
+    } catch (error) {
+      console.error(
+        'TEACHER LOGOUT ERROR:',
+        error
+      );
+
+      setLoggingOut(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.loadingContainer,
+          {
+            backgroundColor: colors.background,
+          },
+        ]}
+      >
+        <ActivityIndicator
+          size="large"
+          color={colors.primary}
         />
-        {!!search && (
-          <Pressable onPress={() => setSearch('')} hitSlop={8}>
-            <Ionicons name="close-circle" size={19} color={colors.subtle} />
-          </Pressable>
-        )}
+
+        <Text
+          style={[
+            styles.loadingText,
+            {
+              color: colors.muted,
+            },
+          ]}
+        >
+          Loading settings...
+        </Text>
       </View>
-    </>
-  );
+    );
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              loadSubjects(false);
-            }}
+            onRefresh={refresh}
             tintColor={colors.primary}
           />
         }
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
       >
-        {renderHeader()}
+        {/* PAGE HEADER */}
 
-        {loading ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.stateText, { color: colors.muted }]}>Loading your subjects...</Text>
-          </View>
-        ) : error ? (
-          <View style={[styles.stateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={[styles.stateIcon, { backgroundColor: isDark ? '#3B1515' : '#FEF2F2' }]}>
-              <Ionicons name="alert-circle-outline" size={28} color={colors.danger} />
+        <View style={styles.header}>
+          <Text
+            style={[
+              styles.title,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Settings
+          </Text>
+
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                color: colors.muted,
+              },
+            ]}
+          >
+            Manage your account, security and preferences.
+          </Text>
+        </View>
+
+        {/* ACCOUNT */}
+
+        <SectionHeader
+          title="Account"
+          subtitle="Manage your teacher account"
+          colors={colors}
+        />
+
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          {/* ACCOUNT IDENTITY */}
+
+          <View style={styles.accountRow}>
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    colors.primarySoft,
+                },
+              ]}
+            >
+              <Ionicons
+                name="person-outline"
+                size={21}
+                color={colors.primary}
+              />
             </View>
-            <Text style={[styles.stateTitle, { color: colors.text }]}>Unable to load subjects</Text>
-            <Text style={[styles.stateText, { color: colors.muted }]}>{error}</Text>
-            <Pressable style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={() => loadSubjects()}>
-              <Ionicons name="refresh-outline" size={17} color="#FFFFFF" />
-              <Text style={styles.retryText}>Try Again</Text>
-            </Pressable>
-          </View>
-        ) : filteredSubjects.length === 0 ? (
-          <View style={[styles.stateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={[styles.stateIcon, { backgroundColor: colors.primarySoft }]}>
-              <Ionicons name="book-outline" size={28} color={colors.primary} />
+
+            <View style={styles.flexContent}>
+              <Text
+                style={[
+                  styles.rowTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Teacher Account
+              </Text>
+
+              <Text
+                style={[
+                  styles.rowDescription,
+                  {
+                    color: colors.muted,
+                  },
+                ]}
+              >
+                {user?.full_name ||
+                  user?.username ||
+                  'Teacher'}
+              </Text>
             </View>
-            <Text style={[styles.stateTitle, { color: colors.text }]}>No subjects found</Text>
-            <Text style={[styles.stateText, { color: colors.muted }]}>Try another search or check your assigned subjects later.</Text>
+
+            <View
+              style={[
+                styles.secureBadge,
+                {
+                  backgroundColor: isDark
+                    ? '#063B34'
+                    : '#ECFDF5',
+                },
+              ]}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={17}
+                color={colors.success}
+              />
+            </View>
           </View>
-        ) : (
-          <View style={styles.subjectList}>
-            {filteredSubjects.map((subject) => {
-              const enrolled = Number(subject.enrolled_count || 0);
 
-              return (
-                <View key={String(subject.id)} style={[styles.subjectCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={styles.subjectTop}>
-                    <View style={[styles.subjectIcon, { backgroundColor: colors.primarySoft }]}>
-                      <Ionicons name="book-outline" size={22} color={colors.primary} />
-                    </View>
-                    <View style={styles.subjectTitleWrap}>
-                      <Text style={[styles.subjectName, { color: colors.text }]} numberOfLines={2}>
-                        {subject.subject_name || 'Unnamed Subject'}
-                      </Text>
-                      <Text style={[styles.subjectCode, { color: colors.muted }]}>
-                        {subject.subject_code || 'No subject code'}
-                      </Text>
-                    </View>
-                  </View>
+          <View
+            style={[
+              styles.divider,
+              {
+                backgroundColor: colors.border,
+              },
+            ]}
+          />
 
-                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          {/* USERNAME */}
 
-                  <View style={styles.metaGrid}>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="school-outline" size={16} color={colors.subtle} />
-                      <View style={styles.metaTextWrap}>
-                        <Text style={[styles.metaLabel, { color: colors.subtle }]}>COURSE</Text>
-                        <Text style={[styles.metaValue, { color: colors.text }]} numberOfLines={1}>{subject.course_name || '—'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="layers-outline" size={16} color={colors.subtle} />
-                      <View style={styles.metaTextWrap}>
-                        <Text style={[styles.metaLabel, { color: colors.subtle }]}>SEMESTER</Text>
-                        <Text style={[styles.metaValue, { color: colors.text }]}>{subject.semester ?? '—'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="ribbon-outline" size={16} color={colors.subtle} />
-                      <View style={styles.metaTextWrap}>
-                        <Text style={[styles.metaLabel, { color: colors.subtle }]}>CREDITS</Text>
-                        <Text style={[styles.metaValue, { color: colors.text }]}>{subject.credits ?? '—'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Ionicons name="people-outline" size={16} color={colors.subtle} />
-                      <View style={styles.metaTextWrap}>
-                        <Text style={[styles.metaLabel, { color: colors.subtle }]}>ENROLLED</Text>
-                        <Text style={[styles.metaValue, { color: colors.text }]}>{enrolled}</Text>
-                      </View>
-                    </View>
-                  </View>
+          <View style={styles.formSection}>
+            <View style={styles.formHeading}>
+              <View
+                style={[
+                  styles.smallIconBox,
+                  {
+                    backgroundColor:
+                      colors.primarySoft,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="at-outline"
+                  size={18}
+                  color={colors.primary}
+                />
+              </View>
 
-                  <Pressable
-                    onPress={() => openSchedule(subject)}
-                    style={({ pressed }) => [
-                      styles.scheduleButton,
-                      { backgroundColor: colors.primarySoft },
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-                    <Text style={[styles.scheduleText, { color: colors.primary }]}>Schedule Class</Text>
-                  </Pressable>
-                </View>
-              );
-            })}
-          </View>
-        )}
-      </ScrollView>
+              <View style={styles.flexContent}>
+                <Text
+                  style={[
+                    styles.rowTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Change Username
+                </Text>
 
-      <Modal visible={scheduleOpen} transparent animationType="slide" onRequestClose={closeSchedule}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}> 
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleWrap}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Schedule Class</Text>
-                <Text style={[styles.modalSubtitle, { color: colors.muted }]} numberOfLines={1}>
-                  {selectedSubject?.subject_name || 'Selected subject'}
+                <Text
+                  style={[
+                    styles.rowDescription,
+                    {
+                      color: colors.muted,
+                    },
+                  ]}
+                >
+                  Update the username you use to log
+                  into the portal.
                 </Text>
               </View>
-              <Pressable onPress={closeSchedule} disabled={scheduling} style={styles.closeButton}>
-                <Ionicons name="close" size={22} color={colors.muted} />
-              </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Field label="DATE" value={schedule.date} onChangeText={(value) => setSchedule((prev) => ({ ...prev, date: value }))} placeholder="YYYY-MM-DD" colors={colors} />
+            {usernameMessage.text ? (
+              <MessageBox
+                message={usernameMessage}
+                colors={colors}
+              />
+            ) : null}
 
-              <View style={styles.timeRow}>
-                <View style={styles.timeField}>
-                  <Field label="START TIME" value={schedule.startTime} onChangeText={(value) => setSchedule((prev) => ({ ...prev, startTime: value }))} placeholder="09:00" colors={colors} keyboardType="numbers-and-punctuation" />
-                </View>
-                <View style={styles.timeField}>
-                  <Field label="END TIME" value={schedule.endTime} onChangeText={(value) => setSchedule((prev) => ({ ...prev, endTime: value }))} placeholder="10:00" colors={colors} keyboardType="numbers-and-punctuation" />
-                </View>
-              </View>
+            <Text
+              style={[
+                styles.inputLabel,
+                {
+                  color: colors.muted,
+                },
+              ]}
+            >
+              LOGIN USERNAME
+            </Text>
 
-              <Field label="ROOM / VENUE" value={schedule.room} onChangeText={(value) => setSchedule((prev) => ({ ...prev, room: value }))} placeholder="e.g. Lab 4" colors={colors} autoCapitalize="words" />
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Enter username"
+              placeholderTextColor={colors.subtle}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[
+                styles.input,
+                {
+                  backgroundColor:
+                    colors.secondary,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+            />
 
-              <View style={[styles.modalHint, { backgroundColor: colors.soft, borderColor: colors.border }]}>
-                <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
-                <Text style={[styles.modalHintText, { color: colors.muted }]}>Use 24-hour time. Example: 14:30 for 2:30 PM.</Text>
-              </View>
+            <Pressable
+              onPress={handleUsernameSubmit}
+              disabled={
+                savingUsername ||
+                !username.trim() ||
+                username.trim() ===
+                  String(user?.username || '')
+              }
+              style={({ pressed }) => [
+                styles.primaryButton,
+                {
+                  backgroundColor:
+                    colors.primary,
+                  opacity:
+                    savingUsername ||
+                    !username.trim() ||
+                    username.trim() ===
+                      String(user?.username || '')
+                      ? 0.55
+                      : 1,
+                },
+                pressed && styles.pressed,
+              ]}
+            >
+              {savingUsername ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="save-outline"
+                    size={18}
+                    color="#FFFFFF"
+                  />
+
+                  <Text style={styles.primaryButtonText}>
+                    Update Username
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+
+        {/* PREFERENCES */}
+
+        <SectionHeader
+          title="Preferences"
+          subtitle="Customize your mobile experience"
+          colors={colors}
+        />
+
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          {/* NOTIFICATIONS */}
+
+          <SettingRow
+            icon="notifications-outline"
+            title="Notifications"
+            description="Receive important university updates."
+            colors={colors}
+          >
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={
+                handleNotificationToggle
+              }
+              trackColor={{
+                false: '#CBD5E1',
+                true: colors.primary,
+              }}
+              thumbColor="#FFFFFF"
+            />
+          </SettingRow>
+
+          <View
+            style={[
+              styles.divider,
+              {
+                backgroundColor: colors.border,
+              },
+            ]}
+          />
+
+          {/* APPEARANCE */}
+
+          <SettingRow
+            icon={
+              isDark
+                ? 'moon-outline'
+                : 'sunny-outline'
+            }
+            title={
+              isDark
+                ? 'Dark Mode'
+                : 'Appearance'
+            }
+            description={
+              isDark
+                ? 'Use the dark appearance.'
+                : 'Use the light appearance.'
+            }
+            colors={colors}
+          >
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{
+                false: '#CBD5E1',
+                true: colors.primary,
+              }}
+              thumbColor="#FFFFFF"
+            />
+          </SettingRow>
+
+          <View
+            style={[
+              styles.preferenceInfo,
+              {
+                backgroundColor:
+                  colors.secondary,
+              },
+            ]}
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={17}
+              color={colors.primary}
+            />
+
+            <Text
+              style={[
+                styles.preferenceInfoText,
+                {
+                  color: colors.muted,
+                },
+              ]}
+            >
+              Notification preferences are saved
+              locally on this device.
+            </Text>
+          </View>
+        </View>
+
+        {/* SECURITY */}
+
+        <SectionHeader
+          title="Security"
+          subtitle="Keep your account protected"
+          colors={colors}
+        />
+
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Pressable
+            onPress={() => {
+              setShowPasswordForm(
+                (current) => !current
+              );
+
+              setPasswordMessage({
+                text: '',
+                type: '',
+              });
+            }}
+            style={({ pressed }) => [
+              styles.actionRow,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    colors.primarySoft,
+                },
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={21}
+                color={colors.primary}
+              />
+            </View>
+
+            <View style={styles.flexContent}>
+              <Text
+                style={[
+                  styles.rowTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Change Password
+              </Text>
+
+              <Text
+                style={[
+                  styles.rowDescription,
+                  {
+                    color: colors.muted,
+                  },
+                ]}
+              >
+                Update your account password.
+              </Text>
+            </View>
+
+            <Ionicons
+              name={
+                showPasswordForm
+                  ? 'chevron-up'
+                  : 'chevron-forward'
+              }
+              size={20}
+              color={colors.muted}
+            />
+          </Pressable>
+
+          {showPasswordForm ? (
+            <View
+              style={[
+                styles.passwordForm,
+                {
+                  borderTopColor:
+                    colors.border,
+                },
+              ]}
+            >
+              {passwordMessage.text ? (
+                <MessageBox
+                  message={passwordMessage}
+                  colors={colors}
+                />
+              ) : null}
+
+              <PasswordField
+                label="CURRENT PASSWORD"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                colors={colors}
+              />
+
+              <PasswordField
+                label="NEW PASSWORD"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                colors={colors}
+              />
+
+              <PasswordField
+                label="CONFIRM NEW PASSWORD"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                colors={colors}
+              />
+
+              <Text
+                style={[
+                  styles.passwordHint,
+                  {
+                    color: colors.muted,
+                  },
+                ]}
+              >
+                Password must contain at least 8
+                characters.
+              </Text>
 
               <Pressable
-                onPress={submitSchedule}
-                disabled={scheduling}
-                style={({ pressed }) => [styles.confirmButton, { backgroundColor: colors.primary }, pressed && styles.pressed, scheduling && styles.disabled]}
+                onPress={handleChangePassword}
+                disabled={changingPassword}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  {
+                    backgroundColor:
+                      colors.primary,
+                    opacity: changingPassword
+                      ? 0.65
+                      : 1,
+                  },
+                  pressed && styles.pressed,
+                ]}
               >
-                {scheduling ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="calendar-outline" size={19} color="#FFFFFF" />}
-                <Text style={styles.confirmText}>{scheduling ? 'Scheduling...' : 'Confirm Schedule'}</Text>
+                {changingPassword ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={18}
+                      color="#FFFFFF"
+                    />
+
+                    <Text
+                      style={
+                        styles.primaryButtonText
+                      }
+                    >
+                      Update Password
+                    </Text>
+                  </>
+                )}
               </Pressable>
-              <View style={{ height: 16 }} />
-            </ScrollView>
+            </View>
+          ) : null}
+        </View>
+
+        {/* SESSION */}
+
+        <SectionHeader
+          title="Session"
+          subtitle="Manage your current portal session"
+          colors={colors}
+        />
+
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.accountRow}>
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    colors.primarySoft,
+                },
+              ]}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={21}
+                color={colors.primary}
+              />
+            </View>
+
+            <View style={styles.flexContent}>
+              <Text
+                style={[
+                  styles.rowTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Institutional Access
+              </Text>
+
+              <Text
+                style={[
+                  styles.rowDescription,
+                  {
+                    color: colors.muted,
+                  },
+                ]}
+              >
+                Your teacher account is protected by
+                institutional authentication.
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* LOGOUT */}
+
+        <Pressable
+          onPress={() =>
+            setShowLogoutModal(true)
+          }
+          disabled={loggingOut}
+          style={({ pressed }) => [
+            styles.logoutButton,
+            {
+              backgroundColor:
+                colors.dangerSoft,
+              borderColor: isDark
+                ? '#4C1D24'
+                : '#FECACA',
+            },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="log-out-outline"
+            size={21}
+            color={colors.danger}
+          />
+
+          <Text
+            style={[
+              styles.logoutText,
+              {
+                color: colors.danger,
+              },
+            ]}
+          >
+            Logout
+          </Text>
+        </Pressable>
+
+        {/* FOOTER */}
+
+        <View style={styles.footer}>
+          <View style={styles.statusDot} />
+
+          <Text
+            style={[
+              styles.footerText,
+              {
+                color: colors.muted,
+              },
+            ]}
+          >
+            Secure institutional access
+          </Text>
+        </View>
+
+        <View style={{ height: 30 }} />
+      </ScrollView>
+
+      {/* LOGOUT CONFIRMATION */}
+
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!loggingOut) {
+            setShowLogoutModal(false);
+          }
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.logoutModal,
+              {
+                backgroundColor: colors.card,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.deleteIcon,
+                {
+                  backgroundColor:
+                    colors.dangerSoft,
+                },
+              ]}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={25}
+                color={colors.danger}
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.modalTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Logout?
+            </Text>
+
+            <Text
+              style={[
+                styles.modalDescription,
+                {
+                  color: colors.muted,
+                },
+              ]}
+            >
+              Are you sure you want to logout from
+              the teacher portal?
+            </Text>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() =>
+                  setShowLogoutModal(false)
+                }
+                disabled={loggingOut}
+                style={[
+                  styles.modalCancelButton,
+                  {
+                    backgroundColor:
+                      colors.secondary,
+                    borderColor:
+                      colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.modalCancelText,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={performLogout}
+                disabled={loggingOut}
+                style={[
+                  styles.modalDeleteButton,
+                  {
+                    backgroundColor:
+                      colors.danger,
+                  },
+                ]}
+              >
+                {loggingOut ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="log-out-outline"
+                      size={18}
+                      color="#FFFFFF"
+                    />
+
+                    <Text
+                      style={
+                        styles.modalDeleteText
+                      }
+                    >
+                      Logout
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -418,93 +1239,565 @@ export default function TeacherSubjects() {
   );
 }
 
-function Field({
+/* -------------------------------------------------------------------------- */
+/* SECTION HEADER                                                             */
+/* -------------------------------------------------------------------------- */
+
+function SectionHeader({
+  title,
+  subtitle,
+  colors,
+}: {
+  title: string;
+  subtitle: string;
+  colors: Colors;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text
+        style={[
+          styles.sectionTitle,
+          {
+            color: colors.text,
+          },
+        ]}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={[
+          styles.sectionSubtitle,
+          {
+            color: colors.muted,
+          },
+        ]}
+      >
+        {subtitle}
+      </Text>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* SETTING ROW                                                                */
+/* -------------------------------------------------------------------------- */
+
+function SettingRow({
+  icon,
+  title,
+  description,
+  colors,
+  children,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+  colors: Colors;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.settingRow}>
+      <View
+        style={[
+          styles.iconBox,
+          {
+            backgroundColor:
+              colors.primarySoft,
+          },
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={21}
+          color={colors.primary}
+        />
+      </View>
+
+      <View style={styles.flexContent}>
+        <Text
+          style={[
+            styles.rowTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          {title}
+        </Text>
+
+        <Text
+          style={[
+            styles.rowDescription,
+            {
+              color: colors.muted,
+            },
+          ]}
+        >
+          {description}
+        </Text>
+      </View>
+
+      {children}
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PASSWORD FIELD                                                             */
+/* -------------------------------------------------------------------------- */
+
+function PasswordField({
   label,
   value,
   onChangeText,
-  placeholder,
   colors,
-  keyboardType,
-  autoCapitalize = 'none',
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
-  placeholder: string;
   colors: Colors;
-  keyboardType?: any;
-  autoCapitalize?: any;
 }) {
   return (
-    <View style={styles.fieldWrap}>
-      <Text style={[styles.fieldLabel, { color: colors.muted }]}>{label}</Text>
+    <View style={styles.inputContainer}>
+      <Text
+        style={[
+          styles.inputLabel,
+          {
+            color: colors.muted,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="Enter password"
         placeholderTextColor={colors.subtle}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
-        style={[styles.fieldInput, { backgroundColor: colors.soft, borderColor: colors.border, color: colors.text }]}
+        style={[
+          styles.input,
+          {
+            backgroundColor:
+              colors.secondary,
+            borderColor: colors.border,
+            color: colors.text,
+          },
+        ]}
       />
     </View>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* MESSAGE BOX                                                                */
+/* -------------------------------------------------------------------------- */
+
+function MessageBox({
+  message,
+  colors,
+}: {
+  message: Message;
+  colors: Colors;
+}) {
+  const isError = message.type === 'error';
+
+  return (
+    <View
+      style={[
+        styles.messageBox,
+        {
+          backgroundColor: isError
+            ? colors.dangerSoft
+            : isDarkSuccessBackground(colors),
+          borderColor: isError
+            ? isDarkBorder(colors)
+            : colors.success,
+        },
+      ]}
+    >
+      <Ionicons
+        name={
+          isError
+            ? 'alert-circle-outline'
+            : 'checkmark-circle-outline'
+        }
+        size={18}
+        color={
+          isError
+            ? colors.danger
+            : colors.success
+        }
+      />
+
+      <Text
+        style={[
+          styles.messageText,
+          {
+            color: isError
+              ? colors.danger
+              : colors.success,
+          },
+        ]}
+      >
+        {message.text}
+      </Text>
+    </View>
+  );
+}
+
+function isDarkSuccessBackground(
+  colors: Colors
+) {
+  return colors.background === '#050817'
+    ? '#063B34'
+    : '#ECFDF5';
+}
+
+function isDarkBorder(colors: Colors) {
+  return colors.background === '#050817'
+    ? '#6B1F2A'
+    : '#FECACA';
+}
+
+/* -------------------------------------------------------------------------- */
+/* STYLES                                                                     */
+/* -------------------------------------------------------------------------- */
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, paddingBottom: 36 },
-  pageHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
-  headerIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  headerText: { flex: 1, marginLeft: 12 },
-  title: { fontSize: 25, fontWeight: '900', letterSpacing: -0.5 },
-  subtitle: { marginTop: 3, fontSize: 12, fontWeight: '600' },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  statCard: { flex: 1, minHeight: 128, borderWidth: 1, borderRadius: 18, padding: 14, justifyContent: 'space-between' },
-  statIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
-  statLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 8 },
-  statValue: { fontSize: 27, fontWeight: '900', marginTop: 2 },
-  searchBox: { height: 50, borderWidth: 1, borderRadius: 15, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 16 },
-  searchInput: { flex: 1, marginLeft: 9, fontSize: 14, fontWeight: '600', paddingVertical: 0 },
-  subjectList: { gap: 14 },
-  subjectCard: { borderWidth: 1, borderRadius: 20, padding: 15 },
-  subjectTop: { flexDirection: 'row', alignItems: 'center' },
-  subjectIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  subjectTitleWrap: { flex: 1, marginLeft: 12 },
-  subjectName: { fontSize: 17, fontWeight: '900', lineHeight: 21 },
-  subjectCode: { marginTop: 4, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 },
-  divider: { height: 1, marginVertical: 14 },
-  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },
-  metaItem: { width: '50%', flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
-  metaTextWrap: { flex: 1, marginLeft: 8 },
-  metaLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.8 },
-  metaValue: { fontSize: 12, fontWeight: '800', marginTop: 2 },
-  scheduleButton: { height: 46, borderRadius: 13, marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  scheduleText: { fontSize: 13, fontWeight: '900' },
-  centerState: { minHeight: 280, alignItems: 'center', justifyContent: 'center' },
-  stateCard: { borderWidth: 1, borderRadius: 20, padding: 24, alignItems: 'center', marginTop: 4 },
-  stateIcon: { width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  stateTitle: { fontSize: 17, fontWeight: '900', textAlign: 'center' },
-  stateText: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 18, marginTop: 6 },
-  retryButton: { height: 42, borderRadius: 12, paddingHorizontal: 18, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  retryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(2, 6, 23, 0.58)', justifyContent: 'flex-end' },
-  modalSheet: { maxHeight: '88%', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 4 },
-  modalHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', alignSelf: 'center', marginBottom: 14 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
-  modalTitleWrap: { flex: 1 },
-  modalTitle: { fontSize: 21, fontWeight: '900' },
-  modalSubtitle: { fontSize: 11, fontWeight: '700', marginTop: 3 },
-  closeButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  fieldWrap: { marginBottom: 14 },
-  fieldLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 7 },
-  fieldInput: { height: 48, borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, fontSize: 14, fontWeight: '700' },
-  timeRow: { flexDirection: 'row', gap: 10 },
-  timeField: { flex: 1 },
-  modalHint: { borderWidth: 1, borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  modalHintText: { flex: 1, fontSize: 10, fontWeight: '600', lineHeight: 15 },
-  confirmButton: { height: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  confirmText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
-  pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
-  disabled: { opacity: 0.6 },
+  container: {
+    flex: 1,
+  },
+
+  content: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  header: {
+    marginBottom: 22,
+  },
+
+  title: {
+    fontSize: 27,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+
+  subtitle: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
+  },
+
+  sectionHeader: {
+    marginTop: 8,
+    marginBottom: 9,
+  },
+
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+
+  sectionSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  card: {
+    borderWidth: 1,
+    borderRadius: 17,
+    marginBottom: 22,
+    overflow: 'hidden',
+  },
+
+  accountRow: {
+    minHeight: 78,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  settingRow: {
+    minHeight: 76,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  actionRow: {
+    minHeight: 78,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  flexContent: {
+    flex: 1,
+    paddingRight: 10,
+  },
+
+  iconBox: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  smallIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  secureBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  formSection: {
+    padding: 15,
+  },
+
+  formHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+
+  rowTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  rowDescription: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+
+  divider: {
+    height: 1,
+  },
+
+  inputContainer: {
+    marginBottom: 13,
+  },
+
+  inputLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+
+  input: {
+    height: 49,
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 13,
+    fontSize: 13,
+  },
+
+  primaryButton: {
+    minHeight: 48,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 3,
+  },
+
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  messageBox: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 8,
+  },
+
+  messageText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
+
+  preferenceInfo: {
+    marginHorizontal: 15,
+    marginBottom: 14,
+    borderRadius: 11,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+
+  preferenceInfoText: {
+    flex: 1,
+    fontSize: 10,
+    lineHeight: 15,
+  },
+
+  passwordForm: {
+    borderTopWidth: 1,
+    padding: 15,
+  },
+
+  passwordHint: {
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: -3,
+    marginBottom: 13,
+  },
+
+  logoutButton: {
+    minHeight: 53,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 1,
+  },
+
+  logoutText: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  footer: {
+    marginTop: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 7,
+  },
+
+  footerText: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
+
+  pressed: {
+    opacity: 0.78,
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+
+  logoutModal: {
+    width: '100%',
+    maxWidth: 390,
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  deleteIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+
+  modalDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 7,
+    marginBottom: 20,
+  },
+
+  modalActions: {
+    flexDirection: 'row',
+    gap: 9,
+  },
+
+  modalCancelButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 11,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  modalCancelText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  modalDeleteButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+  },
+
+  modalDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
 });

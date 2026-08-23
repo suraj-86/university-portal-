@@ -270,32 +270,10 @@ export default function ParentProfile() {
             </Pressable>
 
             <View style={{ flex: 1 }}>
-              <Text style={[styles.eyebrow, { color: colors.primary }]}>
-                PARENT PORTAL
-              </Text>
               <Text style={[styles.title, { color: colors.text }]}>
                 Ward Profile
               </Text>
             </View>
-          </View>
-
-          <View
-            style={[
-              styles.readOnlyBadge,
-              {
-                backgroundColor: colors.primarySoft,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Ionicons
-              name="lock-closed-outline"
-              size={13}
-              color={colors.primary}
-            />
-            <Text style={[styles.readOnlyText, { color: colors.primary }]}>
-              READ ONLY
-            </Text>
           </View>
         </View>
 
@@ -568,7 +546,7 @@ export default function ParentProfile() {
 
               {profile.academic.semester != null ? (
                 <Text style={[styles.semester, { color: colors.muted }]}>
-                  Semester {display(profile.academic.semester)}
+                {display(profile.academic.semester)}
                 </Text>
               ) : null}
             </View>

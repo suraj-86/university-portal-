@@ -394,7 +394,6 @@ export default function ParentDashboard() {
               { color: colors.primary },
             ]}
           >
-            PARENT PORTAL
           </Text>
 
           <Text
@@ -403,7 +402,7 @@ export default function ParentDashboard() {
               { color: colors.text },
             ]}
           >
-            Welcome, {parentName} 👋
+            Welcome, <br />{parentName}
           </Text>
 
           <Text

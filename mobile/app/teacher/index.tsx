@@ -176,7 +176,7 @@ export default function TeacherDashboard() {
     >
       <View style={styles.header}>
         <Text style={[styles.eyebrow, { color: colors.muted }]}>WELCOME</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Hello, <Text style={{ color: colors.primary }}>{dashboardData.teacherName || 'Professor'}</Text></Text>
+        <Text style={[styles.title, { color: colors.text }]}><Text style={{ color: colors.primary }}>{dashboardData.teacherName || 'Professor'}</Text></Text>
         <Text style={[styles.subtitle, { color: colors.muted }]}>Here is your daily teaching overview and scheduled classes.</Text>
       </View>
 
