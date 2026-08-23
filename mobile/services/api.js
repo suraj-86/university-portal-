@@ -1,13 +1,18 @@
 import axios from 'axios';
 import { getItem } from './storage';
 
-const API_BASE_URL = 'http://10.126.71.246:5000';
+const USE_LOCAL_API = true; // Set to true for local development, false for production
+
+const API_BASE_URL = USE_LOCAL_API
+  ? 'http://10.126.71.246:5000'
+  : 'https://university-portal-backend-0vr0.onrender.com';
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
-  timeout: 10000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
+    'X-Client': 'mobile',
   },
 });
 

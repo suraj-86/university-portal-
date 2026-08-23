@@ -283,7 +283,7 @@ export default function StudentDashboard() {
                 { color: colors.text },
               ]}
             >
-              Welcome, {firstName} 👋
+              Welcome, {firstName} 
             </Text>
 
           </View>
