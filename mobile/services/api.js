@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getItem } from './storage';
 
-const USE_LOCAL_API = true; // Set to true for local development, false for production
+const USE_LOCAL_API = false; // Set to true for local development, false for production
 
 const API_BASE_URL = USE_LOCAL_API
   ? 'http://10.126.71.246:5000'
