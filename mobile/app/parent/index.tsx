@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import api from '../../services/api';
@@ -47,6 +47,33 @@ type SummaryMetrics = {
   outstanding_fee?: number;
 };
 
+type ProfileResponse = {
+  academic?: {
+    current_cgpa?: string | number | null;
+    attendance_overall?: string | number | null;
+    semester?: string | number | null;
+  };
+};
+
+type FeeRecord = {
+  total_fee?: string | number | null;
+  paid_amount?: string | number | null;
+};
+
+type ResultSubject = {
+  total?: string | number | null;
+  totalMax?: string | number | null;
+  grade?: string | null;
+};
+
+type AttendanceLog = {
+  status?: string | null;
+  class_date?: string | null;
+  subject_name?: string | null;
+};
+
+type SemesterResults = Record<string, ResultSubject[]>;
+
 type UpcomingClass = {
   id: string | number;
   subject: string;
@@ -59,10 +86,13 @@ type UpcomingClass = {
 type Notice = {
   id: string | number;
   title: string;
-  content?: string;
-  type?: string;
-  date: string;
+  content?: string | null;
+  type?: string | null;
+  date?: string | null;
   attachment_url?: string | null;
+  author_role?: string | null;
+  author_name?: string | null;
+  priority?: string | null;
 };
 
 type DashboardResponse = {
@@ -75,6 +105,7 @@ type DashboardData = {
   summary: DashboardResponse;
   classes: UpcomingClass[];
   notices: Notice[];
+  metrics: SummaryMetrics;
 };
 
 type Colors = {
@@ -178,20 +209,167 @@ export default function ParentDashboard() {
 
         const childUserId = overview.childProfile.user_id;
 
-        const dashboardResponse = await api.get(
-          `/student/${childUserId}/custom-dashboard`
-        );
+        // Load every dashboard metric from the same endpoints used by the
+        // dedicated Parent screens. wards-overview does not reliably expose
+        // summaryMetrics in the current backend, so it must NOT be the source
+        // of CGPA / attendance / fee values.
+        let upcomingClasses: UpcomingClass[] = [];
+        let notices: Notice[] = [];
+        let metrics: SummaryMetrics = {};
 
-        const dashboard = dashboardResponse.data || {};
+        const semester = Number(overview.childProfile.semester) || 1;
+
+        const [dashboardResult, profileResult, feesResult, resultsResult, attendanceResult, noticesResult] =
+          await Promise.allSettled([
+            api.get(`/student/${childUserId}/custom-dashboard`),
+            api.get(`/student/${childUserId}/profile`),
+            api.get(`/student/${childUserId}/fees`),
+            api.get(`/student/${childUserId}/results`),
+            api.get(`/student/${childUserId}/attendance-logs?semester=${semester}`),
+            api.get(`/student/${childUserId}/notices`),
+          ]);
+
+        // 1. Upcoming classes + dashboard notices.
+        if (dashboardResult.status === 'fulfilled') {
+          const dashboard = dashboardResult.value?.data || {};
+
+          if (Array.isArray(dashboard.upcoming_classes)) {
+            upcomingClasses = dashboard.upcoming_classes;
+          }
+
+          if (Array.isArray(dashboard.notices)) {
+            notices = dashboard.notices;
+          }
+        } else {
+          console.warn(
+            'PARENT DASHBOARD CUSTOM FEED ERROR:',
+            dashboardResult.reason
+          );
+        }
+
+        // 2. Profile is a fallback source for CGPA/attendance only.
+        if (profileResult.status === 'fulfilled') {
+          const profile: ProfileResponse = profileResult.value?.data || {};
+          const academic = profile.academic || {};
+
+          const profileCgpa = parseNumeric(academic.current_cgpa);
+          const profileAttendance = parseNumeric(academic.attendance_overall);
+
+          if (profileCgpa !== null) metrics.cgpa = profileCgpa;
+          if (profileAttendance !== null) metrics.attendance = profileAttendance;
+        } else {
+          console.warn('PARENT DASHBOARD PROFILE ERROR:', profileResult.reason);
+        }
+
+        // 3. Fees: exactly the same calculation as Parent Fees.
+        if (feesResult.status === 'fulfilled') {
+          const fees: FeeRecord[] = Array.isArray(feesResult.value?.data)
+            ? feesResult.value.data
+            : [];
+
+          const totalFee = fees.reduce(
+            (sum, fee) => sum + Number(fee.total_fee || 0),
+            0
+          );
+          const paidFee = fees.reduce(
+            (sum, fee) => sum + Number(fee.paid_amount || 0),
+            0
+          );
+
+          metrics.total_fee = totalFee;
+          metrics.paid_fee = paidFee;
+          metrics.outstanding_fee = Math.max(totalFee - paidFee, 0);
+        } else {
+          console.warn('PARENT DASHBOARD FEES ERROR:', feesResult.reason);
+        }
+
+        // 4. Results: use the exact cumulative-CGPA algorithm from Parent Results.
+        if (resultsResult.status === 'fulfilled') {
+          const rawResults = resultsResult.value?.data;
+          const results: SemesterResults =
+            rawResults && typeof rawResults === 'object' && !Array.isArray(rawResults)
+              ? rawResults
+              : {};
+
+          let percentageSum = 0;
+          let semesterCount = 0;
+
+          Object.values(results).forEach((subjects) => {
+            const published = Array.isArray(subjects)
+              ? subjects.filter(
+                  (subject) =>
+                    subject.total !== null &&
+                    subject.total !== undefined &&
+                    subject.total !== '' &&
+                    Number.isFinite(Number(subject.total))
+                )
+              : [];
+
+            if (published.length === 0) return;
+
+            const earned = published.reduce(
+              (sum, subject) => sum + Number(subject.total || 0),
+              0
+            );
+            const maximum = published.reduce(
+              (sum, subject) => sum + (Number(subject.totalMax) || 100),
+              0
+            );
+
+            if (maximum > 0) {
+              percentageSum += (earned / maximum) * 100;
+              semesterCount += 1;
+            }
+          });
+
+          if (semesterCount > 0) {
+            metrics.cgpa = Number(
+              ((percentageSum / semesterCount) / 9.5).toFixed(2)
+            );
+          }
+        } else {
+          console.warn('PARENT DASHBOARD RESULTS ERROR:', resultsResult.reason);
+        }
+
+        // 5. Attendance: calculate from the same attendance logs used by
+        // Parent Attendance. Present + Late count as attended.
+        if (attendanceResult.status === 'fulfilled') {
+          const logs: AttendanceLog[] = Array.isArray(attendanceResult.value?.data)
+            ? attendanceResult.value.data
+            : [];
+
+          const present = logs.filter(
+            (log) => String(log.status || '').toLowerCase() === 'present'
+          ).length;
+          const late = logs.filter(
+            (log) => String(log.status || '').toLowerCase() === 'late'
+          ).length;
+
+          if (logs.length > 0) {
+            metrics.attendance = Number(
+              (((present + late) / logs.length) * 100).toFixed(1)
+            );
+          }
+        } else {
+          console.warn(
+            'PARENT DASHBOARD ATTENDANCE ERROR:',
+            attendanceResult.reason
+          );
+        }
+
+        // 6. If custom-dashboard did not contain notices, use the same
+        // notices endpoint as the dedicated Parent Notices page.
+        if (notices.length === 0 && noticesResult.status === 'fulfilled') {
+          if (Array.isArray(noticesResult.value?.data)) {
+            notices = noticesResult.value.data;
+          }
+        }
 
         setData({
           summary: overview,
-          classes: Array.isArray(dashboard.upcoming_classes)
-            ? dashboard.upcoming_classes
-            : [],
-          notices: Array.isArray(dashboard.notices)
-            ? dashboard.notices
-            : [],
+          classes: upcomingClasses,
+          notices,
+          metrics,
         });
       } catch (err: any) {
         console.error(
@@ -213,9 +391,11 @@ export default function ParentDashboard() {
     [selectedWardId]
   );
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboard();
+    }, [fetchDashboard])
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -342,9 +522,10 @@ export default function ParentDashboard() {
     );
   }
 
-  const { childProfile, summaryMetrics } = data.summary;
+  const { childProfile } = data.summary;
+  const summaryMetrics = data.metrics || {};
 
-    const selectedWard = wards.find(
+  const selectedWard = wards.find(
     (ward) =>
       String(ward.student_id) === String(selectedWardId)
   );
@@ -388,13 +569,6 @@ export default function ParentDashboard() {
     >
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text
-            style={[
-              styles.eyebrow,
-              { color: colors.primary },
-            ]}
-          >
-          </Text>
 
           <Text
             style={[
@@ -402,7 +576,7 @@ export default function ParentDashboard() {
               { color: colors.text },
             ]}
           >
-            Welcome, <br />{parentName}
+            Welcome, {parentName} 
           </Text>
 
           <Text
@@ -826,32 +1000,32 @@ export default function ParentDashboard() {
 
       <View style={styles.actionGrid}>
         <ActionCard
-  icon="calendar-outline"
-  label="Attendance"
-  colors={colors}
-  onPress={() => {}}
-/>
+          icon="calendar-outline"
+          label="Attendance"
+          colors={colors}
+          onPress={() => router.push('/parent/attendance')}
+        />
 
-<ActionCard
-  icon="school-outline"
-  label="Results"
-  colors={colors}
-  onPress={() => {}}
-/>
+        <ActionCard
+          icon="school-outline"
+          label="Results"
+          colors={colors}
+          onPress={() => router.push('/parent/results')}
+        />
 
-<ActionCard
-  icon="wallet-outline"
-  label="Fees"
-  colors={colors}
-  onPress={() => {}}
-/>
+        <ActionCard
+          icon="wallet-outline"
+          label="Fees"
+          colors={colors}
+          onPress={() => router.push('/parent/fees')}
+        />
 
-<ActionCard
-  icon="notifications-outline"
-  label="Notices"
-  colors={colors}
-  onPress={() => {}}
-/>
+        <ActionCard
+          icon="notifications-outline"
+          label="Notices"
+          colors={colors}
+          onPress={() => router.push('/parent/notices')}
+        />
       </View>
 
       {/* UPCOMING CLASSES */}
@@ -992,8 +1166,8 @@ export default function ParentDashboard() {
         {data.notices.length > 0 ? (
           data.notices.slice(0, 5).map((notice) => (
             <Pressable
-  key={notice.id}
-  onPress={() => {}}
+              key={notice.id}
+              onPress={() => router.push('/parent/notices')}
               style={[
                 styles.noticeCard,
                 {
@@ -1314,6 +1488,17 @@ function EmptyState({
       </Text>
     </View>
   );
+}
+
+function parseNumeric(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const normalized = String(value).replace('%', '').replace(/,/g, '').trim();
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function formatCurrency(amount: number) {
