@@ -11,7 +11,7 @@ const app = express();
 app.use(cors({
 origin: [
         'https://university-portal-flax-tau.vercel.app', 
-        'http://localhost:5173',
+        'http://localhost:5174',
         'http://localhost:8081'
     ],
     credentials: true
