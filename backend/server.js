@@ -8,10 +8,9 @@ const cookieParser = require('cookie-parser');
 const { createAudit } = require('./audit');
 
 const app = express();
-app.set('trust proxy', 1); // Render sits behind a proxy; needed for correct req.ip
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-// Basic security headers (no extra dependency)
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -19,7 +18,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Tiny in-memory rate limiter (resets on restart; fine for a single instance)
 const createRateLimiter = ({ windowMs, max, keyFn, message }) => {
     const hits = new Map();
     setInterval(() => {
@@ -123,32 +121,7 @@ const upload = multer({
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-const db = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT,
-    ssl: {
-        rejectUnauthorized: false
-    },
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
-
-const queryAsync = (sql, params = []) => {
-    return new Promise((resolve, reject) => {
-        db.query(sql, params, (err, results) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-
-            resolve(results);
-        });
-    });
-};
+const { db, queryAsync } = require('./lib/db');
 
 db.getConnection((err, connection) => {
     if (err) {
@@ -169,69 +142,7 @@ db.getConnection((err, connection) => {
 
 const audit = createAudit(db);
 
-const verifyRole = (allowedRoles = []) => {
-    return async (req, res, next) => {
-        try {
-            let token = req.cookies.token;
-
-            if (!token) {
-                const authHeader = req.headers.authorization;
-
-                if (authHeader && authHeader.startsWith("Bearer ")) {
-                    token = authHeader.substring(7);
-                }
-            }
-
-            if (!token) {
-                return res.status(401).json({
-                    success: false,
-                    error: "Authentication required. Please log in."
-                });
-            }
-
-            const decoded = jwt.verify(token, JWT_SECRET);
-
-            req.user = {
-                id: decoded.id,
-                role: decoded.role
-            };
-
-            if (!allowedRoles.includes(req.user.role)) {
-                return res.status(403).json({
-                    success: false,
-                    error: "You are not authorized to access this resource."
-                });
-            }
-
-            // Re-check the account on every request so deactivated/deleted users lose access immediately
-            let rows;
-            try {
-                rows = await queryAsync("SELECT is_active FROM users WHERE id = ? LIMIT 1", [req.user.id]);
-            } catch (dbErr) {
-                console.error("Auth DB check failed:", dbErr.message);
-                return res.status(500).json({ success: false, error: "Authentication check failed." });
-            }
-
-            if (rows.length === 0 || rows[0].is_active === 0) {
-                res.clearCookie("token");
-                return res.status(401).json({
-                    success: false,
-                    error: "This account is no longer active. Please contact the administrator."
-                });
-            }
-
-            next();
-
-        } catch (error) {
-            console.error("JWT Verification Error:", error.message);
-
-            return res.status(401).json({
-                success: false,
-                error: "Session expired or invalid token. Please log in again."
-            });
-        }
-    };
-};
+const { verifyRole, requireSelfTeacher } = require('./lib/auth');
 
 const verifyStudentOwnership = async (req, res, next) => {
     const requestedId = Number(req.params.id);
@@ -300,13 +211,6 @@ const verifyStudentOwnership = async (req, res, next) => {
         success: false,
         error: "You are not authorized to access this student's records."
     });
-};
-
-const requireSelfTeacher = (req, res, next) => {
-    if (Number(req.params.id) !== Number(req.user.id)) {
-        return res.status(403).json({ error: "You are not authorized to access another teacher's data." });
-    }
-    next();
 };
 
 const teacherOwnsSubject = (teacherUserId, subjectId, callback) => {
@@ -716,7 +620,6 @@ const deleteFile = (filePath) => {
 
 
 app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
-    // Teachers get only what they need; full personal records are admin-only
     const columns = req.user.role === 'admin'
         ? 'students.*'
         : 'students.student_id, students.user_id, students.course_id, students.enrollment_number, students.roll_number, students.full_name, students.semester, students.status';
@@ -2250,7 +2153,7 @@ app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), requireSelfTeache
 
 app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
     const { subjectId, date, startTime, endTime, room } = req.body;
-    const userId = req.user.id; // never trust a user id sent in the body
+    const userId = req.user.id;
     if (
     !subjectId ||
     !date ||
@@ -3409,6 +3312,8 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
         });
     });
 });
+
+require('./routes')(app, { db, queryAsync, verifyRole, requireSelfTeacher, audit });
 
 const PORT = process.env.PORT || 5000;
 process.on("uncaughtException", err => {
