@@ -5,8 +5,50 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const { createAudit } = require('./audit');
 
 const app = express();
+app.set('trust proxy', 1); // Render sits behind a proxy; needed for correct req.ip
+app.disable('x-powered-by');
+
+// Basic security headers (no extra dependency)
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+});
+
+// Tiny in-memory rate limiter (resets on restart; fine for a single instance)
+const createRateLimiter = ({ windowMs, max, keyFn, message }) => {
+    const hits = new Map();
+    setInterval(() => {
+        const now = Date.now();
+        for (const [k, v] of hits) if (v.reset <= now) hits.delete(k);
+    }, windowMs).unref();
+    return (req, res, next) => {
+        const key = keyFn(req);
+        const now = Date.now();
+        let entry = hits.get(key);
+        if (!entry || entry.reset <= now) {
+            entry = { count: 0, reset: now + windowMs };
+            hits.set(key, entry);
+        }
+        entry.count += 1;
+        if (entry.count > max) {
+            res.setHeader('Retry-After', Math.ceil((entry.reset - now) / 1000));
+            return res.status(429).json({ success: false, message, error: message });
+        }
+        next();
+    };
+};
+
+const loginLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    keyFn: (req) => `${req.ip}|${String((req.body && req.body.username) || '').toLowerCase()}`,
+    message: 'Too many login attempts. Please try again in 15 minutes.'
+});
 
 app.use(cors({
 origin: [
@@ -125,8 +167,10 @@ db.getConnection((err, connection) => {
     connection.release();
 });
 
+const audit = createAudit(db);
+
 const verifyRole = (allowedRoles = []) => {
-    return (req, res, next) => {
+    return async (req, res, next) => {
         try {
             let token = req.cookies.token;
 
@@ -156,6 +200,23 @@ const verifyRole = (allowedRoles = []) => {
                 return res.status(403).json({
                     success: false,
                     error: "You are not authorized to access this resource."
+                });
+            }
+
+            // Re-check the account on every request so deactivated/deleted users lose access immediately
+            let rows;
+            try {
+                rows = await queryAsync("SELECT is_active FROM users WHERE id = ? LIMIT 1", [req.user.id]);
+            } catch (dbErr) {
+                console.error("Auth DB check failed:", dbErr.message);
+                return res.status(500).json({ success: false, error: "Authentication check failed." });
+            }
+
+            if (rows.length === 0 || rows[0].is_active === 0) {
+                res.clearCookie("token");
+                return res.status(401).json({
+                    success: false,
+                    error: "This account is no longer active. Please contact the administrator."
                 });
             }
 
@@ -231,7 +292,6 @@ const verifyStudentOwnership = async (req, res, next) => {
             return res.status(500).json({
                 success: false,
                 error: "Authorization check failed.",
-                details: error.sqlMessage || error.message
             });
         }
     }
@@ -240,6 +300,13 @@ const verifyStudentOwnership = async (req, res, next) => {
         success: false,
         error: "You are not authorized to access this student's records."
     });
+};
+
+const requireSelfTeacher = (req, res, next) => {
+    if (Number(req.params.id) !== Number(req.user.id)) {
+        return res.status(403).json({ error: "You are not authorized to access another teacher's data." });
+    }
+    next();
 };
 
 const teacherOwnsSubject = (teacherUserId, subjectId, callback) => {
@@ -286,7 +353,7 @@ const withTransaction = (res, workFn) => {
     });
 };
 
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", loginLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
 
@@ -518,6 +585,7 @@ app.put(
                                 });
                             }
 
+                            audit(req, { action: 'PASSWORD_CHANGE', entity: 'users', entityId: userId });
                             return res.json({
                                 success: true,
                                 message: "Password updated successfully."
@@ -648,14 +716,18 @@ const deleteFile = (filePath) => {
 
 
 app.get('/api/students', verifyRole(['admin', 'teacher']), (req, res) => {
+    // Teachers get only what they need; full personal records are admin-only
+    const columns = req.user.role === 'admin'
+        ? 'students.*'
+        : 'students.student_id, students.user_id, students.course_id, students.enrollment_number, students.roll_number, students.full_name, students.semester, students.status';
     const sql = `
-        SELECT students.*, courses.course_name
+        SELECT ${columns}, courses.course_name
 FROM students
 LEFT JOIN courses ON students.course_id = courses.id
 ORDER BY students.student_id DESC
     `;
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: "Database error." });
         return res.json(data);
     });
 });
@@ -810,6 +882,7 @@ app.delete('/api/students/:id', verifyRole(['admin']), (req, res) => {
         
         db.query('DELETE FROM users WHERE id = ?', [userIdToDelete], (err2, userResult) => {
             if (err2) return res.status(500).json({ error: "Failed to delete user login" });
+            audit(req, { action: 'STUDENT_DELETE', entity: 'users', entityId: userIdToDelete });
             return res.json({ success: true, message: "Student completely removed!" });
         });
     });
@@ -1040,6 +1113,7 @@ app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
                                     );
                                 }
 
+                                audit(req, { action: 'TEACHER_DELETE', entity: 'users', entityId: userId });
                                 res.json({ success: true });
                             });
                         }
@@ -1142,14 +1216,14 @@ app.put('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     withTransaction(res, (db) => {
         const subSql = "UPDATE subjects SET course_id=?, semester=?, subject_code=?, subject_name=?, subject_type=?, credits=? WHERE id=?";
         db.query(subSql, [course_id, semester, subject_code, subject_name, subject_type, credits, subjectId], (err) => {
-            if (err) return db.rollback(() => res.status(500).json(err));
+            if (err) return db.rollback(() => res.status(500).json({ error: "Database error." }));
 
             const assignSql = "REPLACE INTO teacher_assignments (teacher_id, subject_id, academic_year) VALUES (?, ?, '2026-2027')";
             db.query(assignSql, [teacher_id, subjectId], (err) => {
-                if (err) return db.rollback(() => res.status(500).json(err));
+                if (err) return db.rollback(() => res.status(500).json({ error: "Database error." }));
 
                 db.commit((err) => {
-                    if (err) return db.rollback(() => res.status(500).json(err));
+                    if (err) return db.rollback(() => res.status(500).json({ error: "Database error." }));
                     res.json({ success: true });
                 });
             });
@@ -1322,6 +1396,7 @@ app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
         
         db.query("DELETE FROM users WHERE id = ?", [userId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
+            audit(req, { action: 'PARENT_DELETE', entity: 'users', entityId: userId });
             res.json({ success: true, message: "Parent account deleted" });
         });
     });
@@ -1708,7 +1783,7 @@ if (err) {
 });
 
 
-app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), (req, res) => {
+app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), requireSelfTeacher, (req, res) => {
     const sql = `
         SELECT 
             s.id, 
@@ -1726,7 +1801,7 @@ app.get('/api/teacher/:id/assigned-subjects', verifyRole(['teacher']), (req, res
     `;
 
     db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: "Database error." });
         res.json(data);
     });
 });
@@ -1749,7 +1824,7 @@ app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
         ORDER BY n.created_at DESC
     `;
     db.query(sql, [req.user.id], (err, data) => {
-        if (err) return res.status(500).json(err);
+        if (err) return res.status(500).json({ error: "Database error." });
         res.json(data);
     });
 });
@@ -1903,7 +1978,7 @@ if (err) {
     });
 });
 
-app.get('/api/teacher/:id/attendance-history', verifyRole(['teacher']), (req, res) => {
+app.get('/api/teacher/:id/attendance-history', verifyRole(['teacher']), requireSelfTeacher, (req, res) => {
     const sql = `
         SELECT 
             dc.id, 
@@ -2078,7 +2153,7 @@ if (teacherData.length === 0) {
     });
 });
 
-app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), (req, res) => {
+app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), requireSelfTeacher, (req, res) => {
     const sql = `
         SELECT 
             m.subject_id as classId, 
@@ -2109,7 +2184,7 @@ app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), (req, res) => 
     });
 });
 
-app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), (req, res) => {
+app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), requireSelfTeacher, (req, res) => {
     const userId = req.params.id;
 
     const teacherSql = `SELECT teacher_id, full_name FROM teachers WHERE user_id = ?`;
@@ -2174,9 +2249,9 @@ app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), (req, res) => {
 });
 
 app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
-    const { userId, subjectId, date, startTime, endTime, room } = req.body;
+    const { subjectId, date, startTime, endTime, room } = req.body;
+    const userId = req.user.id; // never trust a user id sent in the body
     if (
-    !userId ||
     !subjectId ||
     !date ||
     !startTime ||
@@ -2195,14 +2270,20 @@ app.post('/api/teacher/schedule-class', verifyRole(['teacher']), (req, res) => {
 
         const exactTeacherId = teacherResult[0].teacher_id;
 
-        const insertSql = `
-            INSERT INTO daily_classes (teacher_id, subject_id, class_date, start_time, end_time, room_number) 
-            VALUES (?, ?, ?, ?, ?, ?)
-        `;
+        teacherOwnsSubject(req.user.id, subjectId, (ownErr, owns) => {
+            if (ownErr) return res.status(500).json({ error: "Authorization check failed." });
+            if (!owns) return res.status(403).json({ error: "You are not assigned to this subject." });
 
-        db.query(insertSql, [exactTeacherId, subjectId, date, startTime, endTime, room], (err, result) => {
-            if (err) return res.status(500).json({ error: "Failed to schedule class in database." });
-            res.json({ success: true, message: "Class successfully scheduled!" });
+            const insertSql = `
+                INSERT INTO daily_classes (teacher_id, subject_id, class_date, start_time, end_time, room_number) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            `;
+
+            db.query(insertSql, [exactTeacherId, subjectId, date, startTime, endTime, room], (err, result) => {
+                if (err) return res.status(500).json({ error: "Failed to schedule class in database." });
+                audit(req, { action: 'CLASS_SCHEDULE', entity: 'daily_classes', entityId: result.insertId, newValue: { subjectId, date, startTime, endTime, room } });
+                res.json({ success: true, message: "Class successfully scheduled!" });
+            });
         });
     });
 });
@@ -2297,7 +2378,6 @@ app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => 
             return res.status(500).json({
                 success: false,
                 error: "Failed to load child information.",
-                details: err.sqlMessage || err.message
             });
         }
 
@@ -2360,7 +2440,6 @@ app.get('/api/parent/:id/wards-overview', verifyRole(['parent']), (req, res) => 
                     return res.status(500).json({
                         success: false,
                         error: "Failed to load summary metrics.",
-                        details: metricsErr.sqlMessage || metricsErr.message
                     });
                 }
 
@@ -2391,6 +2470,10 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
             SUM(CASE WHEN m.exam_type != 'End Sem' THEN m.max_score ELSE 0 END) as midTermMax,
             SUM(CASE WHEN m.exam_type = 'End Sem' THEN m.score ELSE 0 END) as final,
             SUM(CASE WHEN m.exam_type = 'End Sem' THEN m.max_score ELSE 0 END) as finalMax,
+            SUM(CASE WHEN m.exam_type = 'Assignment' THEN m.score END) as assignment,
+            SUM(CASE WHEN m.exam_type = 'Sessional 1' THEN m.score END) as sessional1,
+            SUM(CASE WHEN m.exam_type = 'Sessional 2' THEN m.score END) as sessional2,
+            SUM(CASE WHEN m.exam_type = 'End Sem' THEN m.score END) as endSem,
             SUM(m.score) as total,
             SUM(m.max_score) as totalMax
         FROM subjects sub
@@ -2432,6 +2515,10 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
                 midTermMax: parseFloat(row.midTermMax) || 0,
                 final: parseFloat(row.final) || 0,
                 finalMax: parseFloat(row.finalMax) || 0,
+                assignment: row.assignment === null ? null : parseFloat(row.assignment),
+                sessional1: row.sessional1 === null ? null : parseFloat(row.sessional1),
+                sessional2: row.sessional2 === null ? null : parseFloat(row.sessional2),
+                endSem: row.endSem === null ? null : parseFloat(row.endSem),
                 total: total,
                 totalMax: parseFloat(row.totalMax) || 0,
                 grade: grade,
@@ -2640,8 +2727,13 @@ app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res)
     });
 }
 
+    const payAmount = Number(amount_paid);
+    if (!Number.isFinite(payAmount) || payAmount <= 0) {
+        return res.status(400).json({ error: "Payment amount must be greater than zero." });
+    }
+
     const authorizeFeeSql = `
-        SELECT s.user_id
+        SELECT s.user_id, f.total_fee, f.paid_amount
         FROM fees f
         JOIN students s ON f.student_id = s.student_id
         WHERE f.id = ?
@@ -2658,6 +2750,11 @@ app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res)
         }
 
         const feeOwnerUserId = feeOwnerRows[0].user_id;
+        const remaining = Number(feeOwnerRows[0].total_fee) - Number(feeOwnerRows[0].paid_amount);
+
+        if (payAmount > remaining + 0.001) {
+            return res.status(400).json({ error: `Amount exceeds the outstanding balance (${remaining}).` });
+        }
 
         const proceed = () => processPayment(req, res, fee_id, amount_paid, payment_method, transaction_reference, processed_by);
 
@@ -2725,6 +2822,7 @@ const newPaid = Math.min(
                     if (err) return db.rollback(() => res.status(500).json({ error: "Fee update error. Ledger entry rolled back." }));
                     db.commit((err) => {
                         if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
+                        audit(req, { action: 'PAYMENT_CREATE', entity: 'fees', entityId: fee_id, newValue: { amount_paid, payment_method, transaction_reference } });
                         res.json({ success: true, message: "Payment processed successfully!" });
                     });
                 });
@@ -3163,6 +3261,7 @@ app.put('/api/fees/:id', verifyRole(['admin']), (req, res) => {
 app.delete('/api/fees/:id', verifyRole(['admin']), (req, res) => {
     db.query(`DELETE FROM fees WHERE id = ?`, [req.params.id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
+        audit(req, { action: 'FEE_DELETE', entity: 'fees', entityId: req.params.id });
         res.json({ success: true });
     });
 });

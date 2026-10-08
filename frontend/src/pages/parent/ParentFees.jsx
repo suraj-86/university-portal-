@@ -3,6 +3,7 @@ import { FileText, CheckCircle2, Users, Download } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import Table from '../../components/Table';
+import toast from 'react-hot-toast';
 
 const ParentFees = () => {
     const { user } = useAuth();
