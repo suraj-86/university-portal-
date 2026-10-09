@@ -121,7 +121,7 @@ const upload = multer({
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-const { db, queryAsync } = require('./lib/db');
+const { db, queryAsync, transaction } = require('./lib/db');
 
 db.getConnection((err, connection) => {
     if (err) {
@@ -3313,7 +3313,7 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     });
 });
 
-require('./routes')(app, { db, queryAsync, verifyRole, requireSelfTeacher, audit });
+require('./routes')(app, { db, queryAsync, transaction, verifyRole, requireSelfTeacher, audit });
 
 const PORT = process.env.PORT || 5000;
 process.on("uncaughtException", err => {
