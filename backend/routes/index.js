@@ -1,5 +1,6 @@
 const modules = [
-    require('./health')
+    require('./health'),
+    require('./calendar')
 ];
 
 module.exports = (app, ctx) => {

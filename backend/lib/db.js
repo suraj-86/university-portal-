@@ -27,4 +27,22 @@ const queryAsync = (sql, params = []) => {
     });
 };
 
-module.exports = { db, queryAsync };
+const transaction = async (work) => {
+    const conn = await new Promise((resolve, reject) =>
+        db.getConnection((err, c) => (err ? reject(err) : resolve(c))));
+    const q = (sql, params = []) => new Promise((resolve, reject) =>
+        conn.query(sql, params, (err, rows) => (err ? reject(err) : resolve(rows))));
+    try {
+        await q('START TRANSACTION');
+        const result = await work(q);
+        await q('COMMIT');
+        return result;
+    } catch (e) {
+        try { await q('ROLLBACK'); } catch (_) { }
+        throw e;
+    } finally {
+        conn.release();
+    }
+};
+
+module.exports = { db, queryAsync, transaction };
