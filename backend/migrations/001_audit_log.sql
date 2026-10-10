@@ -1,4 +1,4 @@
--- Phase 0: reusable audit trail. Run once on the production DB (Aiven).
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     actor_user_id INT NULL,
