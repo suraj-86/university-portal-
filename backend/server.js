@@ -3313,7 +3313,7 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
     });
 });
 
-require('./routes')(app, { db, queryAsync, transaction, verifyRole, requireSelfTeacher, audit });
+require('./routes')(app, { db, queryAsync, transaction, verifyRole, requireSelfTeacher, verifyStudentOwnership, audit });
 
 const PORT = process.env.PORT || 5000;
 process.on("uncaughtException", err => {

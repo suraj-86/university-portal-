@@ -45,6 +45,8 @@ import ParentAttendance from './pages/parent/ParentAttendance';
 
 import Holidays from './pages/shared/Holidays';
 import AcademicCalendar from './pages/shared/AcademicCalendar';
+import Timetable from './pages/shared/Timetable';
+import AdminTimetable from './pages/admin/AdminTimetable';
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -107,6 +109,7 @@ function App() {
             <Route path="/student/results" element={<ProtectedRoute role="student"><StudentResults /></ProtectedRoute>} />
             <Route path="/student/subjects" element={<ProtectedRoute role="student"><StudentSubjects /></ProtectedRoute>} />
             <Route path="/student/settings" element={<ProtectedRoute role="student"><StudentSettings /></ProtectedRoute>} />
+            <Route path="/student/timetable" element={<ProtectedRoute role="student"><Timetable /></ProtectedRoute>} />
             <Route path="/student/calendar" element={<ProtectedRoute role="student"><AcademicCalendar /></ProtectedRoute>} />
             <Route path="/student/holidays" element={<ProtectedRoute role="student"><Holidays /></ProtectedRoute>} />
 
@@ -116,6 +119,7 @@ function App() {
             <Route path="/admin/courses" element={<ProtectedRoute role="admin"><AdminCourses /></ProtectedRoute>} />
             <Route path="/admin/subjects" element={<ProtectedRoute role="admin"><AdminSubjects /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute role="admin"><AdminSettings /></ProtectedRoute>} />
+            <Route path="/admin/timetable" element={<ProtectedRoute role="admin"><AdminTimetable /></ProtectedRoute>} />
             <Route path="/admin/calendar" element={<ProtectedRoute role="admin"><AcademicCalendar /></ProtectedRoute>} />
             <Route path="/admin/holidays" element={<ProtectedRoute role="admin"><Holidays /></ProtectedRoute>} />
             <Route path="/admin/fees" element={<ProtectedRoute role="admin"><AdminFees /></ProtectedRoute>} />
@@ -129,6 +133,7 @@ function App() {
             <Route path="/teacher/subjects" element={<ProtectedRoute role="teacher"><TeacherSubjects /></ProtectedRoute>} />
             <Route path="/teacher/notices" element={<ProtectedRoute role="teacher"><TeacherNotices /></ProtectedRoute>} />
             <Route path="/teacher/settings" element={<ProtectedRoute role="teacher"><TeacherSettings /></ProtectedRoute>} />
+            <Route path="/teacher/timetable" element={<ProtectedRoute role="teacher"><Timetable /></ProtectedRoute>} />
             <Route path="/teacher/calendar" element={<ProtectedRoute role="teacher"><AcademicCalendar /></ProtectedRoute>} />
             <Route path="/teacher/holidays" element={<ProtectedRoute role="teacher"><Holidays /></ProtectedRoute>} />
 
@@ -138,6 +143,7 @@ function App() {
             <Route path="/parent/results" element={<ProtectedRoute role="parent"><ParentResults /></ProtectedRoute>} />
             <Route path="/parent/notices" element={<ProtectedRoute role="parent"><ParentNotices /></ProtectedRoute>} />
             <Route path="/parent/settings" element={<ProtectedRoute role="parent"><ParentSettings /></ProtectedRoute>} />
+            <Route path="/parent/timetable" element={<ProtectedRoute role="parent"><Timetable /></ProtectedRoute>} />
             <Route path="/parent/calendar" element={<ProtectedRoute role="parent"><AcademicCalendar /></ProtectedRoute>} />
             <Route path="/parent/holidays" element={<ProtectedRoute role="parent"><Holidays /></ProtectedRoute>} />
             <Route path="/parent/attendance" element={<ProtectedRoute role="parent"><ParentAttendance /></ProtectedRoute>} />

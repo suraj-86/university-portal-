@@ -1,6 +1,7 @@
 const modules = [
     require('./health'),
-    require('./calendar')
+    require('./calendar'),
+    require('./timetable')
 ];
 
 module.exports = (app, ctx) => {
