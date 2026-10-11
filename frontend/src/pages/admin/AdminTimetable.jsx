@@ -60,7 +60,7 @@ const AdminTimetable = () => {
 
     useEffect(() => { load(); }, [load]);
 
-    const openAdd = () => { setEditingId(null); setForm({ ...EMPTY, subject_id: subjects[0]?.id || '' }); setFormError(''); setModalOpen(true); };
+    const openAdd = () => { setEditingId(null); setForm({ ...EMPTY, day: 'Every day', subject_id: subjects[0]?.id || '' }); setFormError(''); setModalOpen(true); };
     const openEdit = (s) => {
         setEditingId(s.id);
         setForm({ subject_id: s.subject_id, day: s.day, start_time: s.start_time, end_time: s.end_time, room: s.room });
@@ -72,9 +72,10 @@ const AdminTimetable = () => {
         e.preventDefault();
         setFormError('');
         try {
+            let res;
             if (editingId) await api.put(`/timetable/${editingId}`, form);
-            else await api.post('/timetable', form);
-            toast.success(editingId ? 'Entry updated.' : 'Entry added.');
+            else res = await api.post('/timetable', form);
+            toast.success(editingId ? 'Entry updated.' : res?.data?.created ? `Added for all ${res.data.created} days.` : 'Entry added.');
             setModalOpen(false);
             load();
         } catch (err) {
@@ -152,8 +153,12 @@ const AdminTimetable = () => {
                     <div className="space-y-1">
                         <span className="block text-sm font-medium text-slate-700 dark:text-slate-300">Day</span>
                         <select value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })} className={selectCls}>
+                            {!editingId && <option value="Every day">Every day (Monday to Friday)</option>}
                             {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
                         </select>
+                        {!editingId && form.day === 'Every day' && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Adds this class at the same time and room on all five days. If any day clashes, nothing is added.</p>
+                        )}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <Input label="Start Time" type="time" required value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />

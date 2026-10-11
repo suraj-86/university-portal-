@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import Modal from './Modal';
 import { parseCSV, downloadTextFile } from '../utils/csv';
 
+
 const CsvImportModal = ({ isOpen, onClose, title, headers, required, sample, templateName, mapRow, previewKeys, onSubmit, onDone }) => {
     const [fileName, setFileName] = useState('');
     const [rows, setRows] = useState([]);
@@ -53,7 +54,7 @@ const CsvImportModal = ({ isOpen, onClose, title, headers, required, sample, tem
         } catch (err) {
             const data = err.response?.data;
             if (data?.errors?.length) setServerErrors(data.errors);
-            toast.error(data?.error || 'Import failed. Nothing was saved.');
+            toast.error(data?.error || err.message || 'Import failed. Nothing was saved.');
             setBusy(false);
         }
     };

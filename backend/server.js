@@ -1732,105 +1732,6 @@ app.get('/api/teacher/:id/notices', verifyRole(['teacher']), (req, res) => {
     });
 });
 
-app.post('/api/attendance', verifyRole(['teacher']), (req, res) => {
-    const { subject_id, date, students } = req.body;
-    const marked_by = req.user.id;
-
-    if (
-    !subject_id ||
-    !date ||
-    !Array.isArray(students)
-) {
-    return res.status(400).json({
-        error: "Invalid attendance data."
-    });
-}
-
-if (students.length === 0) {
-    return res.status(400).json({
-        error: "No students found."
-    });
-}
-
-    const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
-
-    db.query(getTeacherSql, [marked_by], (err, teacherData) => {
-if (err) {
-    console.error(err);
-
-    return res.status(500).json({
-        error: "Teacher lookup failed"
-    });
-}
-
-if (teacherData.length === 0) {
-    return res.status(404).json({
-        error: "No teacher record found for this account."
-    });
-}
-
-        const actualTeacherId = teacherData[0].teacher_id;
-
-        const checkAssignmentSql = `SELECT 1 FROM teacher_assignments WHERE teacher_id = ? AND subject_id = ? LIMIT 1`;
-
-        db.query(checkAssignmentSql, [actualTeacherId, subject_id], (err, assignmentRows) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ error: "Assignment check failed" });
-            }
-
-            if (assignmentRows.length === 0) {
-                return res.status(403).json({ error: "You are not assigned to this subject." });
-            }
-
-        const checkClassSql = `SELECT id FROM daily_classes WHERE subject_id = ? AND class_date = ?`;
-
-        db.query(checkClassSql, [subject_id, date], (err, classData) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({
-                    error: "Class lookup failed"
-                });
-            }
-
-            const insertAttendance = (dailyClassId) => {
-                const values = students.map(student => [
-                    student.student_id,
-                    dailyClassId,
-                    student.status,
-                    'Marked via Quick Attendance',
-                    actualTeacherId
-                ]);
-
-                const insertSql = `
-                    INSERT INTO attendance (student_id, daily_class_id, status, remarks, marked_by) 
-                    VALUES ?
-                    ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by)
-                `;
-
-                db.query(insertSql, [values], (insertErr, result) => {
-                    if (insertErr) return res.status(500).json({ error: "Failed to save attendance" });
-                    res.json({ success: true, message: "Attendance saved successfully!" });
-                });
-            };
-
-            if (classData.length > 0) {
-                insertAttendance(classData[0].id);
-            } else {
-                const createClassSql = `
-                    INSERT INTO daily_classes (subject_id, teacher_id, class_date, start_time, end_time, room_number, status) 
-                    VALUES (?, ?, ?, '09:00', '10:00', 'TBA', 'Completed')
-                `;
-                db.query(createClassSql, [subject_id, actualTeacherId, date], (err, newClass) => {
-                    if (err) return res.status(500).json({ error: "Failed to auto-create class session" });
-                    insertAttendance(newClass.insertId); 
-                });
-            }
-        });
-        });
-    });
-});
-
 app.get('/api/subjects/:id/students', verifyRole(['teacher', 'admin']), (req, res) => {
     if (!req.params.id) {
     return res.status(400).json({
@@ -1951,6 +1852,7 @@ app.get('/api/attendance/class/:classId', verifyRole(['teacher']), (req, res) =>
 
 app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
     const { subject_id, exam_type } = req.query;
+    const assessmentName = String(req.query.assessment_name || '').trim().replace(/\s+/g, ' ');
     if (!subject_id || !exam_type) {
     return res.status(400).json({
         error: "Subject and exam type are required."
@@ -1971,9 +1873,9 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
         SELECT m.student_id as id, st.roll_number as roll, st.roll_number as roll_number, st.full_name as name, m.score, m.max_score
         FROM marks m
         JOIN students st ON m.student_id = st.student_id
-        WHERE m.subject_id = ? AND m.exam_type = ?
+        WHERE m.subject_id = ? AND m.exam_type = ? AND m.assessment_name = ?
     `;
-    db.query(sql, [subject_id, exam_type], (err, data) => {
+    db.query(sql, [subject_id, exam_type, assessmentName], (err, data) => {
         if (err) {
     console.error(err);
 
@@ -1986,81 +1888,13 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
     });
 });
 
-app.post('/api/marks', verifyRole(['teacher']), (req, res) => {
-    const { subject_id, exam_type, max_score, marks } = req.body;
-    const uploaded_by_user_id = req.user.id;
-
-    if (
-    !subject_id ||
-    !exam_type ||
-    !max_score ||
-    !Array.isArray(marks)
-) {
-    return res.status(400).json({
-        error: "Invalid marks data."
-    });
-}
-
-    teacherOwnsSubject(req.user.id, subject_id, (ownErr, owns) => {
-        if (ownErr) {
-            console.error(ownErr);
-            return res.status(500).json({ error: "Authorization check failed." });
-        }
-
-        if (!owns) {
-            return res.status(403).json({ error: "You are not assigned to this subject." });
-        }
-
-    const getTeacherSql = `SELECT teacher_id FROM teachers WHERE user_id = ?`;
-    db.query(getTeacherSql, [uploaded_by_user_id], (err, teacherData) => {
-        if (err) {
-    console.error(err);
-
-    return res.status(500).json({
-        error: "teacher lookup failed"
-    });
-}
-
-if (teacherData.length === 0) {
-    return res.status(404).json({
-        error: "No teacher record found for this account."
-    });
-}
-
-        const teacherId = teacherData[0].teacher_id;
-        
-        const validMarks = marks.filter(m => m.score !== '');
-        if (validMarks.length === 0) return res.json({ success: true, message: "Nothing to save" });
-
-        const values = validMarks.map(m => [
-            m.id, subject_id, exam_type, m.score, max_score, teacherId
-        ]);
-
-        const sql = `
-            INSERT INTO marks (student_id, subject_id, exam_type, score, max_score, uploaded_by)
-            VALUES ?
-            ON DUPLICATE KEY UPDATE score = VALUES(score), max_score = VALUES(max_score), uploaded_by = VALUES(uploaded_by)
-        `;
-
-        db.query(sql, [values], (err, result) => {
-            if (err) {
-    console.error(err);
-
-    return res.status(500).json({
-        error: "Failed to save marks"
-    });
-}
-            res.json({ success: true });
-        });
-    });
-    });
-});
-
 app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), requireSelfTeacher, (req, res) => {
     const sql = `
         SELECT 
             m.subject_id as classId, 
             m.exam_type as type, 
+            m.assessment_name as name,
+            MAX(ast.display_name) as display_name,
             DATE_FORMAT(MAX(m.created_at), '%Y-%m-%d') as date,
             s.subject_name as subject,
             s.semester, 
@@ -2071,8 +1905,9 @@ app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), requireSelfTea
         FROM marks m
         JOIN subjects s ON m.subject_id = s.id
         JOIN courses c ON s.course_id = c.id
+        LEFT JOIN assessment_settings ast ON ast.subject_id = m.subject_id AND ast.exam_type = m.exam_type
         WHERE m.uploaded_by = (SELECT teacher_id FROM teachers WHERE user_id = ?)
-        GROUP BY m.subject_id, m.exam_type, s.subject_name, s.semester, c.course_name
+        GROUP BY m.subject_id, m.exam_type, m.assessment_name, s.subject_name, s.semester, c.course_name
         ORDER BY MAX(m.created_at) DESC
     `;
     db.query(sql, [req.params.id], (err, data) => {
@@ -2377,11 +2212,20 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
             SUM(CASE WHEN m.exam_type = 'Sessional 1' THEN m.score END) as sessional1,
             SUM(CASE WHEN m.exam_type = 'Sessional 2' THEN m.score END) as sessional2,
             SUM(CASE WHEN m.exam_type = 'End Sem' THEN m.score END) as endSem,
+            SUM(CASE WHEN m.exam_type NOT IN ('Assignment','Sessional 1','Sessional 2','End Sem') THEN m.score END) as other,
+            MAX(a1.display_name) as assignmentLabel,
+            MAX(a2.display_name) as sessional1Label,
+            MAX(a3.display_name) as sessional2Label,
+            MAX(a4.display_name) as endSemLabel,
             SUM(m.score) as total,
             SUM(m.max_score) as totalMax
         FROM subjects sub
         JOIN marks m ON sub.id = m.subject_id
         JOIN students s ON m.student_id = s.student_id
+        LEFT JOIN assessment_settings a1 ON a1.subject_id = sub.id AND a1.exam_type = 'Assignment'
+        LEFT JOIN assessment_settings a2 ON a2.subject_id = sub.id AND a2.exam_type = 'Sessional 1'
+        LEFT JOIN assessment_settings a3 ON a3.subject_id = sub.id AND a3.exam_type = 'Sessional 2'
+        LEFT JOIN assessment_settings a4 ON a4.subject_id = sub.id AND a4.exam_type = 'End Sem'
         WHERE s.user_id = ?
         GROUP BY sub.id, sub.subject_name, sub.semester, sub.credits
         ORDER BY sub.semester ASC;
@@ -2422,6 +2266,13 @@ app.get('/api/student/:id/results', verifyRole(['student', 'parent', 'admin']), 
                 sessional1: row.sessional1 === null ? null : parseFloat(row.sessional1),
                 sessional2: row.sessional2 === null ? null : parseFloat(row.sessional2),
                 endSem: row.endSem === null ? null : parseFloat(row.endSem),
+                other: row.other === null ? null : parseFloat(row.other),
+                labels: {
+                    assignment: row.assignmentLabel || null,
+                    sessional1: row.sessional1Label || null,
+                    sessional2: row.sessional2Label || null,
+                    endSem: row.endSemLabel || null
+                },
                 total: total,
                 totalMax: parseFloat(row.totalMax) || 0,
                 grade: grade,
