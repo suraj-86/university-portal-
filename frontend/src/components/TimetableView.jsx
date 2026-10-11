@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MapPin, User, Clock3 } from 'lucide-react';
 
-export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
 const fmtTime = (hhmm) => {
     const [h, m] = hhmm.split(':').map(Number);

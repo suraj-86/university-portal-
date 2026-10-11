@@ -138,6 +138,7 @@ useEffect(() => {
                                 <th className="p-4 font-bold text-center">Assignment</th>
                                 <th className="p-4 font-bold text-center">Sessional 1</th>
                                 <th className="p-4 font-bold text-center">Sessional 2</th>
+                                <th className="p-4 font-bold text-center">Other</th>
                                 <th className="p-4 font-bold text-center">End Sem</th>
                                 <th className="p-4 font-bold text-center">Total</th>
                                 <th className="p-4 font-bold text-right">Grade</th>
@@ -149,10 +150,11 @@ useEffect(() => {
                                     <td className="p-4 font-bold text-slate-900 dark:text-slate-100">
                                         {sub.subject}
                                     </td>
-                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.assignment ?? '-'}</td>
-                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.sessional1 ?? '-'}</td>
-                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.sessional2 ?? '-'}</td>
-                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.endSem ?? '-'}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.assignment ?? '-'}{sub.labels?.assignment && <span className="block text-[10px] font-bold text-slate-400">{sub.labels.assignment}</span>}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.sessional1 ?? '-'}{sub.labels?.sessional1 && <span className="block text-[10px] font-bold text-slate-400">{sub.labels.sessional1}</span>}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.sessional2 ?? '-'}{sub.labels?.sessional2 && <span className="block text-[10px] font-bold text-slate-400">{sub.labels.sessional2}</span>}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.other ?? '-'}</td>
+                                    <td className="p-4 text-center font-medium text-slate-600 dark:text-slate-300">{sub.endSem ?? '-'}{sub.labels?.endSem && <span className="block text-[10px] font-bold text-slate-400">{sub.labels.endSem}</span>}</td>
                                     <td className="p-4 text-center font-bold text-slate-900 dark:text-slate-100">{sub.total} <span className="text-xs text-slate-400">/ {sub.totalMax}</span></td>
                                     <td className="p-4 text-right">
                                         <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider 
@@ -165,7 +167,7 @@ useEffect(() => {
                             ))}
                             {currentSemSubjects.length === 0 && (
                                 <tr>
-                                    <td colSpan="7" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">No scorecards found for Semester {selectedSemester}.</td>
+                                    <td colSpan="8" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">No scorecards found for Semester {selectedSemester}.</td>
                                 </tr>
                             )}
                         </tbody>

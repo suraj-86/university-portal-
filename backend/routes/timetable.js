@@ -1,6 +1,8 @@
 const { str, isPositiveInt } = require('../lib/validate');
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const EVERY_DAY = 'Every day';
+const NO_SATURDAY = "ts.day_of_week <> 'Saturday'";
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const SELECT = `
@@ -17,14 +19,14 @@ const SELECT = `
     JOIN courses c ON c.id = sub.course_id`;
 const ORDER = `ORDER BY FIELD(ts.day_of_week, ${DAYS.map((d) => `'${d}'`).join(',')}), ts.start_time`;
 
-const validateSlot = (b = {}) => {
+const validateSlot = (b = {}, { allowEveryDay = false } = {}) => {
     const subjectId = Number(b.subject_id);
     const day = str(b.day);
     const start = str(b.start_time);
     const end = str(b.end_time);
     const room = str(b.room);
     if (!isPositiveInt(subjectId)) return { error: 'Please select a subject.' };
-    if (!DAYS.includes(day)) return { error: 'Please select a valid day (Monday to Saturday).' };
+    if (!(DAYS.includes(day) || (allowEveryDay && day === EVERY_DAY))) return { error: 'Please select a valid day (Monday to Friday).' };
     if (!TIME_RE.test(start) || !TIME_RE.test(end)) return { error: 'Start and end time must be valid times (HH:MM).' };
     if (end <= start) return { error: 'End time must be after the start time.' };
     if (!room) return { error: 'Room is required.' };
@@ -32,7 +34,7 @@ const validateSlot = (b = {}) => {
     return { value: { subjectId, day, start, end, room } };
 };
 
-module.exports = (app, { queryAsync, verifyRole, requireSelfTeacher, verifyStudentOwnership, audit }) => {
+module.exports = (app, { queryAsync, transaction, verifyRole, requireSelfTeacher, verifyStudentOwnership, audit }) => {
     const admin = verifyRole(['admin']);
 
     const safe = (fn) => (req, res) =>
@@ -85,13 +87,13 @@ module.exports = (app, { queryAsync, verifyRole, requireSelfTeacher, verifyStude
         if (!isPositiveInt(req.query.course_id) || !isPositiveInt(req.query.semester)) {
             return res.status(400).json({ error: 'course_id and semester are required.' });
         }
-        res.json(await queryAsync(`${SELECT} WHERE sub.course_id = ? AND sub.semester = ? ${ORDER}`,
+        res.json(await queryAsync(`${SELECT} WHERE sub.course_id = ? AND sub.semester = ? AND ${NO_SATURDAY} ${ORDER}`,
             [Number(req.query.course_id), Number(req.query.semester)]));
     }));
 
     app.get('/api/student/:id/timetable', verifyRole(['student', 'parent', 'admin']), verifyStudentOwnership, safe(async (req, res) => {
         res.json(await queryAsync(
-            `${SELECT} WHERE (sub.course_id, sub.semester) = (SELECT course_id, semester FROM students WHERE user_id = ? LIMIT 1) ${ORDER}`,
+            `${SELECT} WHERE (sub.course_id, sub.semester) = (SELECT course_id, semester FROM students WHERE user_id = ? LIMIT 1) AND ${NO_SATURDAY} ${ORDER}`,
             [Number(req.params.id)]));
     }));
 
@@ -99,14 +101,34 @@ module.exports = (app, { queryAsync, verifyRole, requireSelfTeacher, verifyStude
         res.json(await queryAsync(
             `${SELECT} WHERE ts.subject_id IN (
                 SELECT ta.subject_id FROM teacher_assignments ta
-                JOIN teachers t ON t.teacher_id = ta.teacher_id WHERE t.user_id = ?) ${ORDER}`,
+                JOIN teachers t ON t.teacher_id = ta.teacher_id WHERE t.user_id = ?) AND ${NO_SATURDAY} ${ORDER}`,
             [Number(req.params.id)]));
     }));
 
     app.post('/api/timetable', admin, safe(async (req, res) => {
-        const { value: v, error } = validateSlot(req.body);
+        const { value: v, error } = validateSlot(req.body, { allowEveryDay: true });
         if (error) return res.status(400).json({ error });
         if (!(await subjectExists(v.subjectId))) return res.status(400).json({ error: 'Selected subject does not exist.' });
+
+        if (v.day === EVERY_DAY) {
+            for (const d of DAYS) {
+                const clash = await findClash({ ...v, day: d }, 0);
+                if (clash) return res.status(409).json({ error: `Nothing was added. ${clash}` });
+            }
+            const ids = await transaction(async (q) => {
+                const out = [];
+                for (const d of DAYS) {
+                    const r = await q(
+                        'INSERT INTO timetable_slots (subject_id, day_of_week, start_time, end_time, room, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+                        [v.subjectId, d, v.start, v.end, v.room, req.user.id]);
+                    out.push(r.insertId);
+                }
+                return out;
+            });
+            audit(req, { action: 'TIMETABLE_CREATE_EVERYDAY', entity: 'timetable_slots', entityId: ids.join(','), newValue: { ...v, days: DAYS } });
+            return res.json({ success: true, ids, created: ids.length });
+        }
+
         const clash = await findClash(v, 0);
         if (clash) return res.status(409).json({ error: clash });
         const r = await queryAsync(

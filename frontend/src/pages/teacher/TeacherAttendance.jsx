@@ -12,11 +12,16 @@ import {
     CheckCircle2,
     XCircle,
     Clock3,
+    UploadCloud,
+    AlertCircle,
 } from 'lucide-react';
 import api from '../../services/api';
 import Table from '../../components/Table';
 import useAuth from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import Modal from '../../components/Modal';
+import CsvImportModal from '../../components/CsvImportModal';
+import { todayISO } from '../../utils/csv';
 
 const TeacherAttendance = () => {
     const { user } = useAuth();
@@ -24,15 +29,16 @@ const TeacherAttendance = () => {
     const [searchParams] = useSearchParams();
 
     const urlSubject = searchParams.get('subject');
-    const urlDate = searchParams.get('date');
 
     const [mySubjects, setMySubjects] = useState([]);
     const [roster, setRoster] = useState([]);
     const [selectedSession, setSelectedSession] = useState(urlSubject || '');
-    const [scheduleDate, setScheduleDate] = useState(
-        urlDate || new Date().toISOString().split('T')[0]
-    );
+    const [scheduleDate, setScheduleDate] = useState(todayISO());
     const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [alreadyMarked, setAlreadyMarked] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     const [historyFilters, setHistoryFilters] = useState({
         semester: 'All',
@@ -166,17 +172,16 @@ const TeacherAttendance = () => {
 
         try {
             const response = await api.get(
-                `/subjects/${selectedSession}/students`
+                `/attendance/sheet?subject_id=${selectedSession}`
             );
+            const data = response.data;
 
-            if (!Array.isArray(response.data)) {
-                toast.error(
-                    'Data error: did not return a valid student list.'
-                );
+            if (!data || !Array.isArray(data.students)) {
+                toast.error('Data error: did not return a valid student list.');
                 return;
             }
 
-            if (response.data.length === 0) {
+            if (data.students.length === 0) {
                 toast.error(
                     "No students found enrolled in this subject's course."
                 );
@@ -184,11 +189,13 @@ const TeacherAttendance = () => {
             }
 
             setRoster(
-                response.data.map((student) => ({
+                data.students.map((student) => ({
                     ...student,
                     status: student.status || 'Absent',
                 }))
             );
+            setScheduleDate(data.date);
+            setAlreadyMarked(!!data.already_marked);
             setIsSheetOpen(true);
         } catch (error) {
             toast.error(
@@ -199,32 +206,68 @@ const TeacherAttendance = () => {
         }
     };
 
-    const handleSave = async () => {
+    const handleSave = () => {
         if (!isSheetOpen || roster.length === 0) {
-            toast.error(
-                'Please open a sheet and mark attendance first!'
-            );
+            toast.error('Please open a sheet and mark attendance first!');
             return;
         }
+        setConfirmOpen(true);
+    };
 
+    const confirmSave = async () => {
+        setSaving(true);
         try {
-            await api.post('/attendance', {
+            const response = await api.post('/attendance', {
                 subject_id: selectedSession,
                 date: scheduleDate,
-                students: roster,
-                marked_by: user.id,
+                students: roster.map((student) => ({
+                    student_id: student.student_id,
+                    status: student.status,
+                })),
             });
 
             toast.success(
-                `Success! Attendance for ${scheduleDate} has been saved.`
+                response.data?.message ||
+                    `Attendance for ${scheduleDate} has been saved.`
             );
 
+            setConfirmOpen(false);
             setIsSheetOpen(false);
             setRoster([]);
         } catch (error) {
             console.error('Failed to save attendance:', error);
-            toast.error('Failed to save attendance.');
+            toast.error(
+                error.response?.data?.error || 'Failed to save attendance.'
+            );
+            setConfirmOpen(false);
+        } finally {
+            setSaving(false);
         }
+    };
+
+    const csvMapRow = (o) => {
+        const student = roster.find(
+            (r) => String(r.roll ?? '').trim().toLowerCase() === o.roll_number.toLowerCase()
+        );
+        if (!o.roll_number) return { error: 'roll_number is required' };
+        if (!student) return { error: 'Roll number not in this class' };
+        const raw = o.status.toLowerCase();
+        let status = null;
+        if (['p', 'present'].includes(raw)) status = 'Present';
+        else if (['a', 'absent'].includes(raw)) status = 'Absent';
+        if (!status) return { error: 'Status must be Present or Absent' };
+        return { value: { roll_number: o.roll_number, name: student.name, status, student_id: student.student_id } };
+    };
+
+    const applyCsv = async (rows) => {
+        const ids = rows.map((r) => r.student_id);
+        if (new Set(ids).size !== ids.length) {
+            throw new Error('Some roll numbers appear more than once in the file.');
+        }
+        const byId = new Map(rows.map((r) => [r.student_id, r.status]));
+        setRoster((current) =>
+            current.map((st) => (byId.has(st.student_id) ? { ...st, status: byId.get(st.student_id) } : st))
+        );
     };
 
     const toggleAttendance = (id) => {
@@ -450,11 +493,13 @@ const TeacherAttendance = () => {
                                 Selected Session
                             </p>
                             <h2 className="mt-1 line-clamp-2 text-xl font-black text-slate-900 dark:text-slate-100">
-                                {selectedSubject?.course_name ||
+                                {selectedSubject?.subject_name ||
                                     'No session selected'}
                             </h2>
                             <p className="mt-1 text-xs font-medium text-slate-400">
-                                {selectedSubject?.subject_code || '—'}
+                                {selectedSubject
+                                    ? `${selectedSubject.subject_code} · ${selectedSubject.course_name} · Sem ${selectedSubject.semester}`
+                                    : '—'}
                             </p>
                         </div>
                         <FileText
@@ -529,22 +574,16 @@ const TeacherAttendance = () => {
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                     <div>
                         <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            Session Date
+                            Session Date (marking is allowed on the day only)
                         </label>
                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
                             <Calendar
                                 size={18}
                                 className="text-indigo-500"
                             />
-                            <input
-                                type="date"
-                                value={scheduleDate}
-                                onChange={(e) => {
-                                    setScheduleDate(e.target.value);
-                                    setIsSheetOpen(false);
-                                }}
-                                className="w-full bg-transparent text-sm font-bold text-slate-700 outline-none dark:text-slate-200"
-                            />
+                            <span className="w-full text-sm font-bold text-slate-700 dark:text-slate-200">
+                                Today · {scheduleDate}
+                            </span>
                         </div>
                     </div>
 
@@ -566,7 +605,7 @@ const TeacherAttendance = () => {
                                     key={sub.id}
                                     value={sub.id}
                                 >
-                                    {sub.subject_code} - {sub.course_name}
+                                    {sub.subject_code} - {sub.subject_name} (Sem {sub.semester})
                                 </option>
                             ))}
                         </select>
@@ -593,13 +632,22 @@ const TeacherAttendance = () => {
                                 Student Roster
                             </h2>
                             <p className="mt-1 text-xs text-slate-400">
-                                {selectedSubject?.course_name || 'Attendance'}
+                                {selectedSubject?.subject_name || 'Attendance'}
                                 {' · '}
                                 {scheduleDate}
                             </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setImportOpen(true)}
+                                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                            >
+                                <UploadCloud size={14} />
+                                Import CSV
+                            </button>
+
                             <button
                                 type="button"
                                 onClick={markAllPresent}
@@ -627,6 +675,13 @@ const TeacherAttendance = () => {
                         </div>
                     </div>
 
+                    {alreadyMarked && (
+                        <div className="flex items-start gap-2 border-b border-amber-100 bg-amber-50 px-5 py-3 text-xs font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400 md:px-6">
+                            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                            Attendance for today is already saved. You can edit it until the end of the day; changes are recorded.
+                        </div>
+                    )}
+
                     <div className="overflow-x-auto">
                         <Table
                             columns={markingColumns}
@@ -642,7 +697,7 @@ const TeacherAttendance = () => {
                         className="mb-4 text-slate-200 dark:text-slate-700"
                     />
                     <p className="font-bold">
-                        Select a date and subject, then open the sheet.
+                        Select a subject, then open today's sheet.
                     </p>
                 </section>
             )}
@@ -953,6 +1008,69 @@ const TeacherAttendance = () => {
             {viewMode === 'mark' && renderMarkingView()}
             {viewMode === 'history' && renderHistoryView()}
             {viewMode === 'history_detail' && renderHistoryDetail()}
+
+            <Modal
+                isOpen={confirmOpen}
+                onClose={() => !saving && setConfirmOpen(false)}
+                title="Confirm Attendance"
+            >
+                <div className="space-y-5">
+                    <div className="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
+                        <p className="font-black text-slate-900 dark:text-slate-100">
+                            {selectedSubject?.subject_code} · {selectedSubject?.subject_name}
+                        </p>
+                        <p className="mt-1 text-slate-500 dark:text-slate-400">{scheduleDate}</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/60">
+                            <p className="text-2xl font-black text-slate-900 dark:text-slate-100">{sessionStats.total}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Students</p>
+                        </div>
+                        <div className="rounded-2xl bg-emerald-50 p-3 dark:bg-emerald-950/40">
+                            <p className="text-2xl font-black text-emerald-600">{sessionStats.present}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Present</p>
+                        </div>
+                        <div className="rounded-2xl bg-rose-50 p-3 dark:bg-rose-950/40">
+                            <p className="text-2xl font-black text-rose-600">{sessionStats.absent}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-400">Absent</p>
+                        </div>
+                    </div>
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                        Attendance can only be changed today. After midnight this sheet is locked.
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => setConfirmOpen(false)}
+                            className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        >
+                            Go back
+                        </button>
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={confirmSave}
+                            className="flex-1 rounded-2xl bg-indigo-600 py-3.5 font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                            {saving ? 'Saving...' : 'Confirm & Save'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            <CsvImportModal
+                isOpen={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Import Attendance (CSV)"
+                headers={['roll_number', 'status']}
+                sample={`roll_number,status\n${roster.map((r) => `${r.roll ?? ''},Present`).join('\n')}\n`}
+                templateName="attendance_template.csv"
+                mapRow={csvMapRow}
+                previewKeys={['roll_number', 'name', 'status']}
+                onSubmit={applyCsv}
+                onDone={() => setImportOpen(false)}
+            />
         </div>
     );
 };
