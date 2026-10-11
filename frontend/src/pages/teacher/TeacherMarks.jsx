@@ -37,6 +37,7 @@ const TeacherMarks = () => {
     const [historyRows, setHistoryRows] = useState([]);
     const [historyTitle, setHistoryTitle] = useState('');
     const [importOpen, setImportOpen] = useState(false);
+    const [ledgerError, setLedgerError] = useState('');
     const [assessmentName, setAssessmentName] = useState('');
     const [customAssessments, setCustomAssessments] = useState([]);
     const [originalMax, setOriginalMax] = useState(null);
@@ -62,8 +63,11 @@ const TeacherMarks = () => {
     const fetchLedger = () => {
         if (user?.id) {
             api.get(`/teacher/${user.id}/marks-ledger`)
-                .then(res => setPastAssessments(res.data))
-                .catch(err => console.error(err));
+                .then(res => { setPastAssessments(res.data); setLedgerError(''); })
+                .catch(err => {
+                    console.error(err);
+                    setLedgerError(err.response?.data?.error || 'Could not load the gradebook. Please try again.');
+                });
         }
     };
 
@@ -684,7 +688,9 @@ const TeacherMarks = () => {
                         {filteredLedger.length > 0 ? (
                             <Table columns={ledgerColumns} data={filteredLedger} pageSize={10} />
                         ) : (
-                            <div className="text-center py-10 text-slate-400 dark:text-slate-500 font-bold">No marks published yet.</div>
+                            ledgerError
+                            ? <div className="text-center py-10 text-rose-600 dark:text-rose-400 font-bold">{ledgerError}</div>
+                            : <div className="text-center py-10 text-slate-400 dark:text-slate-500 font-bold">No marks published yet.</div>
                         )}
                     </div>
                 </div>

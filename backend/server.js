@@ -1905,7 +1905,7 @@ app.get('/api/teacher/:id/marks-ledger', verifyRole(['teacher']), requireSelfTea
         FROM marks m
         JOIN subjects s ON m.subject_id = s.id
         JOIN courses c ON s.course_id = c.id
-        LEFT JOIN assessment_settings ast ON ast.subject_id = m.subject_id AND ast.exam_type = m.exam_type
+        LEFT JOIN assessment_settings ast ON ast.subject_id = m.subject_id AND ast.exam_type COLLATE utf8mb4_general_ci = m.exam_type COLLATE utf8mb4_general_ci
         WHERE m.uploaded_by = (SELECT teacher_id FROM teachers WHERE user_id = ?)
         GROUP BY m.subject_id, m.exam_type, m.assessment_name, s.subject_name, s.semester, c.course_name
         ORDER BY MAX(m.created_at) DESC
