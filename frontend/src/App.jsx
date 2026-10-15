@@ -14,6 +14,7 @@ import StudentAttendance from './pages/student/StudentAttendance';
 import StudentFees from './pages/student/StudentFees';
 import StudentNotices from './pages/student/StudentNotices';
 import StudentResults from './pages/student/StudentResults';
+import StudentReportCard from './pages/student/StudentReportCard';
 import StudentSubjects from './pages/student/StudentSubjects';
 import StudentSettings from './pages/student/StudentSettings';
 
@@ -39,6 +40,7 @@ import ParentDashboard from './pages/parent/ParentDashboard';
 import ParentProfile from './pages/parent/ParentProfile';
 import ParentFees from './pages/parent/ParentFees';
 import ParentResults from './pages/parent/ParentResults';
+import ParentReportCard from './pages/parent/ParentReportCard';
 import ParentNotices from './pages/parent/ParentNotices';
 import ParentSettings from './pages/parent/ParentSettings';
 import ParentAttendance from './pages/parent/ParentAttendance';
@@ -111,6 +113,7 @@ function App() {
             <Route path="/student/announcements" element={<ProtectedRoute role="student"><Announcements /></ProtectedRoute>} />
             <Route path="/student/messages" element={<ProtectedRoute role="student"><Messages /></ProtectedRoute>} />
             <Route path="/student/results" element={<ProtectedRoute role="student"><StudentResults /></ProtectedRoute>} />
+            <Route path="/student/report-card" element={<ProtectedRoute role="student"><StudentReportCard /></ProtectedRoute>} />
             <Route path="/student/subjects" element={<ProtectedRoute role="student"><StudentSubjects /></ProtectedRoute>} />
             <Route path="/student/settings" element={<ProtectedRoute role="student"><StudentSettings /></ProtectedRoute>} />
             <Route path="/student/timetable" element={<ProtectedRoute role="student"><Timetable /></ProtectedRoute>} />
@@ -148,6 +151,7 @@ function App() {
             <Route path="/parent/profile" element={<ProtectedRoute role="parent"><ParentProfile /></ProtectedRoute>} />
             <Route path="/parent/fees" element={<ProtectedRoute role="parent"><ParentFees /></ProtectedRoute>} />
             <Route path="/parent/results" element={<ProtectedRoute role="parent"><ParentResults /></ProtectedRoute>} />
+            <Route path="/parent/report-card" element={<ProtectedRoute role="parent"><ParentReportCard /></ProtectedRoute>} />
             <Route path="/parent/notices" element={<ProtectedRoute role="parent"><ParentNotices /></ProtectedRoute>} />
             <Route path="/parent/announcements" element={<ProtectedRoute role="parent"><Announcements /></ProtectedRoute>} />
             <Route path="/parent/messages" element={<ProtectedRoute role="parent"><Messages /></ProtectedRoute>} />

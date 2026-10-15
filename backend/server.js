@@ -53,6 +53,7 @@ app.use(cors({
 origin: [
         'https://university-portal-flax-tau.vercel.app', 
         'http://localhost:5174',
+        'http://localhost:5173',
         'http://localhost:8081'
     ],
     credentials: true
@@ -1105,9 +1106,13 @@ app.post('/api/subjects', verifyRole(['admin']), (req, res) => {
         error: "Please fill all required fields."
     });
 }
+    const creditsNum = Number(credits);
+    if (!Number.isInteger(creditsNum) || creditsNum < 1 || creditsNum > 10) {
+        return res.status(400).json({ error: "Credits must be a whole number from 1 to 10." });
+    }
     const sql = "INSERT INTO subjects (course_id, semester, subject_code, subject_name, subject_type, credits) VALUES (?, ?, ?, ?, ?, ?)";
-    
-    db.query(sql, [course_id, semester, subject_code, subject_name, subject_type, credits], (err, result) => {
+
+    db.query(sql, [course_id, semester, subject_code, subject_name, subject_type, creditsNum], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, id: result.insertId });
     });
@@ -1117,9 +1122,14 @@ app.put('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     const subjectId = req.params.id;
     const { subject_code, subject_name, course_id, semester, subject_type, credits, teacher_id } = req.body;
 
+    const creditsNum = Number(credits);
+    if (!Number.isInteger(creditsNum) || creditsNum < 1 || creditsNum > 10) {
+        return res.status(400).json({ error: "Credits must be a whole number from 1 to 10." });
+    }
+
     withTransaction(res, (db) => {
         const subSql = "UPDATE subjects SET course_id=?, semester=?, subject_code=?, subject_name=?, subject_type=?, credits=? WHERE id=?";
-        db.query(subSql, [course_id, semester, subject_code, subject_name, subject_type, credits, subjectId], (err) => {
+        db.query(subSql, [course_id, semester, subject_code, subject_name, subject_type, creditsNum, subjectId], (err) => {
             if (err) return db.rollback(() => res.status(500).json({ error: "Database error." }));
 
             const assignSql = "REPLACE INTO teacher_assignments (teacher_id, subject_id, academic_year) VALUES (?, ?, '2026-2027')";

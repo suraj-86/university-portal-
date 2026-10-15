@@ -7,7 +7,8 @@ const modules = [
     require('./notices'),
     require('./announcements'),
     require('./messages'),
-    require('./inbox')
+    require('./inbox'),
+    require('./reportcard')
 ];
 
 module.exports = (app, ctx) => {

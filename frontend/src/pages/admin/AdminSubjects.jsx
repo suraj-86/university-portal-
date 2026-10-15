@@ -42,10 +42,11 @@ const AdminSubjects = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         try {
+            const payload = { ...formData, credits: Number(formData.credits) };
             if (editingSubId) {
-                await api.put(`/subjects/${editingSubId}`, formData);
+                await api.put(`/subjects/${editingSubId}`, payload);
             } else {
-                await api.post('/subjects', formData);
+                await api.post('/subjects', payload);
             }
             
             setIsModalOpen(false);
@@ -99,7 +100,7 @@ const AdminSubjects = () => {
             cell: (row) => (
                 <div>
                     <div className="font-bold text-slate-900 dark:text-slate-100">{row.subject_name}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{row.course_name} • Sem {row.semester}</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{row.course_name} • Sem {row.semester} • {row.credits} {Number(row.credits) === 1 ? 'credit' : 'credits'}</div>
                 </div>
             )
         },
@@ -160,6 +161,12 @@ const AdminSubjects = () => {
                                     <option key={num} value={num}>Semester {num}</option>
                                 ))}
                             </select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Input label="Credits" type="number" value={formData.credits} onChange={(e) => setFormData({...formData, credits: e.target.value})} placeholder="1 to 10" required />
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 ml-1">Whole number from 1 to 10. Used for credits earned, SGPA and CGPA.</p>
                         </div>
                     </div>
                     <div className="bg-emerald-50/50 dark:bg-emerald-950/40 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-900/50">
