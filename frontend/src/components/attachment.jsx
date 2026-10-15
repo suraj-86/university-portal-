@@ -1,6 +1,7 @@
 import React from 'react';
 import { FileText, Download } from 'lucide-react';
 import { getFileUrl } from '../services/api';
+import { fileDisplayName } from '../utils/format';
 
 const AttachmentCard = ({ fileName }) => {
     if (!fileName) return null;
@@ -16,7 +17,7 @@ const AttachmentCard = ({ fileName }) => {
                     <FileText size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{fileName.replace('/uploads/', '')}</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{fileDisplayName(fileName)}</p>
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-0.5">Document Attached</p>
                 </div>
             </div>

@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const { createAudit } = require('./audit');
+const { singleAttachment } = require('./lib/upload');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1337,7 +1338,7 @@ app.get('/api/notices', verifyRole(['admin']), (req, res) => {
     });
 });
 
-app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
+app.post('/api/notices', verifyRole(['admin', 'teacher']), singleAttachment, (req, res) => {
     const {
         title,
         content,
@@ -1349,6 +1350,16 @@ app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attach
     if (!title || !content || !target_role) {
         return res.status(400).json({
             error: "Please fill all required fields."
+        });
+    }
+
+    if (
+        !['all', 'teacher', 'student', 'parent'].includes(target_role) ||
+        !['Low', 'Normal', 'High'].includes(priority) ||
+        String(title).trim().length > 255
+    ) {
+        return res.status(400).json({
+            error: "Invalid audience, priority or title length."
         });
     }
 
@@ -1434,7 +1445,7 @@ app.post('/api/notices', verifyRole(['admin', 'teacher']), upload.single('attach
     });
 });
 
-app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('attachment'), (req, res) => {
+app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), singleAttachment, (req, res) => {
     const {
         title,
         content,
@@ -1446,6 +1457,16 @@ app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), upload.single('att
     if (!title || !content || !target_role) {
         return res.status(400).json({
             error: "Please fill all required fields."
+        });
+    }
+
+    if (
+        !['all', 'teacher', 'student', 'parent'].includes(target_role) ||
+        !['Low', 'Normal', 'High'].includes(priority) ||
+        String(title).trim().length > 255
+    ) {
+        return res.status(400).json({
+            error: "Invalid audience, priority or title length."
         });
     }
 
@@ -1961,15 +1982,16 @@ app.get('/api/teacher/:id/dashboard', verifyRole(['teacher']), requireSelfTeache
         `;
 
         const noticesSql = `
-            SELECT id, title, DATE_FORMAT(created_at, '%b %d') as date, priority 
+            SELECT id, title, content, attachment_url, DATE_FORMAT(created_at, '%b %d') as date, priority 
             FROM notices 
             WHERE target_role IN ('all', 'teacher') 
+               OR EXISTS (SELECT 1 FROM notice_recipients nrc WHERE nrc.notice_id = notices.id AND nrc.user_id = ?)
             ORDER BY created_at DESC LIMIT 3
         `;
 
         db.query(statsSql, [teacherId, teacherId], (err, statsResult) => {
             db.query(classesSql, [teacherId], (err, classesResult) => {
-                db.query(noticesSql, (err, noticesResult) => {
+                db.query(noticesSql, [req.user.id], (err, noticesResult) => {
                     res.json({
                         teacherName: teacherName,
                         stats: {
@@ -3092,11 +3114,14 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
         FROM notices n
         LEFT JOIN subjects sub ON n.subject_id = sub.id
         JOIN students st ON st.user_id = ?
-        WHERE n.target_role IN ('all', 'student')
-          AND (
-              n.subject_id IS NULL
-              OR (sub.course_id = st.course_id AND sub.semester = st.semester)
+        WHERE (
+              n.target_role IN ('all', 'student')
+              AND (
+                  n.subject_id IS NULL
+                  OR (sub.course_id = st.course_id AND sub.semester = st.semester)
+              )
           )
+          OR (? = 'student' AND EXISTS (SELECT 1 FROM notice_recipients nrc WHERE nrc.notice_id = n.id AND nrc.user_id = ?))
         ORDER BY n.created_at DESC
         LIMIT 3
     `;
@@ -3125,7 +3150,7 @@ app.get('/api/student/:id/custom-dashboard', verifyRole(['student', 'parent', 'a
                 return res.status(500).json({ error: "Classes fetch failed" });
             }
 
-            db.query(noticesSql, [userId], (err, noticesData) => {
+            db.query(noticesSql, [userId, req.user.role, req.user.id], (err, noticesData) => {
                 if (err) {
                     console.error(err);
                     return res.status(500).json({ error: "Notices fetch failed" });
