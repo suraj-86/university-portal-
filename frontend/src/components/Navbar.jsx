@@ -1,12 +1,28 @@
-import React from 'react';
-import { Bell, LogOut, Menu } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Bell, LogOut, Menu, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.jsx';
+import api from '../services/api';
 
 const Navbar = ({ onToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+
+  const [counts, setCounts] = useState({ notices: 0, announcements: 0, messages: 0 });
+  useEffect(() => {
+    if (!user?.id || user.role === 'admin') return undefined;
+    let cancelled = false;
+    const load = () => api.get('/inbox/counts')
+      .then((res) => { if (!cancelled) setCounts(res.data); })
+      .catch(() => {});
+    load();
+    const timer = setInterval(() => { if (!document.hidden) load(); }, 45000);
+    window.addEventListener('inbox:refresh', load);
+    return () => { cancelled = true; clearInterval(timer); window.removeEventListener('inbox:refresh', load); };
+  }, [user]);
+  const bellCount = counts.notices + counts.announcements;
+  const badge = (n) => (n > 99 ? '99+' : n);
 
   const userName = user?.full_name || 'Guest User';
   const rawRole = user?.role || 'Guest';
@@ -55,8 +71,23 @@ const Navbar = ({ onToggle }) => {
           className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400"
         >
           <Bell size={18} />
-          <span className="absolute right-2 top-2 flex h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
+          {bellCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-slate-900">{badge(bellCount)}</span>
+          )}
         </button>
+
+        {user?.role && user.role !== 'admin' && (
+          <button
+            onClick={() => navigate(`/${user.role}/messages`)}
+            title="Messages"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            <MessageSquare size={18} />
+            {counts.messages > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-slate-900">{badge(counts.messages)}</span>
+            )}
+          </button>
+        )}
 
         <div className="hidden md:flex items-center gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800 pl-2 pr-4 py-1.5 border border-slate-100 dark:border-slate-700/60">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">

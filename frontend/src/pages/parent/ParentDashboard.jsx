@@ -6,6 +6,7 @@ import StatsWidget from '../../components/StatsWidget';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
+import { fileDisplayName } from '../../utils/format';
 import toast from 'react-hot-toast';
 
 const ParentDashboard = () => {
@@ -286,7 +287,7 @@ const ParentDashboard = () => {
                                         <div className="p-2 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-lg"><FileText size={20} /></div>
                                         <div>
                                             <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase leading-none mb-1">Attachment</p>
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{fileDisplayName(viewingNotice.attachment_url)}</p>
                                         </div>
                                     </div>
                                     <button onClick={(e) => handleDownload(e, viewingNotice.attachment_url)} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">

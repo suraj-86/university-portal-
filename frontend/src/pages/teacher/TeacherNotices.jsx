@@ -1,355 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { Edit2, Trash2, Save, Paperclip, Bell, FileText, Send, Inbox, Megaphone, Download } from 'lucide-react';
-import api, { getFileUrl } from '../../services/api';
-import Card from '../../components/Card';
-import Modal from '../../components/Modal';
-import FormInput from '../../components/FormInput';
-import useAuth from '../../hooks/useAuth';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Send, Inbox, History } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../../services/api';
+import useAuth from '../../hooks/useAuth';
+import ComposeNotice from '../../components/notices/ComposeNotice';
+import SentNoticeList from '../../components/notices/SentNoticeList';
+import NoticeFeed from '../../components/notices/NoticeFeed';
+
+const TABS = [
+    { id: 'compose', label: 'Compose', icon: Send },
+    { id: 'sent', label: 'Sent', icon: History },
+    { id: 'inbox', label: 'University inbox', icon: Inbox }
+];
 
 const TeacherNotices = () => {
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState('broadcast');
-    const [myClasses, setMyClasses] = useState([]);
-    const [sentNotices, setSentNotices] = useState([]);
-    const [adminNotices, setAdminNotices] = useState([]);
-    
-    const [targetClass, setTargetClass] = useState('');
-    const [noticeTitle, setNoticeTitle] = useState('');
-    const [noticeContent, setNoticeContent] = useState('');
-    const [attachment, setAttachment] = useState(null);
-    
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingNotice, setEditingNotice] = useState(null);
-    const [viewingNotice, setViewingNotice] = useState(null);
-
-    const fetchData = async () => {
-        try {
-            const classRes = await api.get(`/teacher/${user.id}/assigned-subjects`);
-            setMyClasses(classRes.data);
-            const noticeRes = await api.get(`/teacher/${user.id}/notices`);
-            const noticeData = noticeRes.data;
-            
-            setAdminNotices(noticeData.filter(n => n.target_role === 'teacher' || n.target_role === 'all'));
-            setSentNotices(noticeData.filter(n => n.posted_by === user.id && n.target_role === 'student'));
-        } catch (error) {
-            console.error("Connection error:", error);
-        }
-    };
+    const [tab, setTab] = useState('compose');
+    const [classes, setClasses] = useState([]);
+    const [sent, setSent] = useState([]);
+    const [loadingSent, setLoadingSent] = useState(false);
 
     useEffect(() => {
-        if (user?.id) fetchData();
+        if (!user?.id) return;
+        api.get(`/teacher/${user.id}/assigned-subjects`)
+            .then((res) => setClasses(Array.isArray(res.data) ? res.data : []))
+            .catch(() => toast.error('Could not load your classes.'));
     }, [user]);
 
-    const handleSendNotice = async (e) => {
-        e.preventDefault();
-        if (!targetClass) return toast.error("Please select a target class/batch!");
-        
-        const submitData = new FormData();
-        submitData.append('title', noticeTitle);
-        submitData.append('content', noticeContent);
-        submitData.append('target_role', 'student');
-        submitData.append('subject_id', targetClass);
-        submitData.append('posted_by', user.id);
-        
-        if (attachment) {
-            submitData.append('attachment', attachment);
-        }
-
+    const loadSent = useCallback(async () => {
+        setLoadingSent(true);
         try {
-            await api.post('/notices', submitData);
-            setNoticeTitle(''); setNoticeContent(''); setTargetClass(''); setAttachment(null);
-            toast.success("Notification sent successfully!");
-            fetchData();
-        } catch (error) {
-            toast.error("Broadcast failed.");
-            console.error(error);
+            const res = await api.get('/notices/sent');
+            setSent(Array.isArray(res.data) ? res.data : []);
+        } catch (e) {
+            toast.error(e.response?.data?.error || 'Could not load sent notices.');
+        } finally {
+            setLoadingSent(false);
         }
-    };
+    }, []);
 
-    const openEditModal = (notice) => {
-        setEditingNotice({ ...notice, new_attachment: null });
-        setIsModalOpen(true);
-    };
-
-    const handleUpdateNotice = async (e) => {
-        e.preventDefault();
-        
-        const submitData = new FormData();
-        submitData.append('title', editingNotice.title);
-        submitData.append('content', editingNotice.content);
-        submitData.append('target_role', 'student');
-        submitData.append('subject_id', editingNotice.subject_id);
-        submitData.append('priority', editingNotice.priority || 'Normal');
-        
-        if (editingNotice.new_attachment) {
-            submitData.append('attachment', editingNotice.new_attachment);
-        } else if (editingNotice.attachment_url) {
-            submitData.append('attachment_url', editingNotice.attachment_url);
-        }
-
-        try {
-            await api.put(`/notices/${editingNotice.id}`, submitData);
-            setIsModalOpen(false);
-            toast.success("Notice updated!");
-            fetchData();
-        } catch (error) {
-            console.error("Update error:", error);
-        }
-    };
-
-    const deleteNotice = async (id) => {
-        if (window.confirm("Delete this notice permanently?")) {
-            try {
-                await api.delete(`/notices/${id}`);
-                fetchData();
-            } catch (error) {
-                console.error("Delete failed:", error);
-            }
-        }
-    };
-
-    const handleDownloadFile = (fileName) => {
-        if (!fileName) return;
-        window.open(getFileUrl(fileName), '_blank');
-    };
-
-    const AttachmentCard = ({ fileName }) => (
-        <div className="flex items-center justify-between bg-white dark:bg-slate-800 w-full sm:w-80 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 mt-2 shadow-sm gap-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0">
-                    <FileText size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{fileName.replace('/uploads/', '')}</p>
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-0.5">Document Attached</p>
-                </div>
-            </div>
-            <button onClick={() => handleDownloadFile(fileName)} className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors shrink-0" title="Download Document">
-                <Download size={16} />
-            </button>
-        </div>
-    );
+    useEffect(() => { if (tab === 'sent') loadSent(); }, [tab, loadSent]);
 
     return (
-        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
-            <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
+        <div className="min-h-screen bg-slate-50 p-6 font-sans dark:bg-slate-950 md:p-10">
+            <header className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
                 <div>
-                    <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Communication Hub</h2>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Send class-specific notices and keep track of university announcements.</p>
+                    <h2 className="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">Notices</h2>
+                    <p className="mt-1 text-slate-500 dark:text-slate-400">Send notices to a whole class or to specific students and parents, and track who has read them.</p>
                 </div>
-                <div className="flex flex-wrap gap-3">
-                    <button 
-                        onClick={() => setActiveTab('broadcast')}
-                        className={`font-bold py-2.5 px-5 rounded-2xl shadow-sm transition-all text-sm flex items-center gap-2 ${
-                            activeTab === 'broadcast' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                    >
-                        <Megaphone size={18} /> Broadcast to Class
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('inbox')}
-                        className={`font-bold py-2.5 px-5 rounded-2xl shadow-sm transition-all text-sm flex items-center gap-2 ${
-                            activeTab === 'inbox' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                    >
-                        <Inbox size={18} /> University Inbox ({adminNotices.length})
-                    </button>
+                <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    {TABS.map((t) => {
+                        const Icon = t.icon;
+                        return (
+                            <button key={t.id} onClick={() => setTab(t.id)}
+                                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider transition-all ${tab === t.id ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 dark:text-slate-400'}`}>
+                                <Icon size={14} /> {t.label}
+                            </button>
+                        );
+                    })}
                 </div>
             </header>
 
-            {activeTab === 'broadcast' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1">
-                        <Card className="sticky top-6">
-                            <div className="flex items-center gap-3 mb-6 border-b border-slate-50 dark:border-slate-800 pb-4">
-                                <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold"><Send size={14}/></div>
-                                <h3 className="font-bold text-slate-800 dark:text-slate-200">Draft Message</h3>
-                            </div>
-                            <form onSubmit={handleSendNotice} className="flex flex-col gap-5">
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Target Class</label>
-                                    <select required value={targetClass} onChange={(e) => setTargetClass(e.target.value)} className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-200 outline-none transition-all">
-                                        <option value="" disabled>-- Select Assigned Class --</option>
-                                        {myClasses.map(cls => <option key={cls.id} value={cls.id}>{cls.course_name} • Sem {cls.semester} • {cls.subject_name}</option>)}
-                                    </select>
-                                </div>
-                                <FormInput label="Subject Line" type="text" required value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)} />
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Message Content</label>
-                                    <textarea required rows="4" value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)} className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-200 outline-none transition-all resize-none" />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Attachment (Optional)</label>
-                                    <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                        <label className="flex flex-col items-center gap-2 cursor-pointer w-full py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center overflow-hidden px-4">
-                                            <Paperclip size={20} className="text-indigo-400 shrink-0" />
-                                            {attachment ? <span className="text-indigo-600 dark:text-indigo-400 truncate max-w-full">{attachment.name}</span> : 'Click to upload PDF, DOC or DOCX'}
-                                            <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => setAttachment(e.target.files?.[0] || null)} />
-                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 normal-case tracking-normal">Maximum file size: 5 MB</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 active:scale-95 flex items-center justify-center gap-2">
-                                    <Megaphone size={16} /> Broadcast Now
-                                </button>
-                            </form>
-                        </Card>
-                    </div>
-
-                    <div className="lg:col-span-2 flex flex-col gap-4">
-                        <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-2">Sent History</h3>
-                        {sentNotices.length === 0 ? (
-                            <Card className="p-10 text-center border-dashed">
-                                <div className="mx-auto w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4">
-                                    <Bell size={22} />
-                                </div>
-                                <h4 className="font-bold text-slate-800 dark:text-slate-200">No notices sent yet</h4>
-                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                    Choose an assigned class and send your first notice.
-                                </p>
-                            </Card>
-                        ) : sentNotices.map(notice => (
-                            <Card key={notice.id} className="p-0 overflow-hidden group">
-                                <div className="p-5">
-                                    <div className="flex justify-between items-start mb-3 gap-4">
-                                        <div className="flex-1">
-                                            <span className="inline-block bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md mb-2 border border-indigo-100 dark:border-indigo-900">
-                                                To: {notice.subject_name || 'Assigned Class'}
-                                            </span>
-                                            <h4 className="font-bold text-slate-900 dark:text-slate-100 text-lg flex items-center gap-2">{notice.title}</h4>
-                                        </div>
-                                        <div className="flex flex-col items-end min-w-[120px]">
-                                            <div className="flex gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity mb-2">
-                                                <button onClick={() => openEditModal(notice)} className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"><Edit2 size={16}/></button>
-                                                <button onClick={() => deleteNotice(notice.id)} className="p-1.5 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                                            </div>
-                                            <div className="text-right text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{notice.date}</div>
-                                        </div>
-                                    </div>
-                                    <div className="mb-2">
-                                        <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap line-clamp-3">{notice.content}</p>
-                                        <button onClick={() => setViewingNotice(notice)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 text-xs font-bold mt-1.5 hover:underline cursor-pointer">
-                                            Read More
-                                        </button>
-                                    </div>
-                                    {notice.attachment_url && <AttachmentCard fileName={notice.attachment_url} />}
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
+            {tab === 'compose' && (
+                <div className="mx-auto max-w-3xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:p-8">
+                    <ComposeNotice role="teacher" classes={classes} onSent={() => setTab('sent')} />
                 </div>
             )}
 
-            {activeTab === 'inbox' && (
-                <div className="flex flex-col gap-5 max-w-4xl mx-auto">
-                    <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-2">Official Announcements</h3>
-                    {adminNotices.map(notice => (
-                        <Card key={notice.id} className="p-0 overflow-hidden relative group">
-                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${notice.priority === 'High' ? 'bg-rose-500' : 'bg-indigo-400'}`}></div>
-                            <div className="p-6 pl-8">
-                                <div className="flex justify-between items-start mb-3">
-                                    <h4 className="font-bold text-slate-900 dark:text-slate-100 text-lg">{notice.title}</h4>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">{notice.date}</span>
-                                </div>
-                                <div className="mb-4">
-                                    <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap line-clamp-3">{notice.content}</p>
-                                    <button onClick={() => setViewingNotice(notice)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 text-xs font-bold mt-1.5 hover:underline cursor-pointer">
-                                        Read More
-                                    </button>
-                                </div>
-                                {notice.attachment_url && <AttachmentCard fileName={notice.attachment_url} />}
-                            </div>
-                        </Card>
-                    ))}
+            {tab === 'sent' && (
+                <div className="mx-auto max-w-4xl">
+                    {loadingSent
+                        ? <div className="py-24 text-center text-xs font-black uppercase tracking-widest text-slate-400 animate-pulse">Loading...</div>
+                        : <SentNoticeList notices={sent} onChanged={loadSent} emptyText="You have not sent any notices yet." />}
                 </div>
             )}
 
-            {isModalOpen && (
-                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Edit Announcement">
-                    <form onSubmit={handleUpdateNotice} className="space-y-5">
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Target Class</label>
-                            <select required value={editingNotice.subject_id || ''} onChange={(e) => setEditingNotice({...editingNotice, subject_id: e.target.value})} className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-200 outline-none transition-all">
-                                <option value="" disabled>-- Select a Class --</option>
-                                {myClasses.map(cls => <option key={cls.id} value={cls.id}>{cls.course_name} - {cls.subject_name}</option>)}
-                            </select>
-                        </div>
-                        <FormInput label="Subject Line" type="text" required value={editingNotice.title} onChange={(e) => setEditingNotice({...editingNotice, title: e.target.value})} />
-                        
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Message Content</label>
-                            <textarea required rows="4" value={editingNotice.content} onChange={(e) => setEditingNotice({...editingNotice, content: e.target.value})} className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-200 outline-none transition-all resize-none" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Attachment (Optional)</label>
-                            <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <label className="flex flex-col items-center gap-2 cursor-pointer w-full py-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center overflow-hidden px-4">
-                                    <Paperclip size={20} className="text-indigo-400 shrink-0" />
-                                    {editingNotice.new_attachment ? (
-                                        <span className="text-indigo-600 dark:text-indigo-400 truncate max-w-full">New File: {editingNotice.new_attachment.name}</span>
-                                    ) : editingNotice.attachment_url ? (
-                                        <span className="text-indigo-600 dark:text-indigo-400 truncate max-w-full">Keep Existing File</span>
-                                    ) : (
-                                        'Click to Upload PDF'
-                                    )}
-                                    <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => setEditingNotice({...editingNotice, new_attachment: e.target.files[0]})} />
-                                </label>
-                            </div>
-                        </div>
-                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 active:scale-95 flex items-center justify-center gap-2">
-                            <Save size={16} /> Update Notice
-                        </button>
-                    </form>
-                </Modal>
-            )}
-
-            {viewingNotice && (
-                <Modal isOpen={!!viewingNotice} onClose={() => setViewingNotice(null)} title="Announcement Preview">
-                    <div className="flex flex-col gap-4 max-w-2xl mx-auto">
-                        <div className="flex items-center gap-3 shrink-0">
-                            {viewingNotice.priority && (
-                                <span className={`px-2 py-1 rounded text-[10px] font-black uppercase border ${
-                                    viewingNotice.priority === 'High' 
-                                        ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border-rose-100 dark:border-rose-900' 
-                                        : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900'
-                                }`}>
-                                    {viewingNotice.priority} Priority
-                                </span>
-                            )}
-                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                                Posted: {viewingNotice.date}
-                            </span>
-                            {viewingNotice.author && (
-                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                                      By: {viewingNotice.author}
-                                </span>
-                            )}
-                        </div>
-                        <h4 className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight break-words shrink-0">
-                            {viewingNotice.title}
-                        </h4>
-                        
-                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-inner">
-                            <div className="p-6 max-h-[300px] overflow-y-auto">
-                                <p className="text-slate-700 dark:text-slate-300 text-base leading-relaxed whitespace-pre-wrap break-words">
-                                    {viewingNotice.content}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="shrink-0 space-y-4">
-                            {viewingNotice.attachment_url && (
-                                <div className="pt-2">
-                                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2">Attached Material:</p>
-                                    <AttachmentCard fileName={viewingNotice.attachment_url} />
-                                </div>
-                            )}
-                            <button onClick={() => setViewingNotice(null)} className="w-full bg-slate-900 dark:bg-slate-800 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 dark:hover:bg-slate-700 transition-all active:scale-95">
-                                Close Preview
-                            </button>
-                        </div>
-                    </div>
-                </Modal>
+            {tab === 'inbox' && (
+                <NoticeFeed embedded endpoint="/notices/feed" />
             )}
         </div>
     );

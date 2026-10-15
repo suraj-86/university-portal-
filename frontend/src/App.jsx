@@ -47,6 +47,8 @@ import Holidays from './pages/shared/Holidays';
 import AcademicCalendar from './pages/shared/AcademicCalendar';
 import Timetable from './pages/shared/Timetable';
 import AdminTimetable from './pages/admin/AdminTimetable';
+import Announcements from './pages/shared/Announcements';
+import Messages from './pages/shared/Messages';
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -106,6 +108,8 @@ function App() {
             <Route path="/student/attendance" element={<ProtectedRoute role="student"><StudentAttendance /></ProtectedRoute>} />
             <Route path="/student/fees" element={<ProtectedRoute role="student"><StudentFees /></ProtectedRoute>} />
             <Route path="/student/notices" element={<ProtectedRoute role="student"><StudentNotices /></ProtectedRoute>} />
+            <Route path="/student/announcements" element={<ProtectedRoute role="student"><Announcements /></ProtectedRoute>} />
+            <Route path="/student/messages" element={<ProtectedRoute role="student"><Messages /></ProtectedRoute>} />
             <Route path="/student/results" element={<ProtectedRoute role="student"><StudentResults /></ProtectedRoute>} />
             <Route path="/student/subjects" element={<ProtectedRoute role="student"><StudentSubjects /></ProtectedRoute>} />
             <Route path="/student/settings" element={<ProtectedRoute role="student"><StudentSettings /></ProtectedRoute>} />
@@ -125,6 +129,7 @@ function App() {
             <Route path="/admin/fees" element={<ProtectedRoute role="admin"><AdminFees /></ProtectedRoute>} />
             <Route path="/admin/payments" element={<ProtectedRoute role="admin"><AdminPayments /></ProtectedRoute>} />
             <Route path="/admin/notices" element={<ProtectedRoute role="admin"><AdminNotices /></ProtectedRoute>} />
+            <Route path="/admin/announcements" element={<ProtectedRoute role="admin"><Announcements /></ProtectedRoute>} />
             <Route path="/admin/parents" element={<ProtectedRoute role="admin"><AdminParents /></ProtectedRoute>} />
 
             <Route path="/teacher-dashboard" element={<ProtectedRoute role="teacher"><TeacherDashboard /></ProtectedRoute>} />
@@ -132,6 +137,8 @@ function App() {
             <Route path="/teacher/marks" element={<ProtectedRoute role="teacher"><TeacherMarks /></ProtectedRoute>} />
             <Route path="/teacher/subjects" element={<ProtectedRoute role="teacher"><TeacherSubjects /></ProtectedRoute>} />
             <Route path="/teacher/notices" element={<ProtectedRoute role="teacher"><TeacherNotices /></ProtectedRoute>} />
+            <Route path="/teacher/announcements" element={<ProtectedRoute role="teacher"><Announcements /></ProtectedRoute>} />
+            <Route path="/teacher/messages" element={<ProtectedRoute role="teacher"><Messages /></ProtectedRoute>} />
             <Route path="/teacher/settings" element={<ProtectedRoute role="teacher"><TeacherSettings /></ProtectedRoute>} />
             <Route path="/teacher/timetable" element={<ProtectedRoute role="teacher"><Timetable /></ProtectedRoute>} />
             <Route path="/teacher/calendar" element={<ProtectedRoute role="teacher"><AcademicCalendar /></ProtectedRoute>} />
@@ -142,6 +149,8 @@ function App() {
             <Route path="/parent/fees" element={<ProtectedRoute role="parent"><ParentFees /></ProtectedRoute>} />
             <Route path="/parent/results" element={<ProtectedRoute role="parent"><ParentResults /></ProtectedRoute>} />
             <Route path="/parent/notices" element={<ProtectedRoute role="parent"><ParentNotices /></ProtectedRoute>} />
+            <Route path="/parent/announcements" element={<ProtectedRoute role="parent"><Announcements /></ProtectedRoute>} />
+            <Route path="/parent/messages" element={<ProtectedRoute role="parent"><Messages /></ProtectedRoute>} />
             <Route path="/parent/settings" element={<ProtectedRoute role="parent"><ParentSettings /></ProtectedRoute>} />
             <Route path="/parent/timetable" element={<ProtectedRoute role="parent"><Timetable /></ProtectedRoute>} />
             <Route path="/parent/calendar" element={<ProtectedRoute role="parent"><AcademicCalendar /></ProtectedRoute>} />

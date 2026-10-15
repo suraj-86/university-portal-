@@ -5,6 +5,7 @@ import api, { getFileUrl } from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import useAuth from '../../hooks/useAuth';
 import Modal from '../../components/Modal';
+import { fileDisplayName } from '../../utils/format';
 
 const TeacherDashboard = () => {
     const { user } = useAuth();
@@ -199,7 +200,7 @@ const TeacherDashboard = () => {
                                         <div className="p-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg"><FileText size={20} /></div>
                                         <div>
                                             <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase leading-none mb-1">Attachment</p>
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{fileDisplayName(viewingNotice.attachment_url)}</p>
                                         </div>
                                     </div>
                                     <button onClick={(e) => handleDownload(e, viewingNotice.attachment_url)} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">

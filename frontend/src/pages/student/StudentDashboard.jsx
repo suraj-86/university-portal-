@@ -4,6 +4,7 @@ import { MapPin, Clock, Bell, Calendar, FileText, ChevronRight, Download } from 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api, { getFileUrl } from '../../services/api';
 import Modal from '../../components/Modal';
+import { fileDisplayName } from '../../utils/format';
 
 const StudentDashboard = () => {
     const [loading, setLoading] = useState(true);
@@ -210,7 +211,7 @@ const StudentDashboard = () => {
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase leading-none mb-1">Attachment</p>
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{viewingNotice.attachment_url.replace('/uploads/', '')}</p>
+                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{fileDisplayName(viewingNotice.attachment_url)}</p>
                                         </div>
                                     </div>
                                     <button 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users2, BookOpen, CalendarCheck, BarChart3,
-  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3
+  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare
 } from 'lucide-react';
 
 const menuConfig = {
@@ -15,6 +15,7 @@ const menuConfig = {
     { name: 'Fees', path: '/admin/fees', icon: <DollarSign size={20} /> },
     { name: 'Payments', path: '/admin/payments', icon: <BarChart3 size={20} /> },
     { name: 'Notices', path: '/admin/notices', icon: <Bell size={20} /> },
+    { name: 'Announcements', path: '/admin/announcements', icon: <Megaphone size={20} /> },
     { name: 'Parents', path: '/admin/parents', icon: <Users2 size={20} /> },
     { name: 'Timetable', path: '/admin/timetable', icon: <Clock3 size={20} /> },
     { name: 'Academic Calendar', path: '/admin/calendar', icon: <CalendarDays size={20} /> },
@@ -27,6 +28,8 @@ const menuConfig = {
     { name: 'Attendance', path: '/teacher/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Marks Entry', path: '/teacher/marks', icon: <ClipboardList size={20} /> },
     { name: 'Notices', path: '/teacher/notices', icon: <Bell size={20} /> },
+    { name: 'Announcements', path: '/teacher/announcements', icon: <Megaphone size={20} /> },
+    { name: 'Messages', path: '/teacher/messages', icon: <MessageSquare size={20} /> },
     { name: 'Timetable', path: '/teacher/timetable', icon: <Clock3 size={20} /> },
     { name: 'Academic Calendar', path: '/teacher/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/teacher/holidays', icon: <Calendar size={20} /> },
@@ -40,6 +43,8 @@ const menuConfig = {
     { name: 'Results', path: '/student/results', icon: <Award size={20} /> },
     { name: 'Fees', path: '/student/fees', icon: <DollarSign size={20} /> },
     { name: 'Notices', path: '/student/notices', icon: <Bell size={20} /> },
+    { name: 'Announcements', path: '/student/announcements', icon: <Megaphone size={20} /> },
+    { name: 'Messages', path: '/student/messages', icon: <MessageSquare size={20} /> },
     { name: 'Timetable', path: '/student/timetable', icon: <Clock3 size={20} /> },
     { name: 'Academic Calendar', path: '/student/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/student/holidays', icon: <Calendar size={20} /> },
@@ -52,6 +57,8 @@ const menuConfig = {
     { name: 'Attendance', path: '/parent/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Academic Results', path: '/parent/results', icon: <Award size={20} /> },
     { name: 'Campus Notices', path: '/parent/notices', icon: <Bell size={20} /> },
+    { name: 'Announcements', path: '/parent/announcements', icon: <Megaphone size={20} /> },
+    { name: 'Messages', path: '/parent/messages', icon: <MessageSquare size={20} /> },
     { name: 'Timetable', path: '/parent/timetable', icon: <Clock3 size={20} /> },
     { name: 'Academic Calendar', path: '/parent/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/parent/holidays', icon: <Calendar size={20} /> },
