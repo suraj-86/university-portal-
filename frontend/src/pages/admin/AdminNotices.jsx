@@ -21,7 +21,7 @@ const AdminNotices = () => {
     const [loading, setLoading] = useState(true);
     const [composing, setComposing] = useState(false);
     const [filter, setFilter] = useState('all');
-    const [query, setQuery] = useState('');
+    const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
 
     const load = useCallback(async () => {
         setLoading(true);

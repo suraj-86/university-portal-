@@ -5,6 +5,7 @@ import api from '../../services/api';
 import StatsWidget from '../../components/StatsWidget';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
+import AdminAnalytics from '../../components/AdminAnalytics';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -94,6 +95,10 @@ const AdminDashboard = () => {
                         </button>
                     </Card>
                 </div>
+            </div>
+
+            <div className="mt-12">
+                <AdminAnalytics />
             </div>
         </div>
     );
