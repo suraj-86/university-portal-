@@ -59,8 +59,8 @@ const Navbar = ({ onToggle }) => {
         </div>
         
         <div className="sm:hidden flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm shadow-md">📖</div>
-            <h1 className="text-slate-900 dark:text-slate-100 font-bold tracking-wide">UniPortal</h1>
+            <img src="/bbau-icon.png" alt="BBAU" className="w-8 h-8 rounded-lg shadow-md" />
+            <h1 className="text-slate-900 dark:text-slate-100 font-bold tracking-wide">BBAU Portal</h1>
         </div>
       </div>
 

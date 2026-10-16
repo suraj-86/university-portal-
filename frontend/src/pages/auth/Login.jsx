@@ -124,9 +124,7 @@ const Login = () => {
                 <div className="hidden lg:flex relative p-12 flex-col justify-between min-h-[620px] border-r border-white/10">
                     <div>
                         <div className="inline-flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
-                                <span className="text-white font-black text-lg">U</span>
-                            </div>
+                            <img src="/bbau-icon.png" alt="BBAU logo" className="w-12 h-12 rounded-2xl shadow-lg shadow-blue-600/30" />
                             <div>
                                 <p className="text-white font-black tracking-tight text-lg">Babasaheb Bhimrao Ambedkar University</p>
                                 <p className="text-blue-400 text-[10px] font-bold tracking-[0.3em]">A central portal for all university services.</p>
@@ -156,9 +154,7 @@ const Login = () => {
                 <div className="relative bg-white dark:bg-slate-900 p-7 sm:p-10 lg:p-12">
                     <div className="mb-8">
                         <div className="lg:hidden flex items-center gap-3 mb-8">
-                            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
-                                <span className="text-white font-black">U</span>
-                            </div>
+                            <img src="/bbau-icon.png" alt="BBAU logo" className="w-11 h-11 rounded-xl" />
                             <div>
                                 <p className="font-black text-slate-900 dark:text-white">Babasaheb Bhimrao Ambedkar University</p>
                                 <p className="text-[9px] font-bold tracking-[0.25em] text-blue-600">PORTAL</p>
