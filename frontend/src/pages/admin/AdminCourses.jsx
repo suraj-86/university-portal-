@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 
 const AdminCourses = () => {
     const [courses, setCourses] = useState([]);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCourseId, setEditingCourseId] = useState(null);
     const [formData, setFormData] = useState({

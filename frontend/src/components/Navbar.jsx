@@ -3,6 +3,7 @@ import { Bell, LogOut, Menu, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.jsx';
 import api from '../services/api';
+import GlobalSearch from './GlobalSearch';
 
 const Navbar = ({ onToggle }) => {
   const navigate = useNavigate();
@@ -65,6 +66,8 @@ const Navbar = ({ onToggle }) => {
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
+
+        {user?.role === 'admin' && <GlobalSearch />}
         
         <button 
           onClick={handleNoticesClick}
