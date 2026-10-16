@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users2, BookOpen, CalendarCheck, BarChart3,
-  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare
+  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2
 } from 'lucide-react';
 
 const menuConfig = {
@@ -18,6 +18,7 @@ const menuConfig = {
     { name: 'Announcements', path: '/admin/announcements', icon: <Megaphone size={20} /> },
     { name: 'Parents', path: '/admin/parents', icon: <Users2 size={20} /> },
     { name: 'Timetable', path: '/admin/timetable', icon: <Clock3 size={20} /> },
+    { name: 'Hostel', path: '/admin/hostel', icon: <Building2 size={20} /> },
     { name: 'Academic Calendar', path: '/admin/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/admin/holidays', icon: <Calendar size={20} /> },
     { name: 'Settings', path: '/admin/settings', icon: <Settings size={20} /> }
@@ -41,6 +42,8 @@ const menuConfig = {
     { name: 'My Subjects', path: '/student/subjects', icon: <BookOpen size={20} /> },
     { name: 'Attendance', path: '/student/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Results', path: '/student/results', icon: <Award size={20} /> },
+    { name: 'Report Card', path: '/student/report-card', icon: <ClipboardList size={20} /> },
+    { name: 'Hostel', path: '/student/hostel', icon: <Building2 size={20} /> },
     { name: 'Fees', path: '/student/fees', icon: <DollarSign size={20} /> },
     { name: 'Notices', path: '/student/notices', icon: <Bell size={20} /> },
     { name: 'Announcements', path: '/student/announcements', icon: <Megaphone size={20} /> },
@@ -56,6 +59,8 @@ const menuConfig = {
     { name: 'Fees & Payments', path: '/parent/fees', icon: <DollarSign size={20} /> },  
     { name: 'Attendance', path: '/parent/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Academic Results', path: '/parent/results', icon: <Award size={20} /> },
+    { name: 'Report Card', path: '/parent/report-card', icon: <ClipboardList size={20} /> },
+    { name: 'Hostel', path: '/parent/hostel', icon: <Building2 size={20} /> },
     { name: 'Campus Notices', path: '/parent/notices', icon: <Bell size={20} /> },
     { name: 'Announcements', path: '/parent/announcements', icon: <Megaphone size={20} /> },
     { name: 'Messages', path: '/parent/messages', icon: <MessageSquare size={20} /> },
