@@ -43,7 +43,9 @@ const menuConfig = {
     { name: 'Attendance', path: '/student/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Results', path: '/student/results', icon: <Award size={20} /> },
     { name: 'Report Card', path: '/student/report-card', icon: <ClipboardList size={20} /> },
+
     { name: 'Hostel', path: '/student/hostel', icon: <Building2 size={20} /> },
+
     { name: 'Fees', path: '/student/fees', icon: <DollarSign size={20} /> },
     { name: 'Notices', path: '/student/notices', icon: <Bell size={20} /> },
     { name: 'Announcements', path: '/student/announcements', icon: <Megaphone size={20} /> },
@@ -60,7 +62,9 @@ const menuConfig = {
     { name: 'Attendance', path: '/parent/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Academic Results', path: '/parent/results', icon: <Award size={20} /> },
     { name: 'Report Card', path: '/parent/report-card', icon: <ClipboardList size={20} /> },
+
     { name: 'Hostel', path: '/parent/hostel', icon: <Building2 size={20} /> },
+
     { name: 'Campus Notices', path: '/parent/notices', icon: <Bell size={20} /> },
     { name: 'Announcements', path: '/parent/announcements', icon: <Megaphone size={20} /> },
     { name: 'Messages', path: '/parent/messages', icon: <MessageSquare size={20} /> },

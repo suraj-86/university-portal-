@@ -42,7 +42,9 @@ import ParentProfile from './pages/parent/ParentProfile';
 import ParentFees from './pages/parent/ParentFees';
 import ParentResults from './pages/parent/ParentResults';
 import ParentReportCard from './pages/parent/ParentReportCard';
+
 import ParentHostel from './pages/parent/ParentHostel';
+
 import ParentNotices from './pages/parent/ParentNotices';
 import ParentSettings from './pages/parent/ParentSettings';
 import ParentAttendance from './pages/parent/ParentAttendance';
@@ -158,6 +160,7 @@ function App() {
             <Route path="/parent/results" element={<ProtectedRoute role="parent"><ParentResults /></ProtectedRoute>} />
             <Route path="/parent/report-card" element={<ProtectedRoute role="parent"><ParentReportCard /></ProtectedRoute>} />
             <Route path="/parent/hostel" element={<ProtectedRoute role="parent"><ParentHostel /></ProtectedRoute>} />
+
             <Route path="/parent/notices" element={<ProtectedRoute role="parent"><ParentNotices /></ProtectedRoute>} />
             <Route path="/parent/announcements" element={<ProtectedRoute role="parent"><Announcements /></ProtectedRoute>} />
             <Route path="/parent/messages" element={<ProtectedRoute role="parent"><Messages /></ProtectedRoute>} />
