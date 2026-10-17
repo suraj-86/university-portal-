@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import toast from 'react-hot-toast';
 import CsvImportModal from '../../components/CsvImportModal';
+import ResetPasswordAction from '../../components/ResetPasswordAction';
 import { downloadTextFile } from '../../utils/csv';
 import { toCSV } from '../../utils/spreadsheet';
 
@@ -134,6 +135,7 @@ const AdminStudents = () => {
             accessor: "actions",
             cell: (row) => (
                 <div className="flex justify-end gap-2">
+                    <ResetPasswordAction kind="student" id={row.id} name={row.name} />
                     <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg">
                         <Edit2 size={16} />
                     </button>

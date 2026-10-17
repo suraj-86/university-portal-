@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users2, BookOpen, CalendarCheck, BarChart3,
-  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2, LifeBuoy, Contact, History
+  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2, LifeBuoy, Contact, History, ShieldCheck
 } from 'lucide-react';
 
 const menuConfig = {
@@ -22,6 +22,7 @@ const menuConfig = {
     { name: 'University Contacts', path: '/admin/contacts', icon: <Contact size={20} /> },
     { name: 'Academic Calendar', path: '/admin/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/admin/holidays', icon: <Calendar size={20} /> },
+    { name: 'Admins', path: '/admin/admins', icon: <ShieldCheck size={20} /> },
     { name: 'Audit Log', path: '/admin/audit', icon: <History size={20} /> },
     { name: 'Settings', path: '/admin/settings', icon: <Settings size={20} /> }
   ],

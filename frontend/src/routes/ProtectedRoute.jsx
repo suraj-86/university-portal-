@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth.jsx'
+import ForcePasswordChange from '../pages/auth/ForcePasswordChange.jsx'
 
 const dashboardPaths = {
   admin: '/admin-dashboard',
@@ -16,6 +17,10 @@ const ProtectedRoute = ({ role, children }) => {
 
   if (user.role !== role) {
     return <Navigate to={dashboardPaths[user.role] || '/'} replace />
+  }
+
+  if (user.must_change_password) {
+    return <ForcePasswordChange />
   }
 
   return children

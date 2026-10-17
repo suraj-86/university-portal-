@@ -227,7 +227,10 @@ const Login = () => {
                         </button>
                     </form>
 
-                    <p className="mt-7 text-center text-[11px] text-slate-400 dark:text-slate-500">
+                    <p className="mt-6 text-center text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Forgot your password? Please contact the university office to have it reset.
+                    </p>
+                    <p className="mt-3 text-center text-[11px] text-slate-400 dark:text-slate-500">
                         Authorized university users only
                     </p>
                 </div>
