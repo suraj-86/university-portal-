@@ -645,7 +645,7 @@ const TeacherAttendance = () => {
                                 className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                             >
                                 <UploadCloud size={14} />
-                                Import CSV
+                                Import Excel/CSV
                             </button>
 
                             <button
@@ -1062,7 +1062,7 @@ const TeacherAttendance = () => {
             <CsvImportModal
                 isOpen={importOpen}
                 onClose={() => setImportOpen(false)}
-                title="Import Attendance (CSV)"
+                title="Import Attendance"
                 headers={['roll_number', 'status']}
                 sample={`roll_number,status\n${roster.map((r) => `${r.roll ?? ''},Present`).join('\n')}\n`}
                 templateName="attendance_template.csv"

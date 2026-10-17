@@ -49,6 +49,18 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         return Number(req.params.id);
     };
 
+    const dryRunResult = (values, exists) => {
+        const actions = values.map((v) => ({ row: v._row, action: exists(v) ? 'update' : 'create' }));
+        return {
+            dry_run: true,
+            total: values.length,
+            create: actions.filter((a) => a.action === 'create').length,
+            update: actions.filter((a) => a.action === 'update').length,
+            actions,
+            errors: []
+        };
+    };
+
     const checkBulk = (req, res, validator) => {
         const rows = req.body && req.body.rows;
         if (!Array.isArray(rows) || rows.length === 0) {
@@ -64,7 +76,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         rows.forEach((r, i) => {
             const result = validator(r);
             if (result.error) errors.push({ row: (r && r.row) || i + 1, error: result.error });
-            else values.push(result.value);
+            else values.push({ ...result.value, _row: (r && r.row) || i + 1 });
         });
         if (errors.length) {
             res.status(400).json({ error: 'Some rows are invalid. Nothing was imported.', errors: errors.slice(0, 50) });
@@ -132,6 +144,13 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
     app.post('/api/holidays/bulk', admin, safe(async (req, res) => {
         const values = checkBulk(req, res, validateHoliday);
         if (!values) return;
+        if (req.body.dry_run) {
+            const found = await queryAsync(
+                "SELECT DATE_FORMAT(holiday_date, '%Y-%m-%d') AS d, name FROM holidays WHERE holiday_date IN (?)",
+                [[...new Set(values.map((v) => v.date))]]);
+            const have = new Set(found.map((f) => `${f.d}|${String(f.name).toLowerCase()}`));
+            return res.json(dryRunResult(values, (v) => have.has(`${v.date}|${v.name.toLowerCase()}`)));
+        }
         await transaction(async (q) => {
             for (const v of values) {
                 await q(`INSERT INTO holidays (holiday_date, name, description, created_by) VALUES (?, ?, ?, ?)
@@ -206,6 +225,13 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
     app.post('/api/academic-events/bulk', admin, safe(async (req, res) => {
         const values = checkBulk(req, res, validateEvent);
         if (!values) return;
+        if (req.body.dry_run) {
+            const found = await queryAsync(
+                "SELECT title, DATE_FORMAT(start_date, '%Y-%m-%d') AS d FROM academic_events WHERE start_date IN (?)",
+                [[...new Set(values.map((v) => v.startDate))]]);
+            const have = new Set(found.map((f) => `${f.d}|${String(f.title).toLowerCase()}`));
+            return res.json(dryRunResult(values, (v) => have.has(`${v.startDate}|${v.title.toLowerCase()}`)));
+        }
         await transaction(async (q) => {
             for (const v of values) {
                 await q(`INSERT INTO academic_events (title, event_type, start_date, end_date, description, created_by)

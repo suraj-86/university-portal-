@@ -130,7 +130,7 @@ const AcademicCalendar = () => {
                     {canManage && (
                         <>
                             <button onClick={() => setImportOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                <UploadCloud size={18} /> Import CSV
+                                <UploadCloud size={18} /> Import Excel/CSV
                             </button>
                             <button onClick={openAdd} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2">
                                 <Plus size={18} /> Add Event
@@ -219,13 +219,14 @@ const AcademicCalendar = () => {
                     <CsvImportModal
                         isOpen={importOpen}
                         onClose={() => setImportOpen(false)}
-                        title="Import Academic Calendar (CSV)"
+                        title="Import Academic Calendar"
                         headers={['title', 'type', 'start_date', 'end_date', 'description']}
                         required={['title', 'start_date']}
                         sample={SAMPLE}
                         templateName="academic_calendar_template.csv"
                         mapRow={mapRow}
                         previewKeys={['title', 'type', 'start_date', 'end_date']}
+                        onPreview={(rows) => api.post('/academic-events/bulk', { rows, dry_run: true })}
                         onSubmit={(rows) => api.post('/academic-events/bulk', { rows })}
                         onDone={() => { setImportOpen(false); load(); }}
                     />

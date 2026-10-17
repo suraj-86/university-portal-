@@ -1,15 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Users, User } from 'lucide-react';
+import { Plus, Edit2, Trash2, Users, User, UploadCloud } from 'lucide-react';
 import api from '../../services/api';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import toast from 'react-hot-toast';
+import CsvImportModal from '../../components/CsvImportModal';
+import { normalizeDate } from '../../utils/csv';
+
+const FEE_TYPES = ['Tuition', 'Hostel', 'Library Fine', 'Exam'];
+const FEE_HEADERS = ['enrollment_number', 'semester', 'fee_type', 'total_fee', 'due_date'];
+const FEE_SAMPLE = 'enrollment_number,semester,fee_type,total_fee,due_date\nAC-001/24,1,Tuition,45000,2026-12-01\n';
+const feeMapRow = (o) => {
+    if (!o.enrollment_number) return { error: 'Enrollment number is required.' };
+    if (!/^\d{1,2}$/.test(o.semester)) return { error: 'Semester must be a whole number.' };
+    if (!FEE_TYPES.some((t) => t.toLowerCase() === o.fee_type.toLowerCase())) return { error: `Fee type must be one of: ${FEE_TYPES.join(', ')}.` };
+    if (!/^[\d,]+(\.\d{1,2})?$/.test(o.total_fee.replace(/[\s₹]/g, ''))) return { error: 'Total fee must be an amount.' };
+    const due = normalizeDate(o.due_date);
+    if (!due) return { error: 'Invalid due date.' };
+    return { value: { ...o, due_date: due } };
+};
 
 const AdminFees = () => {
     const [feeRecords, setFeeRecords] = useState([]);
     const [courses, setCourses] = useState([]);
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [importOpen, setImportOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [courseFilter, setCourseFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
@@ -142,9 +158,14 @@ const AdminFees = () => {
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Fee Management</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Track student dues, record payments, and manage invoices live.</p>
                 </div>
+                <div className="flex flex-wrap items-center gap-3">
+                <button onClick={() => setImportOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl shadow-sm flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap">
+                    <UploadCloud size={18} /> Import Excel/CSV
+                </button>
                 <button onClick={openAssignModal} className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap">
                     <Plus size={18} /> Assign Fee
                 </button>
+                </div>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -306,6 +327,23 @@ const AdminFees = () => {
                     </button>
                 </form>
             </Modal>
+
+            <CsvImportModal
+                isOpen={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Import Fees"
+                headers={FEE_HEADERS}
+                aliases={{ enrollment_number: ['enrollment_no', 'enrollment'], fee_type: ['type'], total_fee: ['amount', 'fee', 'total'], due_date: ['due', 'last_date'], semester: ['sem'] }}
+                sample={FEE_SAMPLE}
+                templateName="fees_template.csv"
+                mapRow={feeMapRow}
+                previewKeys={['enrollment_number', 'semester', 'fee_type', 'total_fee', 'due_date']}
+                maxRows={300}
+                note="Fee type is Tuition, Hostel, Library Fine or Exam. A fee that already exists for that student, semester and type gets the new total and due date; amounts already paid are never changed."
+                onPreview={(rows) => api.post('/fees/import', { rows, dry_run: true })}
+                onSubmit={(rows) => api.post('/fees/import', { rows })}
+                onDone={() => { setImportOpen(false); fetchAdminFees(); }}
+            />
         </div>
     );
 };
