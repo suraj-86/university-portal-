@@ -10,7 +10,8 @@ const modules = [
     require('./inbox'),
     require('./reportcard'),
     require('./hostel'),
-    require('./adminInsights')
+    require('./adminInsights'),
+    require('./contacts')
 ];
 
 module.exports = (app, ctx) => {

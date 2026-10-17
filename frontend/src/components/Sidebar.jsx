@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users2, BookOpen, CalendarCheck, BarChart3,
-  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2
+  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2, LifeBuoy, Contact
 } from 'lucide-react';
 
 const menuConfig = {
@@ -19,6 +19,7 @@ const menuConfig = {
     { name: 'Parents', path: '/admin/parents', icon: <Users2 size={20} /> },
     { name: 'Timetable', path: '/admin/timetable', icon: <Clock3 size={20} /> },
     { name: 'Hostel', path: '/admin/hostel', icon: <Building2 size={20} /> },
+    { name: 'University Contacts', path: '/admin/contacts', icon: <Contact size={20} /> },
     { name: 'Academic Calendar', path: '/admin/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/admin/holidays', icon: <Calendar size={20} /> },
     { name: 'Settings', path: '/admin/settings', icon: <Settings size={20} /> }
@@ -31,9 +32,11 @@ const menuConfig = {
     { name: 'Notices', path: '/teacher/notices', icon: <Bell size={20} /> },
     { name: 'Announcements', path: '/teacher/announcements', icon: <Megaphone size={20} /> },
     { name: 'Messages', path: '/teacher/messages', icon: <MessageSquare size={20} /> },
+    { name: 'Student & Parent Contacts', path: '/teacher/contacts', icon: <Contact size={20} /> },
     { name: 'Timetable', path: '/teacher/timetable', icon: <Clock3 size={20} /> },
     { name: 'Academic Calendar', path: '/teacher/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/teacher/holidays', icon: <Calendar size={20} /> },
+    { name: 'Help & Contacts', path: '/teacher/help', icon: <LifeBuoy size={20} /> },
     { name: 'Settings', path: '/teacher/settings', icon: <Settings size={20} /> }
   ],
   student: [
@@ -53,6 +56,7 @@ const menuConfig = {
     { name: 'Timetable', path: '/student/timetable', icon: <Clock3 size={20} /> },
     { name: 'Academic Calendar', path: '/student/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/student/holidays', icon: <Calendar size={20} /> },
+    { name: 'Help & Contacts', path: '/student/help', icon: <LifeBuoy size={20} /> },
     { name: 'Settings', path: '/student/settings', icon: <Settings size={20} /> }
   ],
   parent: [
@@ -71,6 +75,7 @@ const menuConfig = {
     { name: 'Timetable', path: '/parent/timetable', icon: <Clock3 size={20} /> },
     { name: 'Academic Calendar', path: '/parent/calendar', icon: <CalendarDays size={20} /> },
     { name: 'Holidays', path: '/parent/holidays', icon: <Calendar size={20} /> },
+    { name: 'Help & Contacts', path: '/parent/help', icon: <LifeBuoy size={20} /> },
     { name: 'Settings', path: '/parent/settings', icon: <Settings size={20} /> }
     
   ],
