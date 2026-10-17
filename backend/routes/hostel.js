@@ -58,7 +58,14 @@ const validateAllocation = (b = {}, { create }) => {
     return { value: { studentId, hostelId, block, room, session, semester, remarks } };
 };
 
+const makeNotifier = require('../lib/notify');
+
 module.exports = (app, { queryAsync, transaction, verifyRole, verifyStudentOwnership, audit }) => {
+    const notifier = makeNotifier(queryAsync);
+    const tellFamily = (studentIds, title, body) => notifier.run(async () => {
+        const family = await notifier.familyByStudent(studentIds);
+        await notifier.send([...family.values()].flat(), { type: 'hostel', section: 'hostel', title, body });
+    });
     const admin = verifyRole(['admin']);
 
     const safe = (fn) => (req, res) =>
@@ -241,6 +248,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, verifyStudentOwner
             action: 'HOSTEL_ALLOCATE', entity: 'hostel_allocations', entityId: id,
             newValue: { student_id: v.studentId, hostel_id: v.hostelId, block: v.block, room_number: v.room, academic_session: v.session, semester: v.semester }
         });
+        tellFamily([v.studentId], 'Hostel allotted', 'A hostel room has been allotted. Open Hostel to see the details.');
         res.json({ success: true, id });
     }));
 
@@ -272,6 +280,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, verifyStudentOwner
             oldValue: snapshot(old),
             newValue: { student_id: old.student_id, hostel_id: v.hostelId, block: v.block, room_number: v.room, academic_session: v.session, semester: v.semester, remarks: v.remarks }
         });
+        tellFamily([old.student_id], 'Hostel details updated', 'The hostel allotment was changed. Open Hostel to see the latest details.');
         res.json({ success: true });
     }));
 
@@ -293,6 +302,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, verifyStudentOwner
             action: 'HOSTEL_VACATE', entity: 'hostel_allocations', entityId: id,
             oldValue: snapshot(old), newValue: { status: 'Vacated', vacated_on: today }
         });
+        tellFamily([old.student_id], 'Hostel room vacated', 'The hostel allotment has ended. Open Hostel to see the record.');
         res.json({ success: true });
     }));
 
@@ -374,6 +384,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, verifyStudentOwner
             }
         });
         audit(req, { action: 'HOSTEL_BULK_IMPORT', entity: 'hostel_allocations', newValue: { created: items.length } });
+        tellFamily(items.map((it) => it.studentId), 'Hostel allotted', 'A hostel room has been allotted. Open Hostel to see the details.');
         res.json({ success: true, saved: items.length, created: items.length });
     }));
 

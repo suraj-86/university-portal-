@@ -2,12 +2,14 @@ const { isPositiveInt, str } = require('../lib/validate');
 const { noticeVisibility } = require('../lib/visibility');
 const { studentsFor, parentsOfStudents } = require('../lib/people');
 const { singleAttachment, removeAttachment } = require('../lib/upload');
+const makeNotifier = require('../lib/notify');
 
 const PRIORITIES = ['Low', 'Normal', 'High'];
 const AUDIENCES = ['students', 'parents', 'both'];
 const MAX_RECIPIENT_STUDENTS = 500;
 
 module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
+    const notifier = makeNotifier(queryAsync);
     const readers = verifyRole(['student', 'parent', 'teacher']);
     const senders = verifyRole(['teacher', 'admin']);
 
@@ -59,6 +61,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         if (visible.length) {
             await queryAsync('INSERT IGNORE INTO notice_reads (notice_id, user_id) VALUES ?',
                 [visible.map((v) => [v.id, req.user.id])]);
+            await notifier.markRead(req.user.id, 'notice', visible.map((v) => v.id));
         }
         res.json({ success: true, marked: visible.length });
     }));
@@ -131,6 +134,10 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         });
 
         audit(req, { action: 'NOTICE_TARGETED', entity: 'notices', entityId: noticeId, newValue: { title, audience, recipients: recipientUsers.size, students: studentIds.length } });
+        notifier.run(() => notifier.send([...recipientUsers], {
+            type: 'notice', section: 'notices', refId: noticeId,
+            title: priority === 'High' ? 'Important notice' : 'New notice', body: title
+        }, { exclude: [req.user.id] }));
         res.json({ success: true, id: noticeId, recipients: recipientUsers.size });
     }));
 
@@ -210,6 +217,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         if (!notice) return;
         await queryAsync('DELETE FROM notices WHERE id = ?', [notice.id]);
         removeAttachment(notice.attachment_url);
+        notifier.dropFor('notice', notice.id);
         audit(req, { action: 'NOTICE_TARGETED_DELETE', entity: 'notices', entityId: notice.id, oldValue: { title: notice.title } });
         res.json({ success: true });
     }));

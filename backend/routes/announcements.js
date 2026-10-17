@@ -1,11 +1,13 @@
 const { isPositiveInt, str } = require('../lib/validate');
 const { announcementVisibility } = require('../lib/visibility');
+const makeNotifier = require('../lib/notify');
 
 const CATEGORIES = ['University', 'Department', 'Academic', 'Event', 'Other'];
 const AUDIENCES = ['all', 'teacher', 'student', 'parent'];
 const PRIORITIES = ['Normal', 'High'];
 
 module.exports = (app, { queryAsync, verifyRole, audit }) => {
+    const notifier = makeNotifier(queryAsync);
     const everyone = verifyRole(['admin', 'teacher', 'student', 'parent']);
     const admin = verifyRole(['admin']);
     const nonAdmin = verifyRole(['teacher', 'student', 'parent']);
@@ -70,6 +72,7 @@ module.exports = (app, { queryAsync, verifyRole, audit }) => {
         if (visible.length) {
             await queryAsync('INSERT IGNORE INTO announcement_reads (announcement_id, user_id) VALUES ?',
                 [visible.map((v) => [v.id, req.user.id])]);
+            await notifier.markRead(req.user.id, 'announcement', visible.map((v) => v.id));
         }
         res.json({ success: true, marked: visible.length });
     }));
@@ -82,6 +85,13 @@ module.exports = (app, { queryAsync, verifyRole, audit }) => {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [v.title, v.content, v.category, v.audience, v.courseId, v.semester, v.priority, v.pinned, req.user.id]);
         audit(req, { action: 'ANNOUNCEMENT_CREATE', entity: 'announcements', entityId: r.insertId, newValue: { title: v.title, audience: v.audience, category: v.category } });
+        notifier.run(async () => {
+            const who = await notifier.announcementAudience(v.audience, v.courseId, v.semester);
+            await notifier.send(who, {
+                type: 'announcement', section: 'announcements', refId: r.insertId,
+                title: v.priority === 'High' ? 'Important announcement' : 'New announcement', body: v.title
+            });
+        });
         res.json({ success: true, id: r.insertId });
     }));
 
@@ -105,6 +115,7 @@ module.exports = (app, { queryAsync, verifyRole, audit }) => {
         const old = await queryAsync('SELECT title, audience FROM announcements WHERE id = ?', [id]);
         if (!old.length) return res.status(404).json({ error: 'Announcement not found.' });
         await queryAsync('DELETE FROM announcements WHERE id = ?', [id]);
+        notifier.dropFor('announcement', id);
         audit(req, { action: 'ANNOUNCEMENT_DELETE', entity: 'announcements', entityId: id, oldValue: old[0] });
         res.json({ success: true });
     }));

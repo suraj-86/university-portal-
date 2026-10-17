@@ -57,7 +57,10 @@ const normTime = (text) => {
     return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
 };
 
+const makeNotifier = require('../lib/notify');
+
 module.exports = (app, { queryAsync, transaction, verifyRole, requireSelfTeacher, verifyStudentOwnership, audit }) => {
+    const notifier = makeNotifier(queryAsync);
     const admin = verifyRole(['admin']);
 
     const safe = (fn) => (req, res) =>
@@ -149,6 +152,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, requireSelfTeacher
                 return out;
             });
             audit(req, { action: 'TIMETABLE_CREATE_EVERYDAY', entity: 'timetable_slots', entityId: ids.join(','), newValue: { ...v, days: DAYS } });
+            notifier.run(() => notifier.timetableChanged([v.subjectId]));
             return res.json({ success: true, ids, created: ids.length });
         }
 
@@ -158,6 +162,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, requireSelfTeacher
             'INSERT INTO timetable_slots (subject_id, day_of_week, start_time, end_time, room, created_by) VALUES (?, ?, ?, ?, ?, ?)',
             [v.subjectId, v.day, v.start, v.end, v.room, req.user.id]);
         audit(req, { action: 'TIMETABLE_CREATE', entity: 'timetable_slots', entityId: r.insertId, newValue: v });
+        notifier.run(() => notifier.timetableChanged([v.subjectId]));
         res.json({ success: true, id: r.insertId });
     }));
 
@@ -175,6 +180,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, requireSelfTeacher
             'UPDATE timetable_slots SET subject_id = ?, day_of_week = ?, start_time = ?, end_time = ?, room = ? WHERE id = ?',
             [v.subjectId, v.day, v.start, v.end, v.room, id]);
         audit(req, { action: 'TIMETABLE_UPDATE', entity: 'timetable_slots', entityId: id, oldValue: old[0], newValue: v });
+        notifier.run(() => notifier.timetableChanged([v.subjectId, old[0].subject_id]));
         res.json({ success: true });
     }));
 
@@ -258,6 +264,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, requireSelfTeacher
             }
         });
         audit(req, { action: 'TIMETABLE_BULK_IMPORT', entity: 'timetable_slots', newValue: { slots: finalSlots.length, rows: rows.length } });
+        notifier.run(() => notifier.timetableChanged(finalSlots.map((sl) => sl.subjectId)));
         res.json({ success: true, saved: finalSlots.length, created: finalSlots.length });
     }));
 
@@ -268,6 +275,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, requireSelfTeacher
         if (!old.length) return res.status(404).json({ error: 'Timetable entry not found.' });
         await queryAsync('DELETE FROM timetable_slots WHERE id = ?', [id]);
         audit(req, { action: 'TIMETABLE_DELETE', entity: 'timetable_slots', entityId: id, oldValue: old[0] });
+        notifier.run(() => notifier.timetableChanged([old[0].subject_id]));
         res.json({ success: true });
     }));
 };

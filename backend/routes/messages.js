@@ -5,7 +5,10 @@ const { createRateLimiter } = require('../lib/rateLimit');
 const MAX_BODY = 2000;
 const MAX_BATCH = 200;
 
+const makeNotifier = require('../lib/notify');
+
 module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
+    const notifier = makeNotifier(queryAsync);
     const members = verifyRole(['teacher', 'student', 'parent']);
     const teacherOnly = verifyRole(['teacher']);
     const sendLimiter = createRateLimiter({
@@ -107,6 +110,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         const rows = await queryAsync(
             'SELECT id, sender_user_id, body, created_at, read_at FROM messages WHERE thread_id = ? ORDER BY id DESC LIMIT 300', [th.id]);
         await queryAsync('UPDATE messages SET read_at = CURRENT_TIMESTAMP WHERE thread_id = ? AND sender_user_id <> ? AND read_at IS NULL', [th.id, me]);
+        await notifier.markRead(me, 'message', [th.id]);
         const people = await describeUsers([otherId]);
         res.json({
             id: th.id,
@@ -123,6 +127,14 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         await transaction(async (q) => {
             await q('INSERT INTO messages (thread_id, sender_user_id, body) VALUES (?, ?, ?)', [th.id, req.user.id, body]);
             await q('UPDATE message_threads SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?', [th.id]);
+        });
+        notifier.run(async () => {
+            const to = th.teacher_user_id === req.user.id ? th.participant_user_id : th.teacher_user_id;
+            const from = (await describeUsers([req.user.id])).get(req.user.id);
+            await notifier.send([to], {
+                type: 'message', section: 'messages', refId: th.id,
+                title: `New message${from && from.name ? ` from ${from.name}` : ''}`, body
+            }, { mode: 'refresh' });
         });
         res.json({ success: true });
     }));
@@ -154,6 +166,13 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
             return out;
         });
 
+        notifier.run(async () => {
+            const from = (await describeUsers([req.user.id])).get(req.user.id);
+            await notifier.sendMany(ids.map((userId, i) => ({
+                userId, type: 'message', section: 'messages', refId: threadIds[i],
+                title: `New message${from && from.name ? ` from ${from.name}` : ''}`, body
+            })), { mode: 'refresh' });
+        });
         audit(req, { action: 'MESSAGE_SEND', entity: 'messages', entityId: threadIds.length === 1 ? threadIds[0] : null, newValue: { recipients: ids.length } });
         res.json({ success: true, sent: ids.length, thread_id: threadIds.length === 1 ? threadIds[0] : null });
     }));

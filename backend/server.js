@@ -124,6 +124,7 @@ const upload = multer({
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const { db, queryAsync, transaction } = require('./lib/db');
+const notifier = require('./lib/notify')(queryAsync);
 
 db.getConnection((err, connection) => {
     if (err) {
@@ -494,6 +495,10 @@ app.put(
                             }
 
                             audit(req, { action: 'PASSWORD_CHANGE', entity: 'users', entityId: userId });
+                            notifier.run(() => notifier.send([userId], {
+                                type: 'security', section: 'settings', title: 'Password changed',
+                                body: 'Your password was changed. If this was not you, contact the university office.'
+                            }));
                             return res.json({
                                 success: true,
                                 message: "Password updated successfully."
@@ -1415,6 +1420,14 @@ app.post('/api/notices', verifyRole(['admin', 'teacher']), singleAttachment, (re
                     });
                 }
 
+                notifier.run(async () => {
+                    const who = await notifier.noticeAudience(target_role, subject_id || null);
+                    await notifier.send(who, {
+                        type: 'notice', section: 'notices', refId: result.insertId,
+                        title: priority === 'High' ? 'Important notice' : 'New notice', body: title.trim()
+                    }, { exclude: [authorId] });
+                });
+
                 res.json({
                     success: true,
                     id: result.insertId
@@ -1659,6 +1672,8 @@ app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
                         error: deleteErr.message
                     });
                 }
+
+                notifier.dropFor('notice', noticeId);
 
                 if (notice.attachment_url) {
                     deleteFile(notice.attachment_url);
@@ -2611,6 +2626,15 @@ const newPaid = Math.min(
                     db.commit((err) => {
                         if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
                         audit(req, { action: 'PAYMENT_CREATE', entity: 'fees', entityId: fee_id, newValue: { amount_paid, payment_method, transaction_reference } });
+                        notifier.run(async () => {
+                            const fee = await queryAsync('SELECT student_id, fee_type FROM fees WHERE id = ?', [fee_id]);
+                            if (!fee.length) return;
+                            const family = (await notifier.familyByStudent([fee[0].student_id])).get(fee[0].student_id) || [];
+                            await notifier.send(family, {
+                                type: 'payment', section: 'fees', refId: fee_id, title: 'Payment received',
+                                body: `₹${Number(amount_paid).toLocaleString('en-IN')} received towards ${fee[0].fee_type}.`
+                            });
+                        });
                         res.json({ success: true, message: "Payment processed successfully!" });
                     });
                 });
@@ -2959,7 +2983,15 @@ app.post('/api/fees', verifyRole(['admin']), (req, res) => {
             if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "This fee type already exists for this student & semester." });
             return res.status(500).json({ error: err.message });
         }
-        res.json({ success: true, id: result.insertId });
+        const feeId = result.insertId;
+        notifier.run(async () => {
+            const family = (await notifier.familyByStudent([Number(student_id)])).get(Number(student_id)) || [];
+            await notifier.send(family, {
+                type: 'fee', section: 'fees', refId: feeId, title: 'New fee assigned',
+                body: `${fee_type}: ₹${Number(total_fee).toLocaleString('en-IN')} due by ${String(due_date).slice(0, 10)}.`
+            });
+        });
+        res.json({ success: true, id: feeId });
     });
 });
 
@@ -3019,6 +3051,14 @@ app.post('/api/fees/bulk-assign', verifyRole(['admin']), (req, res) => {
                 console.error(err);
                 return res.status(500).json({ error: err.message });
             }
+
+            notifier.run(async () => {
+                const family = await notifier.familyByStudent(students.map((s) => s.student_id));
+                await notifier.send([...family.values()].flat(), {
+                    type: 'fee', section: 'fees', title: 'New fee assigned',
+                    body: `${fee_type} (semester ${semester}): ₹${Number(total_fee).toLocaleString('en-IN')} due by ${String(due_date).slice(0, 10)}.`
+                });
+            });
 
             res.json({
                 success: true,
