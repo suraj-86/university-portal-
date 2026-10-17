@@ -23,7 +23,10 @@ const validateRow = (raw) => {
     return { value: { enrollment, semester: Number(semesterText), feeType, total: Number(amountText), dueDate } };
 };
 
+const makeNotifier = require('../lib/notify');
+
 module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
+    const notifier = makeNotifier(queryAsync);
     const prepare = async (rows) => {
         const errors = [];
         const items = [];
@@ -100,6 +103,14 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
                 }
             });
             audit(req, { action: 'FEE_BULK_IMPORT', entity: 'fees', newValue: { created: create, updated: update } });
+            notifier.run(async () => {
+                const fresh = items.filter((it) => it.action === 'create');
+                const family = await notifier.familyByStudent(fresh.map((it) => it.studentId));
+                await notifier.sendMany(fresh.flatMap((it) => (family.get(it.studentId) || []).map((userId) => ({
+                    userId, type: 'fee', section: 'fees', title: 'New fee assigned',
+                    body: `${it.feeType}: ₹${Number(it.total).toLocaleString('en-IN')} due by ${String(it.dueDate).slice(0, 10)}.`
+                }))));
+            });
             res.json({ success: true, saved: items.length, created: create, updated: update });
         } catch (e) {
             console.error('Fee import error:', e.code || e.message);

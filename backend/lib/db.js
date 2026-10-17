@@ -9,9 +9,16 @@ const db = mysql.createPool({
     ssl: {
         rejectUnauthorized: false
     },
+    // Read and write every date/time as UTC, so the result is the same on a laptop in any time zone
+    // as on the server. Without this, a machine in India shows fresh items as "5 hr ago".
+    timezone: 'Z',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
+});
+
+db.on('connection', (conn) => {
+    conn.query("SET time_zone = '+00:00'", (err) => { if (err) console.error('Could not set the DB time zone:', err.code || err.message); });
 });
 
 const queryAsync = (sql, params = []) => {

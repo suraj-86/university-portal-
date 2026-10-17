@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, LogOut, Menu, MessageSquare } from 'lucide-react';
+import { LogOut, Menu, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.jsx';
 import api from '../services/api';
 import GlobalSearch from './GlobalSearch';
+import NotificationBell from './NotificationBell';
 
 const Navbar = ({ onToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  const [counts, setCounts] = useState({ notices: 0, announcements: 0, messages: 0 });
+  const [counts, setCounts] = useState({ notices: 0, announcements: 0, messages: 0, notifications: 0 });
   useEffect(() => {
-    if (!user?.id || user.role === 'admin') return undefined;
+    if (!user?.id) return undefined;
     let cancelled = false;
     const load = () => api.get('/inbox/counts')
       .then((res) => { if (!cancelled) setCounts(res.data); })
@@ -22,7 +23,7 @@ const Navbar = ({ onToggle }) => {
     window.addEventListener('inbox:refresh', load);
     return () => { cancelled = true; clearInterval(timer); window.removeEventListener('inbox:refresh', load); };
   }, [user]);
-  const bellCount = counts.notices + counts.announcements;
+  const bellCount = counts.notifications || 0;
   const badge = (n) => (n > 99 ? '99+' : n);
 
   const userName = user?.full_name || 'Guest User';
@@ -34,11 +35,6 @@ const Navbar = ({ onToggle }) => {
   const handleLogout = () => {
     logout();
     navigate('/');
-  };
-
-  const handleNoticesClick = () => {
-    const rolePath = userRole.toLowerCase(); 
-    navigate(`/${rolePath}/notices`);
   };
 
   return (
@@ -69,15 +65,7 @@ const Navbar = ({ onToggle }) => {
 
         {user?.role === 'admin' && <GlobalSearch />}
         
-        <button 
-          onClick={handleNoticesClick}
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400"
-        >
-          <Bell size={18} />
-          {bellCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-slate-900">{badge(bellCount)}</span>
-          )}
-        </button>
+        <NotificationBell unread={bellCount} />
 
         {user?.role && user.role !== 'admin' && (
           <button

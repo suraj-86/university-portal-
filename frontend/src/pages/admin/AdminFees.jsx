@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Users, User, UploadCloud } from 'lucide-react';
+import { Plus, Edit2, Trash2, Users, User, UploadCloud, BellRing } from 'lucide-react';
 import api from '../../services/api';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
@@ -27,6 +27,9 @@ const AdminFees = () => {
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [importOpen, setImportOpen] = useState(false);
+    const [remindOpen, setRemindOpen] = useState(false);
+    const [remind, setRemind] = useState({ course_id: '', semester: '' });
+    const [reminding, setReminding] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [courseFilter, setCourseFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
@@ -141,6 +144,23 @@ const AdminFees = () => {
     };
 
     const confirm = useConfirm();
+    const sendReminders = async (e) => {
+        e.preventDefault();
+        setReminding(true);
+        try {
+            const res = await api.post('/admin/fees/remind', { course_id: remind.course_id || null, semester: remind.semester || null });
+            const { students: n, notified, already } = res.data;
+            if (n === 0) toast('Nobody has unpaid fees in that selection.');
+            else if (notified === 0) toast('Everyone already has an unread reminder.');
+            else toast.success(`Sent ${notified} notification${notified === 1 ? '' : 's'} for ${n} student${n === 1 ? '' : 's'}${already ? ` (${already} already had one)` : ''}.`);
+            setRemindOpen(false);
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Could not send the reminders.');
+        } finally {
+            setReminding(false);
+        }
+    };
+
     const handleDelete = async (id) => {
         if (!(await confirm({ title: 'Delete this fee record?', message: 'This cannot be undone.', confirmText: 'Delete', tone: 'danger' }))) return;
         try {
@@ -161,6 +181,9 @@ const AdminFees = () => {
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Track student dues, record payments, and manage invoices live.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                <button onClick={() => setRemindOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl shadow-sm flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap">
+                    <BellRing size={18} /> Send reminders
+                </button>
                 <button onClick={() => setImportOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl shadow-sm flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap">
                     <UploadCloud size={18} /> Import Excel/CSV
                 </button>
@@ -327,6 +350,34 @@ const AdminFees = () => {
                     <button type="submit" className="w-full bg-cyan-600 text-white font-bold py-4 rounded-2xl hover:bg-cyan-700 shadow-lg transition-all active:scale-95">
                         {editingFeeId ? 'Save Changes' : assignMode === 'bulk' ? 'Assign to Course' : 'Assign Fee'}
                     </button>
+                </form>
+            </Modal>
+
+            <Modal isOpen={remindOpen} onClose={() => setRemindOpen(false)} title="Send fee reminders">
+                <form onSubmit={sendReminders} className="space-y-5">
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                        Sends a notification to every active student who still owes money, and to their parents. Anyone who already has an unread reminder is skipped.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <label className="block">
+                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Course</span>
+                            <select value={remind.course_id} onChange={(e) => setRemind({ course_id: e.target.value, semester: '' })} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none">
+                                <option value="">All courses</option>
+                                {courses.map(c => <option key={c.id} value={c.id}>{c.course_name}</option>)}
+                            </select>
+                        </label>
+                        <label className="block">
+                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Semester</span>
+                            <select value={remind.semester} disabled={!remind.course_id} onChange={(e) => setRemind({ ...remind, semester: e.target.value })} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none disabled:opacity-50">
+                                <option value="">All semesters</option>
+                                {Array.from({ length: (courses.find(c => String(c.id) === String(remind.course_id))?.total_semesters) || 8 }, (_, i) => i + 1).map(n => <option key={n} value={n}>Semester {n}</option>)}
+                            </select>
+                        </label>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={() => setRemindOpen(false)} className="px-5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300">Cancel</button>
+                        <button type="submit" disabled={reminding} className="px-5 py-2.5 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-bold disabled:opacity-50">{reminding ? 'Sending…' : 'Send reminders'}</button>
+                    </div>
                 </form>
             </Modal>
 
