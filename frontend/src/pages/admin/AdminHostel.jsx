@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import Table from '../../components/Table';
 import Input from '../../components/FormInput';
 import CsvImportModal from '../../components/CsvImportModal';
+import { useConfirm } from '../../context/confirm';
 
 const HOSTEL_HEADERS = ['enrollment_number', 'hostel', 'block', 'room_number', 'academic_session', 'semester', 'remarks'];
 const HOSTEL_SAMPLE = 'enrollment_number,hostel,block,room_number,academic_session,semester,remarks\nAC-001/24,Boys Hostel,A,101,2026-2027,1,\n';
@@ -254,8 +255,9 @@ const AdminHostel = () => {
         }
     };
 
+    const confirm = useConfirm();
     const vacate = async (a) => {
-        if (!window.confirm(`Vacate ${a.student_name} from ${a.hostel_name}, room ${a.room_number}? The record is kept as history.`)) return;
+        if (!(await confirm({ title: 'Vacate this room?', message: `${a.student_name} will be vacated from ${a.hostel_name}, room ${a.room_number}. The record is kept as history.`, confirmText: 'Vacate', tone: 'warning' }))) return;
         try {
             await api.post(`/hostel-allocations/${a.id}/vacate`);
             toast.success('Room vacated.');
@@ -266,7 +268,7 @@ const AdminHostel = () => {
     };
 
     const removeAllocation = async (a) => {
-        if (!window.confirm(`Permanently delete this allotment record for ${a.student_name}? Use "Vacate" instead to keep history.`)) return;
+        if (!(await confirm({ title: 'Delete this allotment record?', message: `The record for ${a.student_name} will be permanently deleted. Use "Vacate" instead to keep history.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try {
             await api.delete(`/hostel-allocations/${a.id}`);
             toast.success('Allotment record deleted.');
@@ -314,7 +316,7 @@ const AdminHostel = () => {
     };
 
     const removeHostel = async (h) => {
-        if (!window.confirm(`Delete the hostel "${h.name}"?`)) return;
+        if (!(await confirm({ title: 'Delete this hostel?', message: `"${h.name}" will be removed.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try {
             await api.delete(`/hostels/${h.id}`);
             toast.success('Hostel deleted.');

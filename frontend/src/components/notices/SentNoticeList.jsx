@@ -6,6 +6,7 @@ import Modal from '../Modal';
 import AttachmentChip from './AttachmentChip';
 import AttachmentPicker from './AttachmentPicker';
 import { relativeTime, fullDateTime } from '../../utils/format';
+import { useConfirm } from '../../context/confirm';
 
 const inputCls = 'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200';
 const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400';
@@ -154,12 +155,12 @@ const EditModal = ({ notice, onClose, onSaved }) => {
     );
 };
 
-/** Notices a teacher/admin has sent, with read counts, edit and delete. */
 const SentNoticeList = ({ notices, onChanged, showAuthor = false, emptyText = 'Nothing sent yet.' }) => {
     const [editing, setEditing] = useState(null);
 
+    const confirm = useConfirm();
     const remove = async (n) => {
-        if (!window.confirm(`Delete "${n.title}"? Everyone will lose access to it.`)) return;
+        if (!(await confirm({ title: 'Delete this notice?', message: `"${n.title}" will be removed and everyone will lose access to it.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try {
             await api.delete(n.target_role === 'targeted' ? `/notices/targeted/${n.id}` : `/notices/${n.id}`);
             toast.success('Notice deleted.');

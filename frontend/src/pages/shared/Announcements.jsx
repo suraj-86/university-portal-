@@ -5,6 +5,7 @@ import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import Modal from '../../components/Modal';
 import { relativeTime, fullDateTime, refreshInbox } from '../../utils/format';
+import { useConfirm } from '../../context/confirm';
 
 const CATEGORIES = ['University', 'Department', 'Academic', 'Event', 'Other'];
 const AUDIENCES = [
@@ -107,8 +108,9 @@ const Announcements = () => {
         }
     };
 
+    const confirm = useConfirm();
     const remove = async (a) => {
-        if (!window.confirm(`Delete "${a.title}"?`)) return;
+        if (!(await confirm({ title: 'Delete this announcement?', message: `"${a.title}" will be removed.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try { await api.delete(`/announcements/${a.id}`); toast.success('Announcement deleted.'); load(); }
         catch (err) { toast.error(err.response?.data?.error || 'Could not delete the announcement.'); }
     };

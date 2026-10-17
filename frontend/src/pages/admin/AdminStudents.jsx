@@ -9,6 +9,7 @@ import CsvImportModal from '../../components/CsvImportModal';
 import ResetPasswordAction from '../../components/ResetPasswordAction';
 import { downloadTextFile } from '../../utils/csv';
 import { toCSV } from '../../utils/spreadsheet';
+import { useConfirm } from '../../context/confirm';
 
 const IMPORT_HEADERS = ['enrollment_number', 'name', 'course_code', 'semester', 'roll_number', 'email', 'phone', 'password'];
 const IMPORT_ALIASES = {
@@ -98,8 +99,9 @@ const AdminStudents = () => {
         }
     };
 
+    const confirm = useConfirm();
     const handleDelete = async (userId) => {
-        if (window.confirm("Delete this student record?")) {
+        if (await confirm({ title: 'Delete this student?', message: 'The student record and login will be removed. This cannot be undone.', confirmText: 'Delete', tone: 'danger' })) {
             try {
                 await api.delete(`/students/${userId}`);
                 fetchData();

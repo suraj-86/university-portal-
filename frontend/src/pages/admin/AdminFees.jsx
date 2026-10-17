@@ -6,6 +6,7 @@ import Input from '../../components/FormInput';
 import toast from 'react-hot-toast';
 import CsvImportModal from '../../components/CsvImportModal';
 import { normalizeDate } from '../../utils/csv';
+import { useConfirm } from '../../context/confirm';
 
 const FEE_TYPES = ['Tuition', 'Hostel', 'Library Fine', 'Exam'];
 const FEE_HEADERS = ['enrollment_number', 'semester', 'fee_type', 'total_fee', 'due_date'];
@@ -128,7 +129,7 @@ const AdminFees = () => {
                     total_fee: formData.total_fee,
                     due_date: formData.due_date
                 });
-                alert(`Fee assigned to ${res.data.assigned} students.`);
+                toast.success(`Fee assigned to ${res.data.assigned} students.`);
             }
             setIsModalOpen(false);
             fetchAdminFees();
@@ -139,8 +140,9 @@ const AdminFees = () => {
         }
     };
 
+    const confirm = useConfirm();
     const handleDelete = async (id) => {
-        if (!window.confirm("Delete this fee record? This cannot be undone.")) return;
+        if (!(await confirm({ title: 'Delete this fee record?', message: 'This cannot be undone.', confirmText: 'Delete', tone: 'danger' }))) return;
         try {
             await api.delete(`/fees/${id}`);
             fetchAdminFees();

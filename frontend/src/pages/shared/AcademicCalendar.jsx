@@ -7,6 +7,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import CsvImportModal from '../../components/CsvImportModal';
 import { normalizeDate, parseISODate, todayISO } from '../../utils/csv';
+import { useConfirm } from '../../context/confirm';
 
 const EVENT_TYPES = ['Semester Start', 'Semester End', 'Examination', 'Result', 'Event', 'Deadline', 'Other'];
 const TYPE_STYLES = {
@@ -100,8 +101,9 @@ const AcademicCalendar = () => {
         }
     };
 
+    const confirm = useConfirm();
     const remove = async (ev) => {
-        if (!window.confirm(`Delete "${ev.title}"?`)) return;
+        if (!(await confirm({ title: 'Delete this event?', message: `"${ev.title}" will be removed from the calendar.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try { await api.delete(`/academic-events/${ev.id}`); toast.success('Event deleted.'); load(); }
         catch (err) { toast.error(err.response?.data?.error || 'Could not delete event.'); }
     };

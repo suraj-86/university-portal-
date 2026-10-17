@@ -5,6 +5,7 @@ import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../context/confirm';
 
 const AdminCourses = () => {
     const [courses, setCourses] = useState([]);
@@ -28,8 +29,9 @@ const AdminCourses = () => {
         fetchCourses();
     }, []);
 
+    const confirm = useConfirm();
     const handleDelete = async (id) => {
-        if (window.confirm("Are you sure you want to delete this course?")) {
+        if (await confirm({ title: 'Delete this course?', message: 'This cannot be undone.', confirmText: 'Delete', tone: 'danger' })) {
             try {
                 await api.delete(`/courses/${id}`);
                 fetchCourses();

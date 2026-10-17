@@ -5,6 +5,7 @@ import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../context/confirm';
 
 const AdminSubjects = () => {
     const [subjects, setSubjects] = useState([]);
@@ -81,8 +82,9 @@ const AdminSubjects = () => {
             (subject.teacher_name || '').toLowerCase().includes(term);
     });
 
+    const confirm = useConfirm();
     const handleDelete = async (id) => {
-        if (window.confirm("Delete subject?")) {
+        if (await confirm({ title: 'Delete this subject?', message: 'This cannot be undone.', confirmText: 'Delete', tone: 'danger' })) {
             try {
                 await api.delete(`/subjects/${id}`);
                 fetchData();

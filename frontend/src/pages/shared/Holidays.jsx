@@ -7,6 +7,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import CsvImportModal from '../../components/CsvImportModal';
 import { normalizeDate, parseISODate, todayISO } from '../../utils/csv';
+import { useConfirm } from '../../context/confirm';
 
 const EMPTY = { date: '', name: '', description: '' };
 const SAMPLE = 'date,name,description\n2026-01-26,Republic Day,National holiday\n2026-08-15,Independence Day,National holiday\n';
@@ -77,8 +78,9 @@ const Holidays = () => {
         }
     };
 
+    const confirm = useConfirm();
     const remove = async (h) => {
-        if (!window.confirm(`Delete "${h.name}" (${h.date})?`)) return;
+        if (!(await confirm({ title: 'Delete this holiday?', message: `"${h.name}" (${h.date}) will be removed.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try { await api.delete(`/holidays/${h.id}`); toast.success('Holiday deleted.'); load(); }
         catch (err) { toast.error(err.response?.data?.error || 'Could not delete holiday.'); }
     };

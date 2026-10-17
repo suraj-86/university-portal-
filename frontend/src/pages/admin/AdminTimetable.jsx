@@ -17,6 +17,7 @@ const ttMapRow = (o) => {
     return { value: { ...o } };
 };
 import TimetableView, { DAYS } from '../../components/TimetableView';
+import { useConfirm } from '../../context/confirm';
 
 const EMPTY = { subject_id: '', day: 'Monday', start_time: '09:00', end_time: '10:00', room: '' };
 const selectCls = 'w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none';
@@ -96,8 +97,9 @@ const AdminTimetable = () => {
         }
     };
 
+    const confirm = useConfirm();
     const remove = async (s) => {
-        if (!window.confirm(`Remove ${s.subject_code} on ${s.day} ${s.start_time}-${s.end_time}?`)) return;
+        if (!(await confirm({ title: 'Remove this class?', message: `${s.subject_code} on ${s.day}, ${s.start_time}-${s.end_time}.`, confirmText: 'Remove', tone: 'danger' }))) return;
         try { await api.delete(`/timetable/${s.id}`); toast.success('Entry removed.'); load(); }
         catch (err) { toast.error(err.response?.data?.error || 'Could not remove the entry.'); }
     };

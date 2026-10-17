@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import ContactDirectory from '../../components/ContactDirectory';
 import { OFFICE_GROUPS } from '../../utils/contactGroups';
+import { useConfirm } from '../../context/confirm';
 
 const AUDIENCES = [
     { value: 'all', label: 'Everyone' },
@@ -104,8 +105,9 @@ const AdminContacts = () => {
         }
     };
 
+    const confirm = useConfirm();
     const remove = async (c) => {
-        if (!window.confirm(`Delete "${c.name}"? This cannot be undone.`)) return;
+        if (!(await confirm({ title: 'Delete this contact?', message: `"${c.name}" will be removed. This cannot be undone.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try {
             await api.delete(`/university-contacts/${c.id}`);
             toast.success('Contact deleted.');

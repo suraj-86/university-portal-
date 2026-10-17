@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import ResetPasswordAction from '../../components/ResetPasswordAction';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../context/confirm';
 
 const AdminParents = () => {
     const [parents, setParents] = useState([]);
@@ -69,8 +70,9 @@ const AdminParents = () => {
         setIsModalOpen(true);
     };
 
+    const confirm = useConfirm();
     const handleDelete = async (id) => {
-        if (window.confirm("Are you sure you want to delete this parent account?")) {
+        if (await confirm({ title: 'Delete this parent account?', message: 'Their login will stop working and the account cannot be recovered.', confirmText: 'Delete', tone: 'danger' })) {
             try {
                 await api.delete(`/parents/${id}`);
                 fetchData();

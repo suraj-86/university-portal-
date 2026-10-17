@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import ResetPasswordAction from '../../components/ResetPasswordAction';
 import PasswordResultModal from '../../components/PasswordResultModal';
+import { useConfirm } from '../../context/confirm';
 
 const fmt = (iso) => {
     if (!iso) return null;
@@ -71,8 +72,9 @@ const AdminAdmins = () => {
         }
     };
 
+    const confirm = useConfirm();
     const setActive = async (a, active) => {
-        if (!active && !window.confirm(`Deactivate ${a.username}? They will not be able to log in until reactivated.`)) return;
+        if (!active && !(await confirm({ title: 'Deactivate this admin?', message: `${a.username} will not be able to log in until reactivated.`, confirmText: 'Deactivate', tone: 'warning' }))) return;
         try {
             await api.put(`/admin/admins/${a.id}/active`, { active });
             toast.success(active ? 'Account reactivated.' : 'Account deactivated.');

@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import ResetPasswordAction from '../../components/ResetPasswordAction';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../context/confirm';
 
 const AdminTeachers = () => {
     const [teachers, setTeachers] = useState([]);
@@ -65,8 +66,9 @@ const AdminTeachers = () => {
         }
     };
 
+    const confirm = useConfirm();
     const handleDelete = async (id) => {
-        if (window.confirm("Remove this faculty member?")) {
+        if (await confirm({ title: 'Remove this faculty member?', message: 'Their record and login will be removed. This cannot be undone.', confirmText: 'Delete', tone: 'danger' })) {
             try {
                 await api.delete(`/teachers/${id}`);
                 fetchData();
