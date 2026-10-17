@@ -277,6 +277,7 @@ app.post("/api/login", loginLimiter, async (req, res) => {
                 u.password,
                 u.role,
                 u.is_active,
+                u.must_change_password,
                 COALESCE(
                     t.full_name,
                     s.full_name,
@@ -352,6 +353,7 @@ app.post("/api/login", loginLimiter, async (req, res) => {
 
             delete user.password;
             delete user.is_active;
+            user.must_change_password = Number(user.must_change_password) === 1;
 
             db.query(
                 "UPDATE users SET last_login = NOW() WHERE id = ?",
@@ -479,7 +481,7 @@ app.put(
                     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
                     db.query(
-                        "UPDATE users SET password = ? WHERE id = ?",
+                        "UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?",
                         [hashedPassword, userId],
                         (updateErr) => {
                             if (updateErr) {

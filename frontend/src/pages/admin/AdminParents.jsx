@@ -4,6 +4,7 @@ import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
+import ResetPasswordAction from '../../components/ResetPasswordAction';
 import toast from 'react-hot-toast';
 
 const AdminParents = () => {
@@ -102,6 +103,7 @@ const AdminParents = () => {
             accessor: "actions",
             cell: (row) => (
                 <div className="flex justify-end gap-2">
+                    <ResetPasswordAction kind="parent" id={row.id} name={row.name} />
                     <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg"><Edit2 size={16} /></button>
                     <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg"><Trash2 size={16} /></button>
                 </div>

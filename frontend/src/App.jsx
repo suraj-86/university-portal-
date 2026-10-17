@@ -56,6 +56,7 @@ import AdminTimetable from './pages/admin/AdminTimetable';
 import AdminHostel from './pages/admin/AdminHostel';
 import AdminContacts from './pages/admin/AdminContacts';
 import AdminAuditLog from './pages/admin/AdminAuditLog';
+import AdminAdmins from './pages/admin/AdminAdmins';
 import HelpContacts from './pages/shared/HelpContacts';
 import TeacherContacts from './pages/teacher/TeacherContacts';
 import Announcements from './pages/shared/Announcements';
@@ -141,6 +142,7 @@ function App() {
             <Route path="/admin/hostel" element={<ProtectedRoute role="admin"><AdminHostel /></ProtectedRoute>} />
             <Route path="/admin/contacts" element={<ProtectedRoute role="admin"><AdminContacts /></ProtectedRoute>} />
             <Route path="/admin/audit" element={<ProtectedRoute role="admin"><AdminAuditLog /></ProtectedRoute>} />
+            <Route path="/admin/admins" element={<ProtectedRoute role="admin"><AdminAdmins /></ProtectedRoute>} />
             <Route path="/admin/calendar" element={<ProtectedRoute role="admin"><AcademicCalendar /></ProtectedRoute>} />
             <Route path="/admin/holidays" element={<ProtectedRoute role="admin"><Holidays /></ProtectedRoute>} />
             <Route path="/admin/fees" element={<ProtectedRoute role="admin"><AdminFees /></ProtectedRoute>} />

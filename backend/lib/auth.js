@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { queryAsync } = require('./db');
 
+const isPasswordChangeRequest = (req) =>
+    req.method === 'PUT' && /^\/api\/users\/\d+\/change-password\/?$/.test(String(req.originalUrl || '').split('?')[0]);
+
 const verifyRole = (allowedRoles = []) => {
     return async (req, res, next) => {
         try {
@@ -37,7 +40,7 @@ const verifyRole = (allowedRoles = []) => {
 
             let rows;
             try {
-                rows = await queryAsync("SELECT is_active FROM users WHERE id = ? LIMIT 1", [req.user.id]);
+                rows = await queryAsync("SELECT is_active, must_change_password FROM users WHERE id = ? LIMIT 1", [req.user.id]);
             } catch (dbErr) {
                 console.error("Auth DB check failed:", dbErr.message);
                 return res.status(500).json({ success: false, error: "Authentication check failed." });
@@ -48,6 +51,14 @@ const verifyRole = (allowedRoles = []) => {
                 return res.status(401).json({
                     success: false,
                     error: "This account is no longer active. Please contact the administrator."
+                });
+            }
+
+            if (Number(rows[0].must_change_password) === 1 && !isPasswordChangeRequest(req)) {
+                return res.status(403).json({
+                    success: false,
+                    code: "PASSWORD_CHANGE_REQUIRED",
+                    error: "You must choose a new password before continuing."
                 });
             }
 

@@ -19,6 +19,17 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     
+    useEffect(() => {
+        const onRequired = () => setUser((prev) => {
+            if (!prev || prev.must_change_password) return prev;
+            const updated = { ...prev, must_change_password: true };
+            localStorage.setItem('user', JSON.stringify(updated));
+            return updated;
+        });
+        window.addEventListener('password-change-required', onRequired);
+        return () => window.removeEventListener('password-change-required', onRequired);
+    }, []);
+
     const login = (userObj) => {
         localStorage.setItem('user', JSON.stringify(userObj)); 
         setUser(userObj);

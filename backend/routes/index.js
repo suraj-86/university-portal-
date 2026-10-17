@@ -14,7 +14,8 @@ const modules = [
     require('./contacts'),
     require('./studentImport'),
     require('./feeImport'),
-    require('./auditLog')
+    require('./auditLog'),
+    require('./accountAdmin')
 ];
 
 module.exports = (app, ctx) => {
