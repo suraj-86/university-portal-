@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell
 } from 'recharts';
 import { Users, GraduationCap, BookOpen, Wallet, AlertTriangle, CalendarCheck, Award, Activity, Building2, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 const BLUE = '#3b82f6';
@@ -288,7 +289,10 @@ const AdminAnalytics = () => {
               <Tile label="Hostel" value={`${operations.hostelAllotted} allotted`} hint={`${operations.hostels} hostel${operations.hostels === 1 ? '' : 's'}`} icon={<Building2 size={22} />} />
             </div>
             <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] p-5 shadow-sm">
-              <h4 className="font-black text-slate-900 dark:text-slate-100 mb-3">Recent activity</h4>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-black text-slate-900 dark:text-slate-100">Recent activity</h4>
+                <Link to="/admin/audit" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">View all</Link>
+              </div>
               {operations.recentActivity.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-400">No recorded activity yet.</p>
               ) : (

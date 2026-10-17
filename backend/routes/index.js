@@ -13,7 +13,8 @@ const modules = [
     require('./adminInsights'),
     require('./contacts'),
     require('./studentImport'),
-    require('./feeImport')
+    require('./feeImport'),
+    require('./auditLog')
 ];
 
 module.exports = (app, ctx) => {
