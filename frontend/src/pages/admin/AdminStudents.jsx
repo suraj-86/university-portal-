@@ -1,10 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, ShieldCheck, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, ShieldCheck, Search, UploadCloud, Download } from 'lucide-react';
 import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import toast from 'react-hot-toast';
+import CsvImportModal from '../../components/CsvImportModal';
+import { downloadTextFile } from '../../utils/csv';
+import { toCSV } from '../../utils/spreadsheet';
+
+const IMPORT_HEADERS = ['enrollment_number', 'name', 'course_code', 'semester', 'roll_number', 'email', 'phone', 'password'];
+const IMPORT_ALIASES = {
+    enrollment_number: ['enrollment_no', 'enrollment', 'enrolment_number', 'enrolment_no'],
+    name: ['full_name', 'student_name'],
+    course_code: ['course', 'program', 'programme'],
+    semester: ['sem'],
+    roll_number: ['roll_no', 'roll'],
+    phone: ['phone_number', 'mobile', 'mobile_number']
+};
+const IMPORT_SAMPLE = 'enrollment_number,name,course_code,semester,roll_number,email,phone,password\nAC-001/24,Asha Verma,BCA,1,2401,asha@example.com,9876543210,\n';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const importMapRow = (o) => {
+    if (!o.enrollment_number) return { error: 'Enrollment number is required.' };
+    if (!o.name) return { error: 'Name is required.' };
+    if (!o.course_code) return { error: 'Course code is required.' };
+    if (o.semester && !/^\d{1,2}$/.test(o.semester)) return { error: 'Semester must be a whole number.' };
+    if (o.email && !EMAIL_RE.test(o.email)) return { error: 'Email address is not valid.' };
+    return { value: { ...o } };
+};
 
 const AdminStudents = () => {
     const [students, setStudents] = useState([]);
@@ -12,6 +35,8 @@ const AdminStudents = () => {
     const [searchTerm, setSearchTerm] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingStudentId, setEditingStudentId] = useState(null);
+    const [importOpen, setImportOpen] = useState(false);
+    const [credentials, setCredentials] = useState([]);
     
     const [formData, setFormData] = useState({
         name: '', email: '', enrollment_number: '', roll_number: '', course_id: '', semester: 1, password: ''
@@ -138,6 +163,12 @@ const AdminStudents = () => {
                         className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none shadow-sm transition-all"
                     />
                 </div>
+                <button
+                    onClick={() => setImportOpen(true)}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl shadow-sm flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
+                >
+                    <UploadCloud size={18} /> Import Excel/CSV
+                </button>
                 <button 
                     onClick={() => { 
                         setEditingStudentId(null); 
@@ -223,6 +254,59 @@ const AdminStudents = () => {
                         {editingStudentId ? 'Save Changes' : 'Create Account'}
                     </button>
                 </form>
+            </Modal>
+
+            <CsvImportModal
+                isOpen={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Import Students"
+                headers={IMPORT_HEADERS}
+                required={['enrollment_number', 'name', 'course_code']}
+                aliases={IMPORT_ALIASES}
+                sample={IMPORT_SAMPLE}
+                templateName="students_template.csv"
+                mapRow={importMapRow}
+                previewKeys={['enrollment_number', 'name', 'course_code', 'semester']}
+                maxRows={300}
+                note="course_code is the code on the Courses page (e.g. BCA). A new student without a password gets a random one, shown once after the import. A student whose enrollment number already exists is updated; blank cells keep the current value. Tip: format enrollment, roll and phone columns as Text so leading zeros are kept."
+                onPreview={(rows) => api.post('/students/bulk', { rows, dry_run: true })}
+                onSubmit={(rows) => api.post('/students/bulk', { rows })}
+                onDone={(res) => {
+                    setImportOpen(false);
+                    fetchData();
+                    setCredentials(res?.data?.credentials || []);
+                }}
+            />
+
+            <Modal isOpen={credentials.length > 0} onClose={() => setCredentials([])} title="New student passwords">
+                <div className="space-y-4">
+                    <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                        These passwords are shown only once. Download the list and hand it to the students securely.
+                    </p>
+                    <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                        <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 dark:bg-slate-800 text-slate-400 uppercase tracking-wider sticky top-0">
+                                <tr><th className="p-2">Enrollment</th><th className="p-2">Name</th><th className="p-2">Password</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
+                                {credentials.map((c) => (
+                                    <tr key={c.enrollment_number}>
+                                        <td className="p-2 font-bold">{c.enrollment_number}</td>
+                                        <td className="p-2">{c.name}</td>
+                                        <td className="p-2 font-mono">{c.password}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => downloadTextFile('new_student_passwords.csv', toCSV([['enrollment_number', 'name', 'password'], ...credentials.map((c) => [c.enrollment_number, c.name, c.password])]))}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold"
+                    >
+                        <Download size={16} /> Download passwords (CSV)
+                    </button>
+                </div>
             </Modal>
         </div>
     );

@@ -6,6 +6,7 @@ const PHONE_RE = /^[0-9+\-()\s]{5,30}$/;
 const SESSION_RE = /^(\d{4})-(\d{4})$/;
 const STATUSES = ['Allotted', 'Vacated'];
 const MAX_LIST = 2000;
+const MAX_IMPORT_ROWS = 300;
 const PICKER_LIMIT = 25;
 
 const fail = (status, message) => Object.assign(new Error(message), { http: status });
@@ -304,6 +305,76 @@ module.exports = (app, { queryAsync, transaction, verifyRole, verifyStudentOwner
         await queryAsync('DELETE FROM hostel_allocations WHERE id = ?', [id]);
         audit(req, { action: 'HOSTEL_ALLOCATION_DELETE', entity: 'hostel_allocations', entityId: id, oldValue: snapshot(rows[0]) });
         res.json({ success: true });
+    }));
+
+    app.post('/api/hostel-allocations/import', admin, safe(async (req, res) => {
+        const rows = req.body && req.body.rows;
+        if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No rows to import.' });
+        if (rows.length > MAX_IMPORT_ROWS) return res.status(400).json({ error: `Too many rows (max ${MAX_IMPORT_ROWS} per import). Split the file.` });
+
+        const hostels = await queryAsync('SELECT id, name FROM hostels');
+        const hostelByName = new Map(hostels.map((h) => [String(h.name).trim().toLowerCase(), h]));
+
+        const errors = [];
+        const items = [];
+        const firstSeen = new Map();
+        rows.forEach((r, i) => {
+            const rowNo = (r && Number(r.row)) || i + 1;
+            const b = r || {};
+            const enrollment = str(b.enrollment_number);
+            if (!enrollment) return errors.push({ row: rowNo, error: 'Enrollment number is required.' });
+            const hostel = hostelByName.get(str(b.hostel).toLowerCase());
+            if (!hostel) return errors.push({ row: rowNo, error: `Unknown hostel "${str(b.hostel)}". Use the name shown on the Hostel page.` });
+            const { value: v, error } = validateAllocation({ ...b, student_id: 1, hostel_id: hostel.id }, { create: true });
+            if (error) return errors.push({ row: rowNo, error });
+            const key = enrollment.toLowerCase();
+            if (firstSeen.has(key)) return errors.push({ row: rowNo, error: `Enrollment number repeats row ${firstSeen.get(key)} of this file.` });
+            firstSeen.set(key, rowNo);
+            items.push({ row: rowNo, enrollment, ...v, hostelId: hostel.id });
+        });
+
+        if (items.length) {
+            const students = await queryAsync(
+                'SELECT student_id, enrollment_number, status FROM students WHERE enrollment_number IN (?)',
+                [items.map((it) => it.enrollment)]);
+            const byEnrollment = new Map(students.map((s) => [String(s.enrollment_number).toLowerCase(), s]));
+            const ids = students.map((s) => s.student_id);
+            const held = ids.length
+                ? await queryAsync("SELECT student_id FROM hostel_allocations WHERE status = 'Allotted' AND student_id IN (?)", [ids])
+                : [];
+            const heldSet = new Set(held.map((h) => h.student_id));
+            const keep = [];
+            items.forEach((it) => {
+                const s = byEnrollment.get(it.enrollment.toLowerCase());
+                if (!s) return errors.push({ row: it.row, error: `No student with enrollment number "${it.enrollment}".` });
+                if (s.status !== 'Active') return errors.push({ row: it.row, error: 'Only active students can be allotted a hostel.' });
+                if (heldSet.has(s.student_id)) return errors.push({ row: it.row, error: 'This student already has a hostel allotment. Edit or vacate it first.' });
+                keep.push({ ...it, studentId: s.student_id });
+            });
+            items.length = 0; items.push(...keep);
+        }
+        errors.sort((a, b) => a.row - b.row);
+
+        if (req.body.dry_run) {
+            return res.json({ dry_run: true, total: rows.length, create: items.length, update: 0,
+                actions: items.map((it) => ({ row: it.row, action: 'create' })), errors });
+        }
+        if (errors.length) return res.status(400).json({ error: 'Some rows are invalid. Nothing was imported.', errors: errors.slice(0, 100) });
+
+        const today = todayInTZ();
+        await transaction(async (q) => {
+            for (const it of items) {
+                const clash = await q("SELECT id FROM hostel_allocations WHERE student_id = ? AND status = 'Allotted' LIMIT 1 FOR UPDATE", [it.studentId]);
+                if (clash.length) throw fail(409, `${it.enrollment} was allotted a hostel while importing. Nothing was saved. Please preview again.`);
+                await q(
+                    `INSERT INTO hostel_allocations
+                        (student_id, hostel_id, block, room_number, academic_session, semester, status, allotted_on, remarks, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, 'Allotted', ?, ?, ?)`,
+                    [it.studentId, it.hostelId, it.block, it.room, it.session, it.semester, today, it.remarks, req.user.id]);
+            }
+        });
+        audit(req, { action: 'HOSTEL_BULK_IMPORT', entity: 'hostel_allocations', newValue: { created: items.length } });
+        res.json({ success: true, saved: items.length, created: items.length });
     }));
 
 

@@ -11,7 +11,9 @@ const modules = [
     require('./reportcard'),
     require('./hostel'),
     require('./adminInsights'),
-    require('./contacts')
+    require('./contacts'),
+    require('./studentImport'),
+    require('./feeImport')
 ];
 
 module.exports = (app, ctx) => {

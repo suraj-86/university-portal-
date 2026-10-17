@@ -633,7 +633,7 @@ const TeacherMarks = () => {
                                         <History size={12} /> History
                                     </button>
                                     <button onClick={() => setImportOpen(true)} className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                                        <UploadCloud size={12} /> Import CSV
+                                        <UploadCloud size={12} /> Import Excel/CSV
                                     </button>
                                     <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1.5 rounded-md border border-indigo-100 dark:border-indigo-900">
                                         {assessmentLabel} (Max: {maxScore})
@@ -819,7 +819,7 @@ const TeacherMarks = () => {
             <CsvImportModal
                 isOpen={importOpen}
                 onClose={() => setImportOpen(false)}
-                title="Import Scores (CSV)"
+                title="Import Scores"
                 headers={['roll_number', 'score']}
                 sample={`roll_number,score\n${roster.map(r => `${r.roll_number || ''},`).join('\n')}\n`}
                 templateName="marks_template.csv"

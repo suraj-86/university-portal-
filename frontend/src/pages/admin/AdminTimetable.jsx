@@ -1,9 +1,21 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Clock3 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Clock3, UploadCloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
+import CsvImportModal from '../../components/CsvImportModal';
+
+const TT_HEADERS = ['course_code', 'semester', 'subject_code', 'day', 'start_time', 'end_time', 'room'];
+const TT_SAMPLE = 'course_code,semester,subject_code,day,start_time,end_time,room\nBCA,1,CS101,Monday,09:00,10:00,Room 12\n';
+const timeOk = (t) => /^\d{1,2}:\d{2}(:\d{2})?\s*(am|pm)?$/i.test(t);
+const ttMapRow = (o) => {
+    if (!o.subject_code) return { error: 'Subject code is required.' };
+    if (!o.day) return { error: 'Day is required.' };
+    if (!timeOk(o.start_time) || !timeOk(o.end_time)) return { error: 'Times must look like 09:00 or 9:00 AM.' };
+    if (!o.room) return { error: 'Room is required.' };
+    return { value: { ...o } };
+};
 import TimetableView, { DAYS } from '../../components/TimetableView';
 
 const EMPTY = { subject_id: '', day: 'Monday', start_time: '09:00', end_time: '10:00', room: '' };
@@ -12,6 +24,7 @@ const topSelectCls = 'py-2.5 px-4 rounded-2xl border border-slate-200 dark:borde
 
 const AdminTimetable = () => {
     const [courses, setCourses] = useState([]);
+    const [importOpen, setImportOpen] = useState(false);
     const [allSubjects, setAllSubjects] = useState([]);
     const [courseId, setCourseId] = useState('');
     const [semester, setSemester] = useState('');
@@ -105,6 +118,9 @@ const AdminTimetable = () => {
                         <option value="">Select semester</option>
                         {semesterOptions.map((n) => <option key={n} value={n}>Semester {n}</option>)}
                     </select>
+                    <button onClick={() => setImportOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl shadow-sm flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap">
+                        <UploadCloud size={18} /> Import Excel/CSV
+                    </button>
                     <button onClick={openAdd} disabled={!courseId || !semester || subjects.length === 0}
                         className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2">
                         <Plus size={18} /> Add Class
@@ -170,6 +186,24 @@ const AdminTimetable = () => {
                     </button>
                 </form>
             </Modal>
+
+            <CsvImportModal
+                isOpen={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Import Timetable"
+                headers={TT_HEADERS}
+                required={['subject_code', 'day', 'start_time', 'end_time', 'room']}
+                aliases={{ subject_code: ['subject', 'code'], day: ['weekday'], start_time: ['start', 'from'], end_time: ['end', 'to'], room: ['room_no', 'venue'], semester: ['sem'], course_code: ['course'] }}
+                sample={TT_SAMPLE}
+                templateName="timetable_template.csv"
+                mapRow={ttMapRow}
+                previewKeys={['subject_code', 'day', 'start_time', 'end_time', 'room']}
+                maxRows={300}
+                note="Day is Monday to Friday (or Every day). course_code and semester are optional and only used to double-check the subject. Every slot goes through the same clash checks as adding one by hand; existing slots are not changed."
+                onPreview={(rows) => api.post('/timetable/import', { rows, dry_run: true })}
+                onSubmit={(rows) => api.post('/timetable/import', { rows })}
+                onDone={() => { setImportOpen(false); load(); }}
+            />
         </div>
     );
 };

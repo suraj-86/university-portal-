@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Building2, LogOut, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Building2, LogOut, X, UploadCloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import Modal from '../../components/Modal';
 import Table from '../../components/Table';
 import Input from '../../components/FormInput';
+import CsvImportModal from '../../components/CsvImportModal';
+
+const HOSTEL_HEADERS = ['enrollment_number', 'hostel', 'block', 'room_number', 'academic_session', 'semester', 'remarks'];
+const HOSTEL_SAMPLE = 'enrollment_number,hostel,block,room_number,academic_session,semester,remarks\nAC-001/24,Boys Hostel,A,101,2026-2027,1,\n';
+const hostelMapRow = (o) => {
+    if (!o.enrollment_number) return { error: 'Enrollment number is required.' };
+    if (!o.hostel) return { error: 'Hostel name is required.' };
+    if (!o.room_number) return { error: 'Room number is required.' };
+    const m = /^(\d{4})-(\d{4})$/.exec(o.academic_session);
+    if (!m || Number(m[2]) !== Number(m[1]) + 1) return { error: 'Session must look like 2026-2027.' };
+    return { value: { ...o } };
+};
 
 const selectCls = 'w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none';
 const filterCls = 'py-2.5 px-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none';
@@ -124,6 +136,7 @@ const AdminHostel = () => {
     const [statusFilter, setStatusFilter] = useState('Allotted');
 
     const [allocModal, setAllocModal] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [editingAllocId, setEditingAllocId] = useState(null);
     const [allocForm, setAllocForm] = useState(EMPTY_ALLOCATION);
     const [pickedStudent, setPickedStudent] = useState(null);
@@ -411,9 +424,14 @@ const AdminHostel = () => {
                     <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Manage hostels and allot rooms. Students and parents see the allotment on their Hostel page.</p>
                 </div>
                 {tab === 'allotments' ? (
-                    <button onClick={openAllot} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-md self-start md:self-auto">
-                        <Plus size={18} /> Allot Hostel
-                    </button>
+                    <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+                        <button onClick={() => setImportOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl shadow-sm flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap">
+                            <UploadCloud size={18} /> Import Excel/CSV
+                        </button>
+                        <button onClick={openAllot} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-md">
+                            <Plus size={18} /> Allot Hostel
+                        </button>
+                    </div>
                 ) : (
                     <button onClick={openAddHostel} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-md self-start md:self-auto">
                         <Plus size={18} /> Add Hostel
@@ -543,6 +561,24 @@ const AdminHostel = () => {
                     </button>
                 </form>
             </Modal>
+
+            <CsvImportModal
+                isOpen={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Import Hostel Allotments"
+                headers={HOSTEL_HEADERS}
+                required={['enrollment_number', 'hostel', 'room_number', 'academic_session']}
+                aliases={{ enrollment_number: ['enrollment_no', 'enrollment'], hostel: ['hostel_name'], room_number: ['room', 'room_no'], academic_session: ['session'], semester: ['sem'] }}
+                sample={HOSTEL_SAMPLE}
+                templateName="hostel_allotments_template.csv"
+                mapRow={hostelMapRow}
+                previewKeys={['enrollment_number', 'hostel', 'block', 'room_number', 'academic_session']}
+                maxRows={300}
+                note="Hostel is the exact name on the Hostel tab. Only active students without a current allotment can be added; existing allotments are not changed."
+                onPreview={(rows) => api.post('/hostel-allocations/import', { rows, dry_run: true })}
+                onSubmit={(rows) => api.post('/hostel-allocations/import', { rows })}
+                onDone={() => { setImportOpen(false); refreshAll(); }}
+            />
         </div>
     );
 };

@@ -101,7 +101,7 @@ const Holidays = () => {
                     {canManage && (
                         <>
                             <button onClick={() => setImportOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                <UploadCloud size={18} /> Import CSV
+                                <UploadCloud size={18} /> Import Excel/CSV
                             </button>
                             <button onClick={openAdd} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2">
                                 <Plus size={18} /> Add Holiday
@@ -183,12 +183,13 @@ const Holidays = () => {
                     <CsvImportModal
                         isOpen={importOpen}
                         onClose={() => setImportOpen(false)}
-                        title="Import Holidays (CSV)"
+                        title="Import Holidays"
                         headers={['date', 'name', 'description']}
                         sample={SAMPLE}
                         templateName="holidays_template.csv"
                         mapRow={mapRow}
                         previewKeys={['date', 'name', 'description']}
+                        onPreview={(rows) => api.post('/holidays/bulk', { rows, dry_run: true })}
                         onSubmit={(rows) => api.post('/holidays/bulk', { rows })}
                         onDone={() => { setImportOpen(false); load(); }}
                     />
