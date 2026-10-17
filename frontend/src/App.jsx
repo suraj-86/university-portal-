@@ -54,6 +54,9 @@ import AcademicCalendar from './pages/shared/AcademicCalendar';
 import Timetable from './pages/shared/Timetable';
 import AdminTimetable from './pages/admin/AdminTimetable';
 import AdminHostel from './pages/admin/AdminHostel';
+import AdminContacts from './pages/admin/AdminContacts';
+import HelpContacts from './pages/shared/HelpContacts';
+import TeacherContacts from './pages/teacher/TeacherContacts';
 import Announcements from './pages/shared/Announcements';
 import Messages from './pages/shared/Messages';
 
@@ -120,6 +123,7 @@ function App() {
             <Route path="/student/results" element={<ProtectedRoute role="student"><StudentResults /></ProtectedRoute>} />
             <Route path="/student/report-card" element={<ProtectedRoute role="student"><StudentReportCard /></ProtectedRoute>} />
             <Route path="/student/hostel" element={<ProtectedRoute role="student"><StudentHostel /></ProtectedRoute>} />
+            <Route path="/student/help" element={<ProtectedRoute role="student"><HelpContacts /></ProtectedRoute>} />
             <Route path="/student/subjects" element={<ProtectedRoute role="student"><StudentSubjects /></ProtectedRoute>} />
             <Route path="/student/settings" element={<ProtectedRoute role="student"><StudentSettings /></ProtectedRoute>} />
             <Route path="/student/timetable" element={<ProtectedRoute role="student"><Timetable /></ProtectedRoute>} />
@@ -134,6 +138,7 @@ function App() {
             <Route path="/admin/settings" element={<ProtectedRoute role="admin"><AdminSettings /></ProtectedRoute>} />
             <Route path="/admin/timetable" element={<ProtectedRoute role="admin"><AdminTimetable /></ProtectedRoute>} />
             <Route path="/admin/hostel" element={<ProtectedRoute role="admin"><AdminHostel /></ProtectedRoute>} />
+            <Route path="/admin/contacts" element={<ProtectedRoute role="admin"><AdminContacts /></ProtectedRoute>} />
             <Route path="/admin/calendar" element={<ProtectedRoute role="admin"><AcademicCalendar /></ProtectedRoute>} />
             <Route path="/admin/holidays" element={<ProtectedRoute role="admin"><Holidays /></ProtectedRoute>} />
             <Route path="/admin/fees" element={<ProtectedRoute role="admin"><AdminFees /></ProtectedRoute>} />
@@ -150,6 +155,8 @@ function App() {
             <Route path="/teacher/announcements" element={<ProtectedRoute role="teacher"><Announcements /></ProtectedRoute>} />
             <Route path="/teacher/messages" element={<ProtectedRoute role="teacher"><Messages /></ProtectedRoute>} />
             <Route path="/teacher/settings" element={<ProtectedRoute role="teacher"><TeacherSettings /></ProtectedRoute>} />
+            <Route path="/teacher/contacts" element={<ProtectedRoute role="teacher"><TeacherContacts /></ProtectedRoute>} />
+            <Route path="/teacher/help" element={<ProtectedRoute role="teacher"><HelpContacts /></ProtectedRoute>} />
             <Route path="/teacher/timetable" element={<ProtectedRoute role="teacher"><Timetable /></ProtectedRoute>} />
             <Route path="/teacher/calendar" element={<ProtectedRoute role="teacher"><AcademicCalendar /></ProtectedRoute>} />
             <Route path="/teacher/holidays" element={<ProtectedRoute role="teacher"><Holidays /></ProtectedRoute>} />
@@ -160,6 +167,7 @@ function App() {
             <Route path="/parent/results" element={<ProtectedRoute role="parent"><ParentResults /></ProtectedRoute>} />
             <Route path="/parent/report-card" element={<ProtectedRoute role="parent"><ParentReportCard /></ProtectedRoute>} />
             <Route path="/parent/hostel" element={<ProtectedRoute role="parent"><ParentHostel /></ProtectedRoute>} />
+            <Route path="/parent/help" element={<ProtectedRoute role="parent"><HelpContacts /></ProtectedRoute>} />
 
             <Route path="/parent/notices" element={<ProtectedRoute role="parent"><ParentNotices /></ProtectedRoute>} />
             <Route path="/parent/announcements" element={<ProtectedRoute role="parent"><Announcements /></ProtectedRoute>} />
