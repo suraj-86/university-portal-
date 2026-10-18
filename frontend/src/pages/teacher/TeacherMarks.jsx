@@ -662,7 +662,7 @@ const TeacherMarks = () => {
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Semester:</label>
                                 <select 
                                     value={ledgerSemester}
-                                    onChange={(e) => setLedgerSemester(e.target.value)}
+                                    onChange={(e) => { setLedgerSemester(e.target.value); setLedgerFilter('All'); }}
                                     className="py-2 px-3 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="All">All Semesters</option>
@@ -679,9 +679,12 @@ const TeacherMarks = () => {
                                     className="py-2 px-3 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="All">All Subjects</option>
-                                    {myClasses.map(cls => (
-                                        <option key={cls.id} value={cls.subject_name}>{cls.subject_name}</option>
-                                    ))}
+                                    {[...new Set(myClasses
+                                        .filter(cls => ledgerSemester === 'All' || cls.semester?.toString() === ledgerSemester)
+                                        .map(cls => cls.subject_name))]
+                                        .map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
                                 </select>
                             </div>
                         </div>

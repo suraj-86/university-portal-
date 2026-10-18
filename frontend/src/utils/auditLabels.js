@@ -9,5 +9,6 @@ export const actionTone = (action) => {
     if (/IMPORT/.test(a)) return 'violet';
     if (/CREATE|ALLOCATE|SEND|SCHEDULE/.test(a)) return 'emerald';
     if (/UPDATE|EDIT|CHANGE/.test(a)) return 'blue';
+    if (/REPORT/.test(a)) return 'violet';
     return 'slate';
 };

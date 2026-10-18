@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users2, BookOpen, CalendarCheck, BarChart3,
-  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2, LifeBuoy, Contact, History, ShieldCheck
+  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2, LifeBuoy, Contact, History, ShieldCheck, FileSpreadsheet
 } from 'lucide-react';
 
 const menuConfig = {
@@ -14,6 +14,7 @@ const menuConfig = {
     { name: 'Subjects', path: '/admin/subjects', icon: <FileText size={20} /> },
     { name: 'Fees', path: '/admin/fees', icon: <DollarSign size={20} /> },
     { name: 'Payments', path: '/admin/payments', icon: <BarChart3 size={20} /> },
+    { name: 'Reports', path: '/admin/reports', icon: <FileSpreadsheet size={20} /> },
     { name: 'Notices', path: '/admin/notices', icon: <Bell size={20} /> },
     { name: 'Announcements', path: '/admin/announcements', icon: <Megaphone size={20} /> },
     { name: 'Parents', path: '/admin/parents', icon: <Users2 size={20} /> },
@@ -31,6 +32,7 @@ const menuConfig = {
     { name: 'My Subjects', path: '/teacher/subjects', icon: <BookOpen size={20} /> },
     { name: 'Attendance', path: '/teacher/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Marks Entry', path: '/teacher/marks', icon: <ClipboardList size={20} /> },
+    { name: 'Reports', path: '/teacher/reports', icon: <FileSpreadsheet size={20} /> },
     { name: 'Notices', path: '/teacher/notices', icon: <Bell size={20} /> },
     { name: 'Announcements', path: '/teacher/announcements', icon: <Megaphone size={20} /> },
     { name: 'Messages', path: '/teacher/messages', icon: <MessageSquare size={20} /> },
@@ -48,6 +50,7 @@ const menuConfig = {
     { name: 'Attendance', path: '/student/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Results', path: '/student/results', icon: <Award size={20} /> },
     { name: 'Report Card', path: '/student/report-card', icon: <ClipboardList size={20} /> },
+    { name: 'Statements', path: '/student/reports', icon: <FileSpreadsheet size={20} /> },
 
     { name: 'Hostel', path: '/student/hostel', icon: <Building2 size={20} /> },
 
@@ -68,6 +71,7 @@ const menuConfig = {
     { name: 'Attendance', path: '/parent/attendance', icon: <CalendarCheck size={20} /> },
     { name: 'Academic Results', path: '/parent/results', icon: <Award size={20} /> },
     { name: 'Report Card', path: '/parent/report-card', icon: <ClipboardList size={20} /> },
+    { name: 'Statements', path: '/parent/reports', icon: <FileSpreadsheet size={20} /> },
 
     { name: 'Hostel', path: '/parent/hostel', icon: <Building2 size={20} /> },
 

@@ -29,6 +29,7 @@ const AdminFees = () => {
     const [importOpen, setImportOpen] = useState(false);
     const [remindOpen, setRemindOpen] = useState(false);
     const [remind, setRemind] = useState({ course_id: '', semester: '' });
+    const [pickerCourse, setPickerCourse] = useState('');
     const [reminding, setReminding] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [courseFilter, setCourseFilter] = useState('All');
@@ -90,6 +91,7 @@ const AdminFees = () => {
     const openAssignModal = () => {
         setEditingFeeId(null);
         setAssignMode('single');
+        setPickerCourse('');
         setFormData({ student_id: '', course_id: '', semester: '', fee_type: 'Tuition', total_fee: '', due_date: '' });
         setIsModalOpen(true);
     };
@@ -301,9 +303,13 @@ const AdminFees = () => {
                     {!editingFeeId && assignMode === 'single' && (
                         <div className="space-y-1">
                             <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Student</span>
+                            <select value={pickerCourse} onChange={(e) => { setPickerCourse(e.target.value); setFormData({ ...formData, student_id: '' }); }} className="mb-2 w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none">
+                                <option value="">All courses</option>
+                                {courses.map(c => <option key={c.id} value={c.id}>{c.course_name}</option>)}
+                            </select>
                             <select required value={formData.student_id} onChange={(e) => setFormData({ ...formData, student_id: e.target.value })} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none">
                                 <option value="">-- Select Student --</option>
-                                {students.map(s => (
+                                {students.filter(s => !pickerCourse || String(s.course_id) === String(pickerCourse)).map(s => (
                                     <option key={s.student_id} value={s.student_id}>
                                         {s.full_name} ({s.enrollment_number})
                                     </option>

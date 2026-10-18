@@ -16,7 +16,8 @@ const modules = [
     require('./feeImport'),
     require('./auditLog'),
     require('./accountAdmin'),
-    require('./notifications')
+    require('./notifications'),
+    require('./reports')
 ];
 
 module.exports = (app, ctx) => {
