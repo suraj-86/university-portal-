@@ -766,6 +766,7 @@ const TeacherAttendance = () => {
                                 setHistoryFilters({
                                     ...historyFilters,
                                     semester: e.target.value,
+                                    subject: 'All',
                                 })
                             }
                             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
@@ -773,15 +774,13 @@ const TeacherAttendance = () => {
                             <option value="All">
                                 All Semesters
                             </option>
-                            <option value="Sem 1">
-                                Semester 1
-                            </option>
-                            <option value="Sem 2">
-                                Semester 2
-                            </option>
-                            <option value="Sem 3">
-                                Semester 3
-                            </option>
+                            {[...new Set(mySubjects.map((sub) => sub.semester))]
+                                .sort((x, y) => x - y)
+                                .map((sem) => (
+                                    <option key={sem} value={`Sem ${sem}`}>
+                                        Semester {sem}
+                                    </option>
+                                ))}
                         </select>
                     </div>
 
@@ -802,7 +801,9 @@ const TeacherAttendance = () => {
                             <option value="All">
                                 All Subjects
                             </option>
-                            {mySubjects.map((sub) => (
+                            {mySubjects
+                                .filter((sub) => historyFilters.semester === 'All' || `Sem ${sub.semester}` === historyFilters.semester)
+                                .map((sub) => (
                                 <option
                                     key={sub.id}
                                     value={sub.subject_name}

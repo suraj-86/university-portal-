@@ -329,6 +329,7 @@ const ParentAttendance = () => {
                                     value={selectedWardId}
                                     onChange={e => {
                                         setSelectedWardId(e.target.value);
+                                        setSelectedSubject('All');
                                     }}
                                     className="text-sm font-bold text-slate-800 dark:text-slate-200 bg-transparent outline-none cursor-pointer"
                                 >
@@ -364,6 +365,7 @@ const ParentAttendance = () => {
                                     setSelectedSemester(
                                         Number(e.target.value)
                                     );
+                                    setSelectedSubject('All');
                                 }}
                                 className="text-sm font-bold text-slate-800 dark:text-slate-200 bg-transparent outline-none cursor-pointer"
                             >
