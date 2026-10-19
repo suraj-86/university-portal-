@@ -25,7 +25,6 @@ const Tip = ({ active, payload, label, format }) => {
 
 const Empty = ({ text }) => <p className="py-10 text-center text-sm text-slate-400">{text}</p>;
 
-// Vertical bars over time (fee collection by month). Last bar is lighter when `partialLast` is set.
 export const ColumnChart = ({ data, xKey, yKey, name, format, label, partialLast = false, emptyText = 'No data yet.' }) => {
     if (!data || !data.length || data.every((d) => !d[yKey])) return <Empty text={emptyText} />;
     return (
@@ -46,7 +45,6 @@ export const ColumnChart = ({ data, xKey, yKey, name, format, label, partialLast
     );
 };
 
-// Horizontal percentage bars with a minimum line; values under the minimum turn amber and say "below".
 export const ThresholdBars = ({ data, min = 75, label, emptyText = 'No attendance recorded yet.', height }) => {
     if (!data || !data.length) return <Empty text={emptyText} />;
     const h = height || Math.max(150, data.length * 44 + 30);
@@ -70,7 +68,6 @@ export const ThresholdBars = ({ data, min = 75, label, emptyText = 'No attendanc
     );
 };
 
-// One line per subject over weeks; the weakest line is drawn thicker in rose.
 export const TrendLines = ({ weeks, series, min = 75, label, emptyText = 'No attendance recorded in the last few weeks.' }) => {
     const has = series && series.some((s) => s.values.some((v) => v !== null));
     if (!has) return <Empty text={emptyText} />;
@@ -104,7 +101,6 @@ export const TrendLines = ({ weeks, series, min = 75, label, emptyText = 'No att
     );
 };
 
-// Donut with a text legend beside it, so values never depend on colour alone.
 export const DonutChart = ({ data, label, emptyText = 'No data yet.' }) => {
     const total = (data || []).reduce((s, d) => s + d.value, 0);
     if (!total) return <Empty text={emptyText} />;
@@ -131,7 +127,6 @@ export const DonutChart = ({ data, label, emptyText = 'No data yet.' }) => {
     );
 };
 
-// Two stacked segments per row (e.g. active vs deactivated accounts).
 export const StackedBars = ({ data, keys, label, emptyText = 'No data yet.' }) => {
     if (!data || !data.length) return <Empty text={emptyText} />;
     return (
@@ -150,7 +145,6 @@ export const StackedBars = ({ data, keys, label, emptyText = 'No data yet.' }) =
     );
 };
 
-// Rows with a label, a filled bar (value of total) and a caption.
 export const ProgressList = ({ rows, emptyText = 'No data yet.' }) => {
     if (!rows || !rows.length) return <Empty text={emptyText} />;
     return (
@@ -174,7 +168,6 @@ export const ProgressList = ({ rows, emptyText = 'No data yet.' }) => {
     );
 };
 
-// Plain label / value rows: figures without the "big number box" look.
 export const FigureList = ({ rows }) => (
     <dl>
         {rows.map((r) => (
@@ -185,3 +178,26 @@ export const FigureList = ({ rows }) => (
         ))}
     </dl>
 );
+
+export const GroupedColumns = ({ data, xKey, series, format = (v) => `${v}%`, label, emptyText = 'No data yet.' }) => {
+    if (!data || !data.length) return <Empty text={emptyText} />;
+    const colors = [INDIGO, SLATE];
+    return (
+        <div className="h-64 text-slate-500 dark:text-slate-400" role="img" aria-label={label}>
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data} margin={{ top: 18, right: 8, bottom: 0, left: -8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.15} vertical={false} />
+                    <XAxis dataKey={xKey} tick={axis} axisLine={false} tickLine={false} interval={0} />
+                    <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tick={axis} axisLine={false} tickLine={false} tickFormatter={format} width={44} />
+                    <Tooltip cursor={{ fill: 'currentColor', fillOpacity: 0.08 }} content={<Tip format={(v) => (v === null || v === undefined ? '-' : format(v))} />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {series.map((s, i) => (
+                        <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color || colors[i % colors.length]} radius={[6, 6, 0, 0]} maxBarSize={32}>
+                            <LabelList dataKey={s.key} position="top" formatter={format} style={{ fill: 'currentColor', fontSize: 10, fontWeight: 600 }} />
+                        </Bar>
+                    ))}
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+};
