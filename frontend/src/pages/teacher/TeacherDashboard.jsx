@@ -1,220 +1,188 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Users, Bell, Megaphone, FileText, CheckSquare, Activity, Clock, MapPin, Download, X } from 'lucide-react';
-import api, { getFileUrl } from '../../services/api';
-import StatsWidget from '../../components/StatsWidget';
+import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
-import Modal from '../../components/Modal';
-import { fileDisplayName } from '../../utils/format';
+import DashHeader from '../../components/dashboard/DashHeader';
+import AttentionPanel from '../../components/dashboard/AttentionPanel';
+import DashCard from '../../components/dashboard/DashCard';
+import { TrendLines, ThresholdBars, ColumnChart, ProgressList } from '../../components/dashboard/DashCharts';
+import { plural, weekLabel, shortBand } from '../../utils/dashboardUi';
+
+const STATE_CHIP = {
+    unmarked: { label: 'Not marked', cls: 'text-rose-800 bg-rose-100 dark:text-rose-200 dark:bg-rose-900/40' },
+    marked: { label: 'Marked', cls: 'text-emerald-800 bg-emerald-100 dark:text-emerald-200 dark:bg-emerald-900/40' },
+    upcoming: { label: 'Upcoming', cls: 'text-slate-700 bg-slate-100 dark:text-slate-200 dark:bg-slate-800' }
+};
 
 const TeacherDashboard = () => {
     const { user } = useAuth();
-    const [loading, setLoading] = useState(true);
-    const [viewingNotice, setViewingNotice] = useState(null);
-    const [dashboardData, setDashboardData] = useState({
-        teacherName: '',
-        stats: { totalSubjects: 0, totalStudents: 0, classesConducted: 0 },
-        notices: [],
-        scheduledClasses: []
-    });
+    const [state, setState] = useState({ key: null, insights: null, notices: [], counts: {}, error: false });
+    const [reloadKey, setReloadKey] = useState(0);
+    const key = `${user?.id}:${reloadKey}`;
+    const loading = !!user?.id && state.key !== key;
 
     useEffect(() => {
-        if (user?.id) {
-            api.get(`/teacher/${user.id}/dashboard`)
-                .then(res => {
-                    setDashboardData(res.data);
-                    setLoading(false);
-                })
-                .catch(err => {
-                    console.error("Dashboard Fetch Error:", err);
-                    setLoading(false);
-                });
-        }
-    }, [user]);
+        if (!user?.id) return undefined;
+        let cancelled = false;
+        // Notices and unread counts are nice to have; the dashboard still works without them.
+        Promise.all([
+            api.get(`/teacher/${user.id}/insights`),
+            api.get(`/teacher/${user.id}/dashboard`).then((r) => r.data.notices || []).catch(() => []),
+            api.get('/inbox/counts').then((r) => r.data || {}).catch(() => ({}))
+        ])
+            .then(([ins, notices, counts]) => { if (!cancelled) setState({ key, insights: ins.data, notices, counts, error: false }); })
+            .catch(() => { if (!cancelled) setState({ key, insights: null, notices: [], counts: {}, error: true }); });
+        return () => { cancelled = true; };
+    }, [user, key]);
 
-    const handleDownload = (e, fileName) => {
-        if (e) e.stopPropagation();
-        if (!fileName) return;
-        window.open(getFileUrl(fileName), '_blank');
-    };
+    if (loading) return <div className="p-10 text-slate-400 font-bold animate-pulse">Loading your dashboard…</div>;
+    if (state.error || !state.insights) {
+        return (
+            <div className="p-6 md:p-10">
+                <div className="rounded-[28px] border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-6 flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-rose-700 dark:text-rose-300">The dashboard could not be loaded.</p>
+                    <button type="button" onClick={() => setReloadKey((k) => k + 1)} className="text-sm font-bold text-rose-700 dark:text-rose-300 underline">Try again</button>
+                </div>
+            </div>
+        );
+    }
+
+    const { insights, notices, counts } = state;
+    const { todayClasses, atRisk, trend, analytics } = insights;
+    const attBySubject = analytics.attendanceBySubject.map((x) => ({ name: x.subject, value: x.percent }));
+    const marksAvg = analytics.marksBySubject.map((x) => ({ name: x.subject, value: x.average }));
+    const bands = analytics.marksBands.map((b) => ({ name: shortBand(b.label), count: b.count }));
+    const passRows = analytics.marksBySubject.map((x) => ({ label: x.subject, value: x.passRate || 0, total: 100, caption: `${x.passRate}% passed (${x.entries} entries)` }));
+    const first = insights.firstUnmarked;
+
+    const facts = [
+        { label: plural(insights.counts.subjects, 'subject'), to: '/teacher/subjects' },
+        { label: plural(insights.counts.students, 'student') },
+        { label: plural(insights.counts.classesToday, 'class', 'classes') + ' today', to: '/teacher/timetable' }
+    ];
+    if (insights.counts.averageAttendance !== null) facts.push({ label: `${insights.counts.averageAttendance}% average attendance`, to: '/teacher/reports' });
+
+    const items = [];
+    if (first) {
+        const more = insights.unmarkedCount - 1;
+        items.push({
+            key: 'unmarked', tone: 'rose', button: true, to: '/teacher/attendance', linkLabel: 'Mark attendance',
+            text: <>Attendance is <b>not marked</b> for <b>{first.subject}, {first.start}</b> ({first.course} Sem {first.semester}){more > 0 ? ` and ${plural(more, 'other class', 'other classes')}` : ''}</>
+        });
+    }
+    if (atRisk.count > 0) {
+        const sid = atRisk.items[0]?.subject_id;
+        items.push({
+            key: 'risk', tone: 'amber', to: `/teacher/reports?report=attendance-low${sid ? `&subject_id=${sid}` : ''}`, linkLabel: 'See who →',
+            text: <><b>{plural(atRisk.count, 'student')}</b> {atRisk.count === 1 ? 'is' : 'are'} below {trend.lowThreshold}% attendance in your subjects</>
+        });
+    }
+    if (counts.messages > 0) {
+        items.push({ key: 'msg', tone: 'blue', to: '/teacher/messages', linkLabel: 'Open messages →', text: <><b>{plural(counts.messages, 'unread message')}</b></> });
+    }
+    if (counts.notices > 0) {
+        items.push({ key: 'notice', tone: 'blue', to: '/teacher/notices', linkLabel: 'Open notices →', text: <><b>{plural(counts.notices, 'unread notice')}</b></> });
+    }
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
-            <header className="mb-8">
-                <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
-                    Welcome <span className="text-indigo-600 dark:text-indigo-400">{dashboardData.teacherName || user?.username || 'Professor'}</span>
-                </h2>
-                <p className="text-slate-500 dark:text-slate-400 mt-1">Here is your daily teaching overview and scheduled classes.</p>
-            </header>
+            <DashHeader name={insights.teacherName || user?.full_name || 'Professor'} facts={facts} />
+            <AttentionPanel items={items} allClearText={todayClasses.length ? 'Attendance is up to date and nothing is waiting for you.' : 'No classes today and nothing is waiting for you.'} />
 
-            {loading ? (
-                <div className="flex flex-col justify-center items-center h-64 opacity-50">
-                    <Activity size={48} className="text-indigo-600 dark:text-indigo-400 animate-pulse mb-4" />
-                    <p className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-xs animate-pulse">Syncing Dashboard...</p>
-                </div>
-            ) : (
-                <div className="animate-in fade-in duration-500">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <StatsWidget title="ASSIGNED SUBJECTS" value={dashboardData.stats.totalSubjects} icon={<BookOpen size={24} />} />
-                        <StatsWidget title="TOTAL STUDENTS" value={dashboardData.stats.totalStudents} icon={<Users size={24} />} />
-                        
-                        <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-center shadow-sm">
-                            <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Quick Actions</h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                <Link to="/teacher/attendance" className="bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Mark Attendance">
-                                    <CheckSquare size={18} className="group-hover:scale-110 transition-transform"/>
-                                    <span className="text-[10px] font-bold mt-1.5">Attendance</span>
-                                </Link>
-                                <Link to="/teacher/marks" className="bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Enter Grades">
-                                    <FileText size={18} className="group-hover:scale-110 transition-transform"/>
-                                    <span className="text-[10px] font-bold mt-1.5">Mark Grades</span>
-                                </Link>
-                                <Link to="/teacher/notices" className="bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-600 dark:text-amber-400 rounded-2xl p-2.5 flex flex-col items-center justify-center transition-colors text-center group" title="Broadcast Notice">
-                                    <Megaphone size={18} className="group-hover:scale-110 transition-transform"/>
-                                    <span className="text-[10px] font-bold mt-1.5">Send Notice</span>
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <DashCard title="Today's classes" footer={{ to: '/teacher/timetable', label: 'Open timetable →' }}>
+                    {todayClasses.length === 0 ? (
+                        <p className="py-8 text-center text-sm text-slate-400">You have no classes scheduled today.</p>
+                    ) : (
+                        <ul>
+                            {todayClasses.map((c) => {
+                                const chip = STATE_CHIP[c.state];
+                                return (
+                                    <li key={c.id} className="flex items-center gap-4 py-3.5 border-t border-slate-100 dark:border-slate-800">
+                                        <span className="w-20 text-sm font-bold text-slate-900 dark:text-slate-100">{c.start}</span>
+                                        <span className="flex-1 min-w-0 text-sm">
+                                            <b className="text-slate-900 dark:text-slate-100 block truncate">{c.subject}</b>
+                                            <span className="text-slate-500 dark:text-slate-400">{c.course} Sem {c.semester}{c.room ? ` · Room ${c.room}` : ''}</span>
+                                        </span>
+                                        <span className={`text-xs font-bold rounded-full px-2.5 py-1 whitespace-nowrap ${chip.cls}`}>{chip.label}</span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </DashCard>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2">
-                            <div className="flex justify-between items-end px-1 mb-4">
-                                <div>
-                                    <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Today's Timetable</h3>
-                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-                                </div>
-                                <span className="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-indigo-100 dark:border-indigo-900">
-                                    {dashboardData.scheduledClasses.length} Sessions
-                                </span>
-                            </div>
-                            
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] shadow-sm overflow-hidden">
-                                {dashboardData.scheduledClasses.length > 0 ? (
-                                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {dashboardData.scheduledClasses.map((cls, idx) => (
-                                            <div key={idx} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                                                <div className="flex items-center gap-5">
-                                                    <div className="w-16 h-16 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-2xl flex flex-col items-center justify-center font-black border border-slate-200 dark:border-slate-700 group-hover:border-indigo-200 shadow-sm transition-colors shrink-0">
-                                                        <span className="text-sm">{cls.start_time.split(' ')[0]}</span>
-                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 group-hover:text-indigo-400">{cls.start_time.split(' ')[1]}</span>
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
-                                                            {cls.subject_name} <span className="text-sm text-slate-400 dark:text-slate-500 font-medium">({cls.subject_code})</span>
-                                                        </h4>
-                                                        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                                            <div className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md">
-                                                                <MapPin size={12} className="text-indigo-500"/> Room {cls.room_number}
-                                                            </div>
-                                                            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                                                                {cls.course_name} • Sem {cls.semester} • Ends at {cls.end_time}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <Link
-                                                    to={`/teacher/attendance?subject=${cls.subject_id}`}
-                                                    className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 font-bold text-sm hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 transition-all shadow-sm shrink-0 active:scale-95"
-                                                >
-                                                    <CheckSquare size={18} /> Mark Attendance
-                                                </Link>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-16 bg-white dark:bg-slate-900 flex flex-col items-center justify-center">
-                                        <Clock size={48} className="text-slate-200 dark:text-slate-700 mb-4" />
-                                        <h3 className="text-slate-600 dark:text-slate-300 font-black text-lg mb-1">Schedule Clear</h3>
-                                        <p className="text-slate-400 dark:text-slate-500 font-bold text-sm">You have no classes scheduled for today.</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                <DashCard title="Attendance by subject" subtitle={`Present % per week, last ${trend.weeks.length} weeks. Dashed line is ${trend.lowThreshold}%.`}>
+                    <TrendLines weeks={trend.weeks.map(weekLabel)} series={trend.series} min={trend.lowThreshold}
+                        label="Weekly attendance percentage for each of your subjects" />
+                </DashCard>
+            </div>
 
-                        <div className="lg:col-span-1">
-                            <div className="flex justify-between items-end px-1 mb-4">
-                                <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Recent Updates</h3>
-                                <Link to="/teacher/notices" className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">Inbox</Link>
-                            </div>
-                            
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] shadow-sm overflow-hidden p-2">
-                                {dashboardData.notices.length > 0 ? (
-                                    <div className="flex flex-col gap-2">
-                                        {dashboardData.notices.map(notice => (
-                                            <div
-                                                key={notice.id}
-                                                onClick={() => setViewingNotice(notice)}
-                                                className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl flex items-start gap-4 group hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
-                                            >
-                                                <div className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${
-                                                    notice.priority === 'High' 
-                                                        ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' 
-                                                        : 'bg-indigo-400'
-                                                }`}></div>
-                                                <div className="flex-1">
-                                                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm leading-snug group-hover:text-indigo-900 dark:group-hover:text-indigo-300 transition-colors line-clamp-2">
-                                                        {notice.title}
-                                                    </h4>
-                                                    <div className="flex items-center gap-1.5 mt-2">
-                                                        <Bell size={10} className="text-slate-400 dark:text-slate-500" />
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">{notice.date}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-12 text-slate-400 dark:text-slate-500 font-bold text-sm">
-                                        No recent updates.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <h2 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1 mt-10 mb-4">Your subjects at a glance</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <DashCard title="Overall attendance by subject" subtitle={`Present % across all classes so far. Dashed line is ${trend.lowThreshold}%.`}
+                    footer={{ to: '/teacher/reports?report=attendance-summary', label: 'Open attendance summary →' }}>
+                    <ThresholdBars data={attBySubject} min={trend.lowThreshold} label="Overall attendance percentage for each of your subjects" />
+                </DashCard>
+                <DashCard title="Average marks by subject" subtitle={`% of marks across all assessments. Dashed line is the ${analytics.passPercent}% pass mark.`}
+                    footer={{ to: '/teacher/reports?report=marks-sheet', label: 'Open marks sheet →' }}>
+                    <ThresholdBars data={marksAvg} min={analytics.passPercent} label="Average marks percentage for each of your subjects" emptyText="No marks entered yet." />
+                </DashCard>
+                <DashCard title="Marks distribution" subtitle="All marks you have entered, by percentage band.">
+                    <ColumnChart data={bands} xKey="name" yKey="count" name="Marks entries" label="Number of marks entries in each percentage band" emptyText="No marks entered yet." />
+                </DashCard>
+                <DashCard title="Pass rate by subject" subtitle={`Share of marks entries at or above ${analytics.passPercent}%.`}>
+                    <ProgressList rows={passRows} emptyText="No marks entered yet." />
+                </DashCard>
+            </div>
 
-            {viewingNotice && (
-                <Modal isOpen={!!viewingNotice} onClose={() => setViewingNotice(null)} title="Notice Preview">
-                    <div className="flex flex-col h-full max-h-[80vh]">
-                        <div className="shrink-0 pb-4 border-b border-slate-100 dark:border-slate-800">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${viewingNotice.priority === 'High' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400' : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400'}`}>
-                                    {viewingNotice.priority} Priority
-                                </span>
-                                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{viewingNotice.date}</span>
-                            </div>
-                            <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight capitalize">{viewingNotice.title}</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <DashCard title="Students at risk in your subjects" className="lg:col-span-2"
+                    subtitle={atRisk.count > 8 ? `Showing the 8 lowest of ${atRisk.count}.` : undefined}
+                    footer={{ to: '/teacher/reports', label: 'Open reports →' }}>
+                    {atRisk.items.length === 0 ? (
+                        <p className="py-8 text-center text-sm text-slate-400">No student is below {trend.lowThreshold}% attendance.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[480px]">
+                                <thead>
+                                    <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                        <th className="py-2 pr-3 font-semibold">Student</th>
+                                        <th className="py-2 px-3 font-semibold">Subject</th>
+                                        <th className="py-2 px-3 font-semibold text-right">Present</th>
+                                        <th className="py-2 pl-3 font-semibold text-right">Classes in a row to recover</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {atRisk.items.map((s) => (
+                                        <tr key={`${s.student_id}-${s.subject_id}`} className="border-t border-slate-100 dark:border-slate-800">
+                                            <td className="py-3 pr-3 text-slate-900 dark:text-slate-100"><b>{s.name}</b>{s.roll ? <span className="text-slate-500 dark:text-slate-400"> · Roll {s.roll}</span> : null}</td>
+                                            <td className="py-3 px-3 text-slate-700 dark:text-slate-300">{s.subject}</td>
+                                            <td className={`py-3 px-3 text-right font-bold ${s.percent < 60 ? 'text-rose-700 dark:text-rose-400' : 'text-amber-700 dark:text-amber-400'}`}>{s.percent}%</td>
+                                            <td className="py-3 pl-3 text-right text-slate-700 dark:text-slate-300">{s.needed}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                        
-                        <div className="flex-1 overflow-y-auto py-6 my-2 bg-slate-50/50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-inner px-6">
-                            <p className="text-slate-700 dark:text-slate-300 text-base leading-relaxed whitespace-pre-wrap break-words font-medium">{viewingNotice.content || viewingNotice.title}</p>
-                        </div>
-                        
-                        <div className="shrink-0 pt-4 space-y-4">
-                            {viewingNotice.attachment_url && (
-                                <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg"><FileText size={20} /></div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase leading-none mb-1">Attachment</p>
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{fileDisplayName(viewingNotice.attachment_url)}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={(e) => handleDownload(e, viewingNotice.attachment_url)} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
-                                        <Download size={18} />
-                                    </button>
-                                </div>
-                            )}
-                            <button onClick={() => setViewingNotice(null)} className="w-full bg-slate-900 dark:bg-slate-800 text-white font-black py-4 rounded-2xl hover:bg-slate-800 dark:hover:bg-slate-700 transition-all text-xs uppercase tracking-[0.2em]">
-                                Close Preview
-                            </button>
-                        </div>
-                    </div>
-                </Modal>
-            )}
+                    )}
+                </DashCard>
+
+                <DashCard title="Recent notices" footer={{ to: '/teacher/notices', label: 'Open notices →' }}>
+                    {notices.length === 0 ? (
+                        <p className="py-6 text-sm text-slate-400">No recent notices.</p>
+                    ) : (
+                        <ul>
+                            {notices.map((n) => (
+                                <li key={n.id} className="py-3 border-t border-slate-100 dark:border-slate-800 text-sm">
+                                    <Link to="/teacher/notices" className="font-semibold text-slate-900 dark:text-slate-100 hover:underline line-clamp-2">{n.title}</Link>
+                                    <span className="block text-slate-500 dark:text-slate-400">{n.date}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </DashCard>
+            </div>
         </div>
     );
 };

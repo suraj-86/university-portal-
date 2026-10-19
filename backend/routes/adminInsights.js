@@ -191,6 +191,11 @@ module.exports = (app, { queryAsync, verifyRole }) => {
             };
         },
 
+        async security() {
+            const r = (await queryAsync('SELECT COUNT(*) AS n FROM users WHERE must_change_password = 1 AND is_active = 1'))[0] || {};
+            return { mustChangePassword: n(r.n) };
+        },
+
         async operations() {
             const since = `${monthStart(todayInTZ(), 0)} 00:00:00`;
             const c = (await queryAsync(

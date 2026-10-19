@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth.jsx';
 import api from '../../services/api';
 import ReportView from '../../components/ReportView';
@@ -12,8 +13,20 @@ const Reports = () => {
     const catalog = useMemo(() => REPORTS[role] || [], [role]);
     const [options, setOptions] = useState({ courses: [], subjects: [], hostels: [], wards: [] });
     const [optionsError, setOptionsError] = useState(false);
-    const [selected, setSelected] = useState(null);
-    const [values, setValues] = useState({});
+    const [searchParams] = useSearchParams();
+    const [preset] = useState(() => {
+        const name = searchParams.get('report');
+        const found = (REPORTS[role] || []).find((r) => r.name === name);
+        if (!found) return { selected: null, values: {} };
+        const v = initialValues(found);
+        found.filters.forEach((f) => {
+            const q = searchParams.get(f.key);
+            if (q !== null) v[f.key] = f.type === 'checkbox' ? q === '1' || q === 'true' : q;
+        });
+        return { selected: found, values: v };
+    });
+    const [selected, setSelected] = useState(preset.selected);
+    const [values, setValues] = useState(preset.values);
     const [state, setState] = useState({ busy: false, error: '', report: null });
 
     useEffect(() => {
