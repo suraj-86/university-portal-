@@ -18,7 +18,8 @@ const modules = [
     require('./accountAdmin'),
     require('./notifications'),
     require('./reports'),
-    require('./teacherInsights')
+    require('./teacherInsights'),
+    require('./studentInsights')
 ];
 
 module.exports = (app, ctx) => {
