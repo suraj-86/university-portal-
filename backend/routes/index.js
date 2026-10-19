@@ -17,7 +17,8 @@ const modules = [
     require('./auditLog'),
     require('./accountAdmin'),
     require('./notifications'),
-    require('./reports')
+    require('./reports'),
+    require('./teacherInsights')
 ];
 
 module.exports = (app, ctx) => {
