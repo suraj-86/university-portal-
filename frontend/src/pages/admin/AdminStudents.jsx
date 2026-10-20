@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, ShieldCheck, Search, UploadCloud, Download } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Edit2, Trash2, ShieldCheck, UploadCloud, Download } from 'lucide-react';
 import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
@@ -10,6 +10,9 @@ import ResetPasswordAction from '../../components/ResetPasswordAction';
 import { downloadTextFile } from '../../utils/csv';
 import { toCSV } from '../../utils/spreadsheet';
 import { useConfirm } from '../../context/confirm';
+import useLoad from '../../hooks/useLoad';
+import { plural } from '../../utils/dashboardUi';
+import { ListHeader, FilterBar, LoadState, FormError, FieldLabel, ModalActions, RowActions, IconAction, primaryBtn, secondaryBtn, modalSelectCls } from '../../components/admin/ListParts';
 
 const IMPORT_HEADERS = ['enrollment_number', 'name', 'course_code', 'semester', 'roll_number', 'email', 'phone', 'password'];
 const IMPORT_ALIASES = {
@@ -31,232 +34,153 @@ const importMapRow = (o) => {
     return { value: { ...o } };
 };
 
+const EMPTY = { name: '', email: '', enrollment_number: '', roll_number: '', course_id: '', semester: 1, password: '' };
+const URLS = ['/students', '/courses'];
+
 const AdminStudents = () => {
-    const [students, setStudents] = useState([]);
-    const [courses, setCourses] = useState([]);
-    const [searchTerm, setSearchTerm] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingStudentId, setEditingStudentId] = useState(null);
+    const { data, loading, error, reload } = useLoad(URLS);
+    const rawStudents = data ? data[0] : [];
+    const courses = data ? data[1] : [];
+    const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
+    const [courseFilter, setCourseFilter] = useState('');
+    const [semFilter, setSemFilter] = useState('');
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState(null);
     const [importOpen, setImportOpen] = useState(false);
     const [credentials, setCredentials] = useState([]);
-    
-    const [formData, setFormData] = useState({
-        name: '', email: '', enrollment_number: '', roll_number: '', course_id: '', semester: 1, password: ''
-    });
-
-    const fetchData = async () => {
-        try {
-            const [studentRes, courseRes] = await Promise.all([
-                api.get('/students'),
-                api.get('/courses')
-            ]);
-            
-            setStudents(studentRes.data.map(s => ({
-                id: s.student_id,
-                user_id: s.user_id,
-                course_id: s.course_id,
-                enrollment_number: s.enrollment_number,
-                roll_number: s.roll_number || '',
-                name: s.full_name,
-                email: s.email,
-                course: s.course_name || "N/A", 
-                semester: s.semester,
-                status: s.status || "Active"
-            })));
-            
-            setCourses(courseRes.data);
-        } catch (error) {
-            console.error("Connection failed:", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const filteredStudents = students.filter(s => 
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        s.enrollment_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.roll_number.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const handleFormSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            if (editingStudentId) {
-                await api.put(`/students/${editingStudentId}`, formData);
-            } else {
-                await api.post('/students', formData);
-            }
-            
-            setIsModalOpen(false);
-            fetchData();
-            setEditingStudentId(null);
-        } catch (error) {
-            const errorMsg = error.response?.data?.error || "Failed to submit form";
-            toast.error("Error: " + errorMsg);
-            console.error("Submit failed:", error);
-        }
-    };
-
+    const [form, setForm] = useState(EMPTY);
+    const [formError, setFormError] = useState('');
+    const [saving, setSaving] = useState(false);
     const confirm = useConfirm();
-    const handleDelete = async (userId) => {
-        if (await confirm({ title: 'Delete this student?', message: 'The student record and login will be removed. This cannot be undone.', confirmText: 'Delete', tone: 'danger' })) {
-            try {
-                await api.delete(`/students/${userId}`);
-                fetchData();
-            } catch (error) {
-                console.error("Delete failed:", error);
-            }
-        }
+
+    const students = rawStudents.map((s) => ({
+        id: s.student_id, user_id: s.user_id, course_id: s.course_id, enrollment_number: s.enrollment_number || '',
+        roll_number: s.roll_number || '', name: s.full_name || '', email: s.email, course: s.course_name || 'N/A',
+        semester: s.semester, status: s.status || 'Active'
+    }));
+    const codeOf = new Map(courses.map((c) => [c.id, c.course_code]));
+    const filterCourse = courses.find((c) => String(c.id) === courseFilter);
+    const semMax = filterCourse ? Number(filterCourse.total_semesters) : Math.max(0, ...courses.map((c) => Number(c.total_semesters)));
+    const formCourse = courses.find((c) => String(c.id) === String(form.course_id));
+    const formMaxSem = formCourse ? Number(formCourse.total_semesters) : 8;
+
+    const pickCourse = (v) => {
+        setCourseFilter(v);
+        const c = courses.find((x) => String(x.id) === v);
+        if (c && semFilter && Number(semFilter) > Number(c.total_semesters)) setSemFilter('');
     };
 
-    const openEditModal = (student) => {
-        setEditingStudentId(student.id);
-        setFormData({ ...student, password: '' });
-        setIsModalOpen(true);
+    const term = search.trim().toLowerCase();
+    const shown = students.filter((s) =>
+        (!courseFilter || String(s.course_id) === courseFilter) &&
+        (!semFilter || String(s.semester) === semFilter) &&
+        (!term || [s.name, s.enrollment_number, s.roll_number, s.email].some((v) => (v || '').toLowerCase().includes(term))));
+
+    const perCourse = courses
+        .map((c) => ({ code: c.course_code, n: students.filter((s) => s.course_id === c.id).length }))
+        .filter((c) => c.n > 0);
+    const line = data
+        ? [plural(students.length, 'student'), ...perCourse.slice(0, 4).map((c) => `${c.n} ${c.code}`)].join(' · ')
+        : 'Enrollments and academic records.';
+
+    const openNew = () => { setEditingId(null); setForm(EMPTY); setFormError(''); setModalOpen(true); };
+    const openEdit = (s) => { setEditingId(s.id); setForm({ ...s, password: '' }); setFormError(''); setModalOpen(true); };
+
+    const submit = async (e) => {
+        e.preventDefault();
+        setFormError('');
+        setSaving(true);
+        try {
+            if (editingId) await api.put(`/students/${editingId}`, form);
+            else await api.post('/students', form);
+            setModalOpen(false);
+            toast.success(editingId ? 'Student record updated.' : 'Student account created.');
+            reload();
+        } catch (err) {
+            setFormError(err.response?.data?.error || 'Could not save the student.');
+        } finally { setSaving(false); }
+    };
+
+    const remove = async (s) => {
+        if (!(await confirm({ title: `Delete ${s.name}?`, message: 'The student record and login will be removed. This cannot be undone.', confirmText: 'Delete', tone: 'danger' }))) return;
+        try {
+            await api.delete(`/students/${s.user_id}`);
+            toast.success('Student deleted.');
+            reload();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Could not delete the student.');
+        }
     };
 
     const columns = [
-        { header: "Roll No.", accessor: "roll_number" },
-        { header: "Enrollment No.", accessor: "enrollment_number" },
-        { 
-            header: "Student Name", 
-            accessor: "name",
-            cell: (row) => (
-                <div>
-                    <div className="font-bold text-slate-900 dark:text-slate-100">{row.name}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{row.email}</div>
-                </div>
-            )
-        },
-        { header: "Course", accessor: "course" },
-        { header: "Semester", accessor: "semester" },
-        {
-            header: "Actions",
-            accessor: "actions",
-            cell: (row) => (
-                <div className="flex justify-end gap-2">
-                    <ResetPasswordAction kind="student" id={row.id} name={row.name} />
-                    <button onClick={() => openEditModal(row)} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg">
-                        <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(row.user_id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg">
-                        <Trash2 size={16} />
-                    </button>
-                </div>
-            )
-        }
+        { header: 'Roll No.', accessor: 'roll_number' },
+        { header: 'Enrollment No.', accessor: 'enrollment_number' },
+        { header: 'Student', accessor: 'name', cell: (r) => (
+            <div>
+                <div className="font-bold text-slate-900 dark:text-slate-100">{r.name}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{r.email}</div>
+            </div>
+        ) },
+        { header: 'Course', accessor: 'course', cell: (r) => <span className="font-semibold">{codeOf.get(r.course_id) || r.course}</span> },
+        { header: 'Sem', accessor: 'semester' },
+        { header: '', accessor: 'actions', cell: (r) => (
+            <RowActions>
+                <ResetPasswordAction kind="student" id={r.id} name={r.name} />
+                <IconAction label={`Edit ${r.name}`} onClick={() => openEdit(r)}><Edit2 size={16} /></IconAction>
+                <IconAction label={`Delete ${r.name}`} tone="rose" onClick={() => remove(r)}><Trash2 size={16} /></IconAction>
+            </RowActions>
+        ) }
     ];
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
-            <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Student Directory</h2>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Manage enrollments and academic records.</p>
-                </div>
-                
-                <div className="relative w-full md:w-80">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                        type="text" 
-                        placeholder="Search Name or Enrollment..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none shadow-sm transition-all"
-                    />
-                </div>
-                <button
-                    onClick={() => setImportOpen(true)}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2.5 px-5 rounded-2xl shadow-sm flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
-                >
-                    <UploadCloud size={18} /> Import Excel/CSV
-                </button>
-                <button 
-                    onClick={() => { 
-                        setEditingStudentId(null); 
-                        setFormData({name:'', email:'', enrollment_number:'', roll_number:'', course_id:'', semester:1, password:''}); 
-                        setIsModalOpen(true); 
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2 transition-all active:scale-95 whitespace-nowrap"
-                >
-                    <Plus size={18} /> Add Student
-                </button>
-            </header>
+            <ListHeader title="Students" line={line}
+                actions={<>
+                    <button type="button" onClick={() => setImportOpen(true)} className={secondaryBtn}><UploadCloud size={16} /> Import Excel/CSV</button>
+                    <button type="button" onClick={openNew} className={primaryBtn}><Plus size={16} /> Add student</button>
+                </>} />
+            <LoadState loading={loading} error={error} onRetry={reload}>
+                <FilterBar search={search} onSearch={setSearch} placeholder="Search name, enrollment, roll or email" noun="students"
+                    shown={shown.length} total={students.length} onClear={() => { setSearch(''); setCourseFilter(''); setSemFilter(''); }}
+                    filters={[
+                        { id: 'course', label: 'Course', value: courseFilter, onChange: pickCourse, options: courses.map((c) => ({ value: String(c.id), label: c.course_code })) },
+                        { id: 'sem', label: 'Semester', value: semFilter, onChange: setSemFilter, options: Array.from({ length: semMax }, (_, i) => ({ value: String(i + 1), label: `Semester ${i + 1}` })) }
+                    ]} />
+                <Table columns={columns} data={shown} pageSize={10}
+                    emptyText={students.length ? 'No student matches these filters.' : 'No students yet. Add one or import a spreadsheet.'} />
+            </LoadState>
 
-            <Table columns={columns} data={filteredStudents} pageSize={5} />
-
-            <Modal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)}
-                title={editingStudentId ? 'Edit Student Record' : 'Register New Student'}
-            >
-                <form onSubmit={handleFormSubmit} className="space-y-6">
+            <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Edit student record' : 'Register student'}>
+                <form onSubmit={submit} className="space-y-4">
+                    <FormError message={formError} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label="Full Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Full Name" required />
-                        <Input label="Enrollment No." value={formData.enrollment_number} onChange={(e) => setFormData({...formData, enrollment_number: e.target.value})} placeholder="AC-000/00" required />
-                        <Input label="Roll No." value={formData.roll_number} onChange={(e) => setFormData({...formData, roll_number: e.target.value})} placeholder="e.g. 0000000" required />
-                        <Input label="Email Address" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="email.com" />
-                        
-                        <div className="space-y-1">
-                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Assign Course</span>
-                            <select 
-                                required
-                                value={formData.course_id} 
-                                onChange={(e) => setFormData({...formData, course_id: e.target.value})} 
-                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm focus:ring-2 focus:ring-sky-200 outline-none"
-                            >
-                                <option value="">-- Select Course --</option>
-                                {courses.map(course => (
-                                    <option key={course.id} value={course.id}>
-                                        {course.course_name}
-                                    </option>
-                                ))}
+                        <Input label="Full Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full Name" required />
+                        <Input label="Enrollment No." value={form.enrollment_number} onChange={(e) => setForm({ ...form, enrollment_number: e.target.value })} placeholder="AC-000/00" required />
+                        <Input label="Roll No." value={form.roll_number} onChange={(e) => setForm({ ...form, roll_number: e.target.value })} placeholder="e.g. 0000000" required />
+                        <Input label="Email Address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@example.com" />
+                        <div>
+                            <FieldLabel htmlFor="st-course">Course</FieldLabel>
+                            <select id="st-course" required value={form.course_id} onChange={(e) => {
+                                const c = courses.find((x) => String(x.id) === e.target.value);
+                                setForm({ ...form, course_id: e.target.value, semester: c && form.semester > Number(c.total_semesters) ? 1 : form.semester });
+                            }} className={modalSelectCls}>
+                                <option value="">Select course</option>
+                                {courses.map((c) => <option key={c.id} value={c.id}>{c.course_name}</option>)}
                             </select>
                         </div>
-                        <div className="space-y-1">
-                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                Semester
-                            </span>
-
-                            <select
-                                required
-                                value={formData.semester}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        semester: Number(e.target.value)
-                                    })
-                                }
-                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm focus:ring-2 focus:ring-sky-200 outline-none"
-                            >
-                                {Array.from({ length: 8 }, (_, index) => index + 1).map((semester) => (
-                                    <option key={semester} value={semester}>
-                                        Semester {semester}
-                                    </option>
-                                ))}
+                        <div>
+                            <FieldLabel htmlFor="st-sem">Semester</FieldLabel>
+                            <select id="st-sem" required value={form.semester} onChange={(e) => setForm({ ...form, semester: Number(e.target.value) })} className={modalSelectCls}>
+                                {Array.from({ length: formMaxSem }, (_, i) => i + 1).map((n) => <option key={n} value={n}>Semester {n}</option>)}
                             </select>
                         </div>
                     </div>
-
-                    <div className="bg-blue-50/50 dark:bg-blue-950/40 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/50">
-                        <h4 className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                            <ShieldCheck size={14} /> Account Security
-                        </h4>
-                        <Input 
-                            label="Login Password" 
-                            type="password" 
-                            value={formData.password} 
-                            onChange={(e) => setFormData({...formData, password: e.target.value})} 
-                            placeholder={editingStudentId ? "Leave blank to keep current" : "Set initial password"}
-                            required={!editingStudentId}
-                        />
+                    <div className="bg-indigo-50/60 dark:bg-indigo-950/40 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/50">
+                        <h4 className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-widest mb-3 flex items-center gap-2"><ShieldCheck size={14} /> Account security</h4>
+                        <Input label="Login Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+                            placeholder={editingId ? 'Leave blank to keep current' : 'Set initial password'} required={!editingId} />
                     </div>
-
-                    <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 shadow-lg transition-all active:scale-95">
-                        {editingStudentId ? 'Save Changes' : 'Create Account'}
-                    </button>
+                    <ModalActions onCancel={() => setModalOpen(false)} busy={saving} submitLabel={editingId ? 'Save changes' : 'Create account'} />
                 </form>
             </Modal>
 
@@ -277,7 +201,7 @@ const AdminStudents = () => {
                 onSubmit={(rows) => api.post('/students/bulk', { rows })}
                 onDone={(res) => {
                     setImportOpen(false);
-                    fetchData();
+                    reload();
                     setCredentials(res?.data?.credentials || []);
                 }}
             />
@@ -306,7 +230,7 @@ const AdminStudents = () => {
                     <button
                         type="button"
                         onClick={() => downloadTextFile('new_student_passwords.csv', toCSV([['enrollment_number', 'name', 'password'], ...credentials.map((c) => [c.enrollment_number, c.name, c.password])]))}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold"
                     >
                         <Download size={16} /> Download passwords (CSV)
                     </button>

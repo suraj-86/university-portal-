@@ -1087,7 +1087,7 @@ app.delete('/api/courses/:id', verifyRole(['admin']), (req, res) => {
 
 app.get('/api/subjects', verifyRole(['admin', 'teacher']), (req, res) => {
     const sql = `
-        SELECT subjects.*, courses.course_name, teachers.full_name as teacher_name 
+        SELECT subjects.*, courses.course_name, teacher_assignments.teacher_id AS teacher_id, teachers.full_name as teacher_name 
         FROM subjects 
         LEFT JOIN courses ON subjects.course_id = courses.id
         LEFT JOIN teacher_assignments ON subjects.id = teacher_assignments.subject_id

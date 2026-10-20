@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 
-const Table = ({ columns, data, pageSize = 10 }) => {
+const Table = ({ columns, data, pageSize = 10, emptyText = 'No records found.' }) => {
     const [currentPage, setCurrentPage] = useState(1);
 
     const totalPages = Math.ceil(data.length / pageSize);
-    const startIndex = (currentPage - 1) * pageSize;
+    const page = Math.min(currentPage, Math.max(totalPages, 1));
+    const startIndex = (page - 1) * pageSize;
     const currentData = data.slice(startIndex, startIndex + pageSize);
 
     return (
@@ -34,7 +35,7 @@ const Table = ({ columns, data, pageSize = 10 }) => {
                         ) : (
                             <tr>
                                 <td colSpan={columns.length} className="p-8 text-center text-slate-400 dark:text-slate-500 font-bold">
-                                    No records found.
+                                    {emptyText}
                                 </td>
                             </tr>
                         )}
@@ -42,21 +43,20 @@ const Table = ({ columns, data, pageSize = 10 }) => {
                 </table>
             </div>
 
-            {/* Pagination footer if pages exceed 1 */}
             {totalPages > 1 && (
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400">
-                    <span>Page {currentPage} of {totalPages}</span>
+                    <span>Page {page} of {totalPages}</span>
                     <div className="flex gap-2">
                         <button
-                            onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(Math.max(page - 1, 1))}
+                            disabled={page === 1}
                             className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40"
                         >
                             Previous
                         </button>
                         <button
-                            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(Math.min(page + 1, totalPages))}
+                            disabled={page === totalPages}
                             className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-40"
                         >
                             Next
