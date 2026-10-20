@@ -1,238 +1,138 @@
-import React, { useState, useEffect } from 'react';
-import { BookOpen, Users, Search, CalendarPlus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { CalendarPlus } from 'lucide-react';
 import api from '../../services/api';
-import StatsWidget from '../../components/StatsWidget';
 import Modal from '../../components/Modal';
 import FormInput from '../../components/FormInput';
 import useAuth from '../../hooks/useAuth';
+import useLoad from '../../hooks/useLoad';
 import toast from 'react-hot-toast';
+import { plural } from '../../utils/dashboardUi';
+import { ListHeader, FilterBar, LoadState, FormError, FieldLabel, ModalActions, modalSelectCls } from '../../components/admin/ListParts';
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1);
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
 const to24Hour = (hour12, minute, period) => {
     let h = parseInt(hour12, 10);
-    if (period === 'AM') {
-        if (h === 12) h = 0;
-    } else {
-        if (h !== 12) h += 12;
-    }
+    if (period === 'AM') { if (h === 12) h = 0; } else if (h !== 12) h += 12;
     return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
-const DEFAULT_SCHEDULE_FORM = {
-    date: '',
-    startHour: '9', startMinute: '00', startPeriod: 'AM',
-    endHour: '10', endMinute: '00', endPeriod: 'AM',
-    room: ''
+const DEFAULT_FORM = { date: '', startHour: '9', startMinute: '00', startPeriod: 'AM', endHour: '10', endMinute: '00', endPeriod: 'AM', room: '' };
+
+const TimePick = ({ label, prefix, form, setForm }) => (
+    <div>
+        <FieldLabel htmlFor={`${prefix}-h`}>{label}</FieldLabel>
+        <div className="flex gap-2">
+            <select id={`${prefix}-h`} aria-label={`${label} hour`} value={form[`${prefix}Hour`]} onChange={(e) => setForm({ ...form, [`${prefix}Hour`]: e.target.value })} className={modalSelectCls}>{HOURS_12.map((h) => <option key={h} value={h}>{h}</option>)}</select>
+            <select aria-label={`${label} minute`} value={form[`${prefix}Minute`]} onChange={(e) => setForm({ ...form, [`${prefix}Minute`]: e.target.value })} className={modalSelectCls}>{MINUTES.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+            <select aria-label={`${label} AM or PM`} value={form[`${prefix}Period`]} onChange={(e) => setForm({ ...form, [`${prefix}Period`]: e.target.value })} className={modalSelectCls}><option>AM</option><option>PM</option></select>
+        </div>
+    </div>
+);
+
+const Inner = ({ userId }) => {
+    const { data, loading, error, reload } = useLoad([`/teacher/${userId}/assigned-subjects`, `/teacher/${userId}/insights`]);
+    const [search, setSearch] = useState('');
+    const [courseFilter, setCourseFilter] = useState('');
+    const [semFilter, setSemFilter] = useState('');
+    const [selected, setSelected] = useState(null);
+    const [form, setForm] = useState(DEFAULT_FORM);
+    const [formError, setFormError] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const subjects = data ? data[0] : [];
+    const insights = data ? data[1] : null;
+    const att = new Map((insights?.analytics?.attendanceBySubject || []).map((a) => [a.subject_id, a.percent]));
+    const marks = new Map((insights?.analytics?.marksBySubject || []).map((m) => [m.subject_id, m]));
+    const courses = [...new Set(subjects.map((s) => s.course_name).filter(Boolean))].sort();
+    const sems = [...new Set(subjects.map((s) => s.semester))].sort((a, b) => a - b);
+    const term = search.trim().toLowerCase();
+    const shown = subjects.filter((s) =>
+        (!courseFilter || s.course_name === courseFilter) && (!semFilter || String(s.semester) === semFilter) &&
+        (!term || [s.subject_name, s.subject_code, s.course_name].some((v) => (v || '').toLowerCase().includes(term))));
+    const students = subjects.reduce((n, s) => n + (Number(s.enrolled_count) || 0), 0);
+
+    const openSchedule = (s) => { setSelected(s); setForm({ ...DEFAULT_FORM, date: new Date().toLocaleDateString('en-CA') }); setFormError(''); };
+
+    const submit = async (e) => {
+        e.preventDefault();
+        const start = to24Hour(form.startHour, form.startMinute, form.startPeriod);
+        const end = to24Hour(form.endHour, form.endMinute, form.endPeriod);
+        if (end <= start) return setFormError('The class must end after it starts.');
+        setSaving(true); setFormError('');
+        try {
+            await api.post('/teacher/schedule-class', { userId, subjectId: selected.id, date: form.date, startTime: start, endTime: end, room: form.room });
+            toast.success(`Scheduled ${selected.subject_name}.`);
+            setSelected(null);
+        } catch (err) {
+            setFormError(err.response?.data?.error || 'Could not schedule the class.');
+        } finally { setSaving(false); }
+    };
+
+    return (
+        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
+            <ListHeader title="My subjects" line={data ? `${plural(subjects.length, 'subject')} · ${plural(students, 'student')} enrolled` : 'Your assigned curriculum.'} />
+            <LoadState loading={loading} error={error} onRetry={reload}>
+                <FilterBar search={search} onSearch={setSearch} placeholder="Search subject, code or course" noun="subjects"
+                    shown={shown.length} total={subjects.length} onClear={() => { setSearch(''); setCourseFilter(''); setSemFilter(''); }}
+                    filters={[
+                        ...(courses.length > 1 ? [{ id: 'course', label: 'Course', value: courseFilter, onChange: setCourseFilter, options: courses.map((c) => ({ value: c, label: c })) }] : []),
+                        ...(sems.length > 1 ? [{ id: 'sem', label: 'Semester', value: semFilter, onChange: setSemFilter, options: sems.map((n) => ({ value: String(n), label: `Semester ${n}` })) }] : [])
+                    ]} />
+                {shown.length === 0 ? (
+                    <p className="py-16 text-center text-slate-500 dark:text-slate-400 font-semibold bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-[28px]">
+                        {subjects.length ? 'No subject matches these filters.' : 'No subjects are assigned to you yet.'}
+                    </p>
+                ) : (
+                    <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {shown.map((s) => {
+                            const a = att.get(s.id); const m = marks.get(s.id);
+                            return (
+                                <li key={s.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] p-6 shadow-sm flex flex-col gap-4">
+                                    <div>
+                                        <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">{s.subject_code}</p>
+                                        <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 leading-snug mt-1">{s.subject_name}</h2>
+                                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{s.course_name} · Semester {s.semester}</p>
+                                    </div>
+                                    <dl className="text-sm divide-y divide-slate-100 dark:divide-slate-800">
+                                        <div className="flex justify-between py-2"><dt className="text-slate-600 dark:text-slate-300">Students enrolled</dt><dd className="font-bold text-slate-900 dark:text-slate-100">{s.enrolled_count}</dd></div>
+                                        <div className="flex justify-between py-2"><dt className="text-slate-600 dark:text-slate-300">Average attendance</dt><dd className={`font-bold ${a !== undefined && a !== null && a < 75 ? 'text-amber-700 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>{a !== undefined && a !== null ? `${a}%` : '-'}</dd></div>
+                                        <div className="flex justify-between py-2"><dt className="text-slate-600 dark:text-slate-300">Average marks</dt><dd className="font-bold text-slate-900 dark:text-slate-100">{m ? `${m.average}%` : '-'}</dd></div>
+                                    </dl>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-auto">
+                                        <button type="button" onClick={() => openSchedule(s)} className="inline-flex items-center gap-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl px-4 py-2"><CalendarPlus size={16} aria-hidden="true" /> Schedule class</button>
+                                        <Link to="/teacher/attendance" className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 hover:underline">Attendance →</Link>
+                                        <Link to="/teacher/marks" className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 hover:underline">Marks →</Link>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </LoadState>
+
+            <Modal isOpen={!!selected} onClose={() => setSelected(null)} title="Schedule class" subtitle={selected?.subject_name}>
+                <form onSubmit={submit} className="space-y-4">
+                    <FormError message={formError} />
+                    <FormInput label="Date" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <TimePick label="Start time" prefix="start" form={form} setForm={setForm} />
+                        <TimePick label="End time" prefix="end" form={form} setForm={setForm} />
+                    </div>
+                    <FormInput label="Room / Venue" required placeholder="e.g. Lab 4" value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} />
+                    <ModalActions onCancel={() => setSelected(null)} busy={saving} submitLabel="Confirm schedule" busyLabel="Scheduling…" />
+                </form>
+            </Modal>
+        </div>
+    );
 };
 
 const TeacherSubjects = () => {
     const { user } = useAuth();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [assignedSubjects, setAssignedSubjects] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedSubject, setSelectedSubject] = useState(null);
-    const [scheduleForm, setScheduleForm] = useState(DEFAULT_SCHEDULE_FORM);
-
-    useEffect(() => {
-        const fetchSubjects = async () => {
-            if (!user?.id) return;
-            try {
-                const response = await api.get(`/teacher/${user.id}/assigned-subjects`);
-                const formattedData = response.data.map(sub => ({
-                    id: sub.id,
-                    code: sub.subject_code,
-                    name: sub.subject_name,
-                    course: sub.course_name,
-                    semester: sub.semester,
-                    enrolled_students: sub.enrolled_count
-                }));
-                setAssignedSubjects(formattedData);
-            } catch (error) {
-                console.error("Error fetching subjects:", error);
-            }
-        };
-        fetchSubjects();
-    }, [user]);
-
-    const totalStudents = assignedSubjects.reduce((acc, curr) => acc + curr.enrolled_students, 0);
-    const filteredSubjects = assignedSubjects.filter(subject => 
-        subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        subject.course.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const handleOpenModal = (subject) => {
-        setSelectedSubject(subject);
-        const today = new Date().toLocaleDateString('en-CA');
-        setScheduleForm({ ...DEFAULT_SCHEDULE_FORM, date: today });
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setSelectedSubject(null);
-        setScheduleForm(DEFAULT_SCHEDULE_FORM);
-    };
-
-    const handleScheduleSubmit = async (e) => {
-        e.preventDefault();
-        const startTime24 = to24Hour(scheduleForm.startHour, scheduleForm.startMinute, scheduleForm.startPeriod);
-        const endTime24 = to24Hour(scheduleForm.endHour, scheduleForm.endMinute, scheduleForm.endPeriod);
-        
-        try {
-            await api.post('/teacher/schedule-class', {
-                userId: user.id, 
-                subjectId: selectedSubject.id,
-                date: scheduleForm.date,
-                startTime: startTime24,
-                endTime: endTime24,
-                room: scheduleForm.room
-            });
-            toast.success(`Successfully scheduled ${selectedSubject.name}!`);
-            handleCloseModal();
-        } catch (error) {
-            const errorMsg = error.response?.data?.error || "Network error occurred.";
-            toast.error(`Error: ${errorMsg}`);
-            console.error("Scheduling error:", error);
-        }
-    };
-
-    return (
-        <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans relative">
-            <header className="mb-8">
-                <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">My Subjects</h2>
-                <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your assigned curriculum and schedule daily classes.</p>
-            </header>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatsWidget title="ASSIGNED SUBJECTS" value={assignedSubjects.length} icon={<BookOpen size={24} />} />
-                <StatsWidget title="TOTAL STUDENTS" value={totalStudents} icon={<Users size={24} />} />
-            </div>
-
-            <div className="mb-6 relative w-full md:w-96">
-                <Search size={18} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                <input 
-                    type="text" 
-                    placeholder="Search your subjects..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm shadow-sm bg-white dark:bg-slate-900 font-medium text-slate-700 dark:text-slate-200"
-                />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredSubjects.length === 0 ? (
-                    <div className="col-span-full text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold">
-                        No subjects found.
-                    </div>
-                ) : (
-                    filteredSubjects.map(subject => (
-                        <div key={subject.id} className="bg-white dark:bg-slate-900 rounded-[24px] shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden group">
-                            
-                            <div className="p-6 border-b border-slate-100 dark:border-slate-800 relative overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
-                                <div className="flex justify-between items-start mb-4 relative z-10">
-                                    <span className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm">
-                                        {subject.code}
-                                    </span>
-                                </div>
-                                <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors relative z-10">
-                                    {subject.name}
-                                </h3>
-                            </div>
-                            
-                            <div className="p-6 grow flex justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
-                                <div className="w-full bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 text-center flex flex-col items-center justify-center">
-                                    <Users size={24} className="text-slate-400 mb-2" />
-                                    <div className="font-black text-slate-900 dark:text-slate-100 text-2xl">
-                                        {subject.enrolled_students}
-                                    </div>
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-1">Students Enrolled</div>
-                                </div>
-                            </div>
-                            
-                            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-                                <button 
-                                    onClick={() => handleOpenModal(subject)}
-                                    className="w-full py-3 text-sm font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 transition-all shadow-sm flex items-center justify-center gap-2"
-                                >
-                                    <CalendarPlus size={18} /> Schedule Class
-                                </button>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-
-            {isModalOpen && (
-                <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Schedule Class" subtitle={selectedSubject?.name}>
-                    <form onSubmit={handleScheduleSubmit} className="flex flex-col gap-5">
-                        <FormInput label="Date" type="date" required value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm, date: e.target.value})} />
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Start Time</label>
-                                <div className="flex gap-2">
-                                    <select
-                                        value={scheduleForm.startHour}
-                                        onChange={(e) => setScheduleForm({...scheduleForm, startHour: e.target.value})}
-                                        className="w-1/3 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                                    >
-                                        {HOURS_12.map(h => <option key={h} value={h}>{h}</option>)}
-                                    </select>
-                                    <select
-                                        value={scheduleForm.startMinute}
-                                        onChange={(e) => setScheduleForm({...scheduleForm, startMinute: e.target.value})}
-                                        className="w-1/3 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                                    >
-                                        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
-                                    </select>
-                                    <select
-                                        value={scheduleForm.startPeriod}
-                                        onChange={(e) => setScheduleForm({...scheduleForm, startPeriod: e.target.value})}
-                                        className="w-1/3 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                                    >
-                                        <option value="AM">AM</option>
-                                        <option value="PM">PM</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">End Time</label>
-                                <div className="flex gap-2">
-                                    <select
-                                        value={scheduleForm.endHour}
-                                        onChange={(e) => setScheduleForm({...scheduleForm, endHour: e.target.value})}
-                                        className="w-1/3 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                                    >
-                                        {HOURS_12.map(h => <option key={h} value={h}>{h}</option>)}
-                                    </select>
-                                    <select
-                                        value={scheduleForm.endMinute}
-                                        onChange={(e) => setScheduleForm({...scheduleForm, endMinute: e.target.value})}
-                                        className="w-1/3 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                                    >
-                                        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
-                                    </select>
-                                    <select
-                                        value={scheduleForm.endPeriod}
-                                        onChange={(e) => setScheduleForm({...scheduleForm, endPeriod: e.target.value})}
-                                        className="w-1/3 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                                    >
-                                        <option value="AM">AM</option>
-                                        <option value="PM">PM</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <FormInput label="Room / Venue" type="text" required placeholder="e.g. Lab 4" value={scheduleForm.room} onChange={(e) => setScheduleForm({...scheduleForm, room: e.target.value})} />
-                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 active:scale-95 flex items-center justify-center gap-2">
-                            <CalendarPlus size={18} /> Confirm Schedule
-                        </button>
-                    </form>
-                </Modal>
-            )}
-        </div>
-    );
+    if (!user?.id) return null;
+    return <Inner key={user.id} userId={user.id} />;
 };
 
 export default TeacherSubjects;
