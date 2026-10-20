@@ -65,7 +65,7 @@ const NoticeCard = ({ notice, onOpen }) => {
  * Feed of notices for the logged-in student, parent or teacher.
  * endpoint/params choose what to load (parents can pass { student_id }).
  */
-const NoticeFeed = ({ title = 'Notices', subtitle, endpoint = '/notices/feed', params = {}, headerRight, embedded = false }) => {
+const NoticeFeed = ({ title = 'Notices', subtitle, endpoint = '/notices/feed', params = {}, headerRight, topSlot = null, embedded = false }) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -96,7 +96,6 @@ const NoticeFeed = ({ title = 'Notices', subtitle, endpoint = '/notices/feed', p
             await api.post('/notices/read', { ids });
             refreshInbox();
         } catch (e) {
-            /* the badge will correct itself on the next refresh */
         }
     };
 
@@ -128,6 +127,7 @@ const NoticeFeed = ({ title = 'Notices', subtitle, endpoint = '/notices/feed', p
 
     return (
         <div className={embedded ? 'font-sans' : 'min-h-screen bg-slate-50 p-6 font-sans dark:bg-slate-950 md:p-10'}>
+            {!embedded && topSlot}
             {!embedded && <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
                 <div>
                     <h2 className="flex items-center gap-3 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">

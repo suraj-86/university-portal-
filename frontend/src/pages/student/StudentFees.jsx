@@ -119,7 +119,7 @@ useEffect(() => {
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Fee Management</h2>
+                    <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Fee Management</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Review your statement and clear pending dues.</p>
                 </div>
                 {pendingFees.length > 0 && (

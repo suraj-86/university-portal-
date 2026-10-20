@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Award, BookOpen, Download, FileText, ChevronDown } from 'lucide-react';
 import api from '../../services/api';
+import toast from 'react-hot-toast';
 import useAuth from '../../hooks/useAuth';
 
 const StudentResults = () => {
@@ -29,6 +30,7 @@ useEffect(() => {
             }
         } catch (error) {
             console.error("Error fetching results:", error);
+            toast.error(error.response?.data?.error || "Could not load your results. Please try again.");
         } finally {
             setLoading(false);
         }
@@ -72,7 +74,7 @@ useEffect(() => {
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Academic Results</h2>
+                    <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Academic Results</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Review your semester marksheets, internal assessments, and CGPA.</p>
                 </div>
                 
