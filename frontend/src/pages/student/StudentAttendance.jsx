@@ -7,6 +7,7 @@ import {
     AlertCircle,
 } from 'lucide-react';
 import api from '../../services/api';
+import toast from 'react-hot-toast';
 import useAuth from '../../hooks/useAuth';
 
 const StudentAttendance = () => {
@@ -72,6 +73,7 @@ const StudentAttendance = () => {
             })
             .catch((err) => {
                 console.error('Error loading attendance:', err);
+                toast.error(err.response?.data?.error || 'Could not load your attendance. Please try again.');
                 setLogs([]);
                 setSubjectsFromDb([]);
                 setLoading(false);

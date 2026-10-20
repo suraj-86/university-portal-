@@ -70,7 +70,7 @@ const Notifications = () => {
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Notifications</h2>
+                    <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Notifications</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
                         {loading ? 'Loading…' : data.unread > 0 ? `${data.unread} unread` : 'You are all caught up.'} Items are kept for 90 days.
                     </p>

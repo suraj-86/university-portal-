@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     CalendarDays,
-    Users,
     CheckCircle2,
     XCircle,
     Clock3,
@@ -11,6 +10,7 @@ import {
 
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
+import WardSwitcher from '../../components/parent/WardSwitcher';
 
 const REQUIRED_PERCENTAGE = 75;
 
@@ -298,6 +298,8 @@ const ParentAttendance = () => {
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
 
+            <WardSwitcher wards={allWards} currentId={selectedWardId} onChange={(v) => { setSelectedWardId(v); setSelectedSubject('All'); }} />
+
             <header className="mb-8 flex flex-col xl:flex-row xl:items-end justify-between gap-5">
 
                 <div>
@@ -312,40 +314,7 @@ const ParentAttendance = () => {
 
                 <div className="flex flex-wrap items-center gap-3">
 
-                    {/* WARD */}
-                    {allWards.length > 1 && (
-                        <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                            <Users
-                                size={18}
-                                className="text-indigo-600 dark:text-indigo-400"
-                            />
-
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                                    Select Ward
-                                </p>
-
-                                <select
-                                    value={selectedWardId}
-                                    onChange={e => {
-                                        setSelectedWardId(e.target.value);
-                                        setSelectedSubject('All');
-                                    }}
-                                    className="text-sm font-bold text-slate-800 dark:text-slate-200 bg-transparent outline-none cursor-pointer"
-                                >
-                                    {allWards.map(ward => (
-                                        <option
-                                            key={ward.student_id}
-                                            value={ward.student_id}
-                                            className="dark:bg-slate-900"
-                                        >
-                                            {ward.full_name} ({ward.course_name})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    )}
+                    
 
                     {/* SEMESTER */}
                     <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">

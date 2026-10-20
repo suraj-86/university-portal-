@@ -36,7 +36,7 @@ const StudentReportCard = () => {
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
             <header className="mb-8">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Report Card</h2>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Report Card</h2>
                 <p className="text-slate-500 dark:text-slate-400 mt-1">Your semester-wise marks, grades, SGPA, CGPA and attendance in one formal statement.</p>
             </header>
 

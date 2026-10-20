@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Clock3 } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import TimetableView from '../../components/TimetableView';
+import WardSwitcher from '../../components/parent/WardSwitcher';
 
 const Timetable = () => {
     const { user } = useAuth();
@@ -60,25 +61,13 @@ const Timetable = () => {
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
+            {role === 'parent' && <WardSwitcher wards={allWards} currentId={selectedWardId} onChange={setSelectedWardId} />}
             <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
                 <div>
                     <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Timetable</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p>
                 </div>
-                {role === 'parent' && allWards.length > 1 && (
-                    <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <Users size={18} className="text-indigo-600 dark:text-indigo-400" />
-                        <div>
-                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Select Ward</p>
-                            <select value={selectedWardId} onChange={(e) => setSelectedWardId(e.target.value)}
-                                className="text-sm font-bold text-slate-800 dark:text-slate-200 bg-transparent outline-none cursor-pointer">
-                                {allWards.map((w) => (
-                                    <option key={w.student_id} value={w.student_id} className="dark:bg-slate-900">{w.full_name} ({w.course_name})</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                )}
+                
             </header>
 
             {loading ? (
