@@ -1,161 +1,108 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, GraduationCap, Search } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
 import api from '../../services/api';
 import Table from '../../components/Table';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../context/confirm';
+import useLoad from '../../hooks/useLoad';
+import { plural } from '../../utils/dashboardUi';
+import { ListHeader, FilterBar, LoadState, FormError, ModalActions, RowActions, IconAction, primaryBtn } from '../../components/admin/ListParts';
+
+const EMPTY = { course_code: '', course_name: '', department: 'Computer Science', duration_years: 3, total_semesters: 6 };
+const URLS = ['/courses'];
 
 const AdminCourses = () => {
-    const [courses, setCourses] = useState([]);
-    const [searchTerm, setSearchTerm] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingCourseId, setEditingCourseId] = useState(null);
-    const [formData, setFormData] = useState({
-        course_code: '', course_name: '', department: 'Computer Science', duration_years: 3, total_semesters: 6
-    });
-
-    const fetchCourses = async () => {
-        try {
-            const response = await api.get('/courses');
-            setCourses(response.data);
-        } catch (error) {
-            console.error("Error fetching courses:", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchCourses();
-    }, []);
-
+    const { data, loading, error, reload } = useLoad(URLS);
+    const courses = data ? data[0] : [];
+    const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
+    const [department, setDepartment] = useState('');
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [form, setForm] = useState(EMPTY);
+    const [formError, setFormError] = useState('');
+    const [saving, setSaving] = useState(false);
     const confirm = useConfirm();
-    const handleDelete = async (id) => {
-        if (await confirm({ title: 'Delete this course?', message: 'This cannot be undone.', confirmText: 'Delete', tone: 'danger' })) {
-            try {
-                await api.delete(`/courses/${id}`);
-                fetchCourses();
-            } catch (error) {
-                console.error("Delete error:", error);
-            }
-        }
+
+    const departments = [...new Set(courses.map((c) => c.department).filter(Boolean))].sort();
+    const term = search.trim().toLowerCase();
+    const shown = courses.filter((c) =>
+        (!department || c.department === department) &&
+        (!term || [c.course_code, c.course_name, c.department].some((v) => (v || '').toLowerCase().includes(term))));
+
+    const openNew = () => { setEditingId(null); setForm(EMPTY); setFormError(''); setModalOpen(true); };
+    const openEdit = (c) => { setEditingId(c.id); setForm({ ...c }); setFormError(''); setModalOpen(true); };
+
+    const submit = async (e) => {
+        e.preventDefault();
+        setFormError('');
+        setSaving(true);
+        try {
+            if (editingId) await api.put(`/courses/${editingId}`, form);
+            else await api.post('/courses', form);
+            setModalOpen(false);
+            toast.success(editingId ? 'Course updated.' : 'Course created.');
+            reload();
+        } catch (err) {
+            setFormError(err.response?.data?.error || 'Could not save the course.');
+        } finally { setSaving(false); }
     };
 
-    const handleFormSubmit = async (e) => {
-        e.preventDefault();
+    const remove = async (c) => {
+        if (!(await confirm({ title: `Delete ${c.course_code}?`, message: `${c.course_name} will be removed. This cannot be undone.`, confirmText: 'Delete', tone: 'danger' }))) return;
         try {
-            if (editingCourseId) {
-                await api.put(`/courses/${editingCourseId}`, formData);
-            } else {
-                await api.post('/courses', formData);
-            }
-            
-            setIsModalOpen(false);
-            fetchCourses();
-            setEditingCourseId(null);
-        } catch (error) {
-            const errorMsg = error.response?.data?.error || "Failed to save course";
-            toast.error("Error saving course: " + errorMsg);
-            console.error("Submit error:", error);
+            await api.delete(`/courses/${c.id}`);
+            toast.success('Course deleted.');
+            reload();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Could not delete the course. It may still have students or subjects.');
         }
     };
 
     const columns = [
-        { header: "Code", accessor: "course_code" },
-        { 
-            header: "Course Name", 
-            accessor: "course_name",
-            cell: (row) => (
-                <div>
-                    <div className="font-bold text-slate-900 dark:text-slate-100">{row.course_name}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest">{row.department}</div>
-                </div>
-            )
-        },
-        { 
-            header: "Duration", 
-            accessor: "duration_years",
-            cell: (row) => <span className="text-slate-600 dark:text-slate-300 font-medium">{row.duration_years} Years ({row.total_semesters} Sem)</span>
-        },
-        {
-            header: "Actions",
-            accessor: "actions",
-            cell: (row) => (
-                <div className="flex justify-end gap-2">
-                    <button onClick={() => openEditModal(row)} className="p-2 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/50 rounded-lg transition-colors">
-                        <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(row.id)} className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors">
-                        <Trash2 size={16} />
-                    </button>
-                </div>
-            )
-        }
+        { header: 'Code', accessor: 'course_code', cell: (r) => <span className="font-black text-slate-900 dark:text-slate-100">{r.course_code}</span> },
+        { header: 'Course', accessor: 'course_name', cell: (r) => (
+            <div>
+                <div className="font-bold text-slate-900 dark:text-slate-100">{r.course_name}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{r.department}</div>
+            </div>
+        ) },
+        { header: 'Duration', accessor: 'duration_years', cell: (r) => <span className="text-slate-600 dark:text-slate-300">{plural(Number(r.duration_years), 'year')} · {plural(Number(r.total_semesters), 'semester')}</span> },
+        { header: '', accessor: 'actions', cell: (r) => (
+            <RowActions>
+                <IconAction label={`Edit ${r.course_code}`} onClick={() => openEdit(r)}><Edit2 size={16} /></IconAction>
+                <IconAction label={`Delete ${r.course_code}`} tone="rose" onClick={() => remove(r)}><Trash2 size={16} /></IconAction>
+            </RowActions>
+        ) }
     ];
-
-    const filteredCourses = courses.filter(course => {
-        const term = searchTerm.toLowerCase();
-        return course.course_code.toLowerCase().includes(term) ||
-            course.course_name.toLowerCase().includes(term) ||
-            course.department.toLowerCase().includes(term);
-    });
-
-    const openEditModal = (course) => {
-        setEditingCourseId(course.id);
-        setFormData({ ...course });
-        setIsModalOpen(true);
-    };
 
     return (
         <div className="p-6 md:p-10 bg-slate-50 dark:bg-slate-950 min-h-screen font-sans">
-            <header className="mb-8 flex flex-col md:flex-row justify-between md:items-end gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Course Catalog</h2>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Manage degree programs and academic structures.</p>
-                </div>
-                <div className="relative w-full md:w-80">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search course, code, or department..."
-                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-cyan-200 outline-none shadow-sm"
-                    />
-                </div>
-                <button 
-                    onClick={() => { 
-                        setEditingCourseId(null); 
-                        setFormData({course_code: '', course_name: '', department: 'Computer Science', duration_years: 3, total_semesters: 6}); 
-                        setIsModalOpen(true); 
-                    }}
-                    className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md flex items-center gap-2 transition-all active:scale-95"
-                >
-                    <Plus size={18} /> New Course
-                </button>
-            </header>
+            <ListHeader title="Courses"
+                line={data ? `${plural(courses.length, 'course')} · ${plural(departments.length, 'department')}` : 'Degree programs and their structure.'}
+                actions={<button type="button" onClick={openNew} className={primaryBtn}><Plus size={16} /> New course</button>} />
+            <LoadState loading={loading} error={error} onRetry={reload}>
+                <FilterBar search={search} onSearch={setSearch} placeholder="Search code, name or department" noun="courses"
+                    shown={shown.length} total={courses.length} onClear={() => { setSearch(''); setDepartment(''); }}
+                    filters={departments.length > 1 ? [{ id: 'dept', label: 'Department', value: department, onChange: setDepartment, options: departments.map((d) => ({ value: d, label: d })) }] : []} />
+                <Table columns={columns} data={shown} pageSize={10}
+                    emptyText={courses.length ? 'No course matches these filters.' : 'No courses yet. Add the first one.'} />
+            </LoadState>
 
-            <Table columns={columns} data={filteredCourses} pageSize={5} />
-
-            <Modal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)}
-                title={editingCourseId ? 'Edit Course Program' : 'Create New Program'}
-            >
-                <form onSubmit={handleFormSubmit} className="space-y-6">
+            <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Edit course' : 'New course'}>
+                <form onSubmit={submit} className="space-y-4">
+                    <FormError message={formError} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label="Course Code" value={formData.course_code} onChange={(e) => setFormData({...formData, course_code: e.target.value.toUpperCase()})} placeholder="e.g. BCA" required />
-                        <Input label="Department" value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} placeholder="Computer Science" required />
+                        <Input label="Course Code" value={form.course_code} onChange={(e) => setForm({ ...form, course_code: e.target.value.toUpperCase() })} placeholder="e.g. BCA" required />
+                        <Input label="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} placeholder="Computer Science" required />
                     </div>
-                    
-                    <Input label="Full Course Name" value={formData.course_name} onChange={(e) => setFormData({...formData, course_name: e.target.value})} placeholder="Bachelor of Computer Applications" required />
+                    <Input label="Full Course Name" value={form.course_name} onChange={(e) => setForm({ ...form, course_name: e.target.value })} placeholder="Bachelor of Computer Applications" required />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label="Duration (Years)" type="number" value={formData.duration_years} onChange={(e) => setFormData({...formData, duration_years: e.target.value})} required />
-                        <Input label="Total Semesters" type="number" value={formData.total_semesters} onChange={(e) => setFormData({...formData, total_semesters: e.target.value})} required />
+                        <Input label="Duration (Years)" type="number" value={form.duration_years} onChange={(e) => setForm({ ...form, duration_years: e.target.value })} required />
+                        <Input label="Total Semesters" type="number" value={form.total_semesters} onChange={(e) => setForm({ ...form, total_semesters: e.target.value })} required />
                     </div>
-                    <button type="submit" className="w-full bg-cyan-600 text-white font-bold py-4 rounded-2xl hover:bg-cyan-700 shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
-                        <GraduationCap size={18} /> {editingCourseId ? 'Save Changes' : 'Create Course'}
-                    </button>
+                    <ModalActions onCancel={() => setModalOpen(false)} busy={saving} submitLabel={editingId ? 'Save changes' : 'Create course'} />
                 </form>
             </Modal>
         </div>
