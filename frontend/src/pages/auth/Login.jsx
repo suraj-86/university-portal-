@@ -103,49 +103,41 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen relative overflow-hidden bg-slate-950 font-sans flex items-center justify-center p-4">
+        <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-cyan-100 via-sky-100 to-blue-100 dark:from-[#08161f] dark:via-[#0a2230] dark:to-slate-950 font-sans flex items-center justify-center p-4">
 
-            <div className="absolute inset-0 opacity-30">
-                <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-blue-600 blur-3xl" />
-                <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-indigo-600 blur-3xl" />
+            <div className="absolute inset-0 opacity-60 dark:opacity-30">
+                <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-cyan-300 dark:bg-cyan-700 blur-3xl" />
+                <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-blue-300 dark:bg-blue-700 blur-3xl" />
             </div>
 
-            <div
-                className="absolute inset-0 opacity-[0.07]"
-                style={{
-                    backgroundImage:
-                        'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
-                    backgroundSize: '42px 42px'
-                }}
-            />
+            <div className="relative z-10 w-full max-w-5xl grid lg:grid-cols-[1.05fr_0.95fr] overflow-hidden rounded-[2rem] border border-white/70 dark:border-white/10 bg-white/50 dark:bg-white/[0.04] shadow-2xl shadow-cyan-900/10 backdrop-blur-xl">
 
-            <div className="relative z-10 w-full max-w-5xl grid lg:grid-cols-[1.05fr_0.95fr] overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl backdrop-blur-xl">
-
-                <div className="hidden lg:flex relative p-12 flex-col justify-between min-h-[620px] border-r border-white/10">
+                <div className="hidden lg:flex relative p-12 flex-col justify-between min-h-[620px] border-r border-cyan-200/60 dark:border-white/10">
                     <div>
-                        <div className="inline-flex items-center gap-3">
-                            <img src="/bbau-icon.png" alt="BBAU logo" className="w-12 h-12 rounded-2xl shadow-lg shadow-blue-600/30" />
+                        <div className="flex flex-col items-start gap-4">
+                            <img src="/bbau-icon.png" alt="BBAU logo" className="w-16 h-16 rounded-2xl bg-white p-1 shadow-lg ring-1 ring-cyan-200" />
                             <div>
-                                <p className="text-white font-black tracking-tight text-lg">Babasaheb Bhimrao Ambedkar University</p>
-                                <p className="text-blue-400 text-[10px] font-bold tracking-[0.3em]">A central portal for all university services.</p>
+                                <p className="text-cyan-950 dark:text-white font-black tracking-wide text-xl leading-snug">BABASAHEB BHIMRAO<br />AMBEDKAR UNIVERSITY</p>
+                                <p className="mt-1 text-cyan-800 dark:text-cyan-200 text-xs font-semibold">(A Central University)</p>
+                                <p className="mt-3 inline-block border-t border-cyan-300 dark:border-white/20 pt-2 text-cyan-800 dark:text-cyan-100 text-xs font-black tracking-[0.2em]">SATELLITE CAMPUS AMETHI</p>
                             </div>
                         </div>
 
-                        <div className="mt-24">
-                            <p className="text-blue-400 text-xs font-black uppercase tracking-[0.3em] mb-4">
+                        <div className="mt-16">
+                            <p className="text-cyan-700 dark:text-cyan-300 text-xs font-black uppercase tracking-[0.3em] mb-4">
                                 UNIVERSITY PORTAL
                             </p>
-                            <h1 className="text-5xl font-black text-white leading-[1.05] tracking-tight">
+                            <h1 className="text-5xl font-black text-slate-900 dark:text-white leading-[1.05] tracking-tight">
                                 Everything
-                                <span className="block text-blue-400">You Need.</span>
+                                <span className="block text-blue-600 dark:text-blue-400">You Need.</span>
                             </h1>
-                            <p className="mt-6 max-w-md text-slate-400 leading-7">
+                            <p className="mt-6 max-w-md text-slate-600 dark:text-slate-400 leading-7">
                                 One secure workspace for administrators, teachers, students and parents.
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
+                    <div className="flex items-center gap-3 text-xs font-medium text-slate-600 dark:text-slate-500">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/50" />
                         Secure institutional access
                     </div>
@@ -156,8 +148,8 @@ const Login = () => {
                         <div className="lg:hidden flex items-center gap-3 mb-8">
                             <img src="/bbau-icon.png" alt="BBAU logo" className="w-11 h-11 rounded-xl" />
                             <div>
-                                <p className="font-black text-slate-900 dark:text-white">Babasaheb Bhimrao Ambedkar University</p>
-                                <p className="text-[9px] font-bold tracking-[0.25em] text-blue-600">PORTAL</p>
+                                <p className="font-black text-sm leading-tight text-slate-900 dark:text-white">BABASAHEB BHIMRAO AMBEDKAR UNIVERSITY</p>
+                                <p className="text-[10px] font-bold tracking-[0.15em] text-cyan-700 dark:text-cyan-300">SATELLITE CAMPUS AMETHI</p>
                             </div>
                         </div>
 
@@ -191,7 +183,7 @@ const Login = () => {
                                 disabled={isLoggingIn}
                                 autoComplete="username"
                                 placeholder="e.g. AC999/99 or FAC999"
-                                className="p-3.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all disabled:opacity-60"
+                                className="p-3.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-60"
                             />
                         </div>
 
@@ -207,14 +199,14 @@ const Login = () => {
                                 disabled={isLoggingIn}
                                 autoComplete="current-password"
                                 placeholder="••••••••"
-                                className="p-3.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all disabled:opacity-60"
+                                className="p-3.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-60"
                             />
                         </div>
 
                         <button
                             type="submit"
                             disabled={isLoggingIn}
-                            className="mt-2 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98] disabled:cursor-wait disabled:active:scale-100"
+                            className="mt-2 w-full bg-cyan-700 hover:bg-cyan-800 disabled:bg-cyan-600 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-700/20 active:scale-[0.98] disabled:cursor-wait disabled:active:scale-100"
                         >
                             {isLoggingIn ? (
                                 <span className="flex items-center justify-center gap-3">

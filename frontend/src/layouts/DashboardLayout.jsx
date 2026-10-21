@@ -24,9 +24,10 @@ const DashboardLayout = () => {
     return (
         <div className="flex h-screen bg-slate-50 dark:bg-slate-950 font-sans overflow-hidden">
             
-            <Navbar 
-                role={currentRole} 
-                onToggle={() => setIsSidebarOpen(!isSidebarOpen)} 
+            <Navbar
+                role={currentRole}
+                sidebarOpen={isSidebarOpen}
+                onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
             />
 
             <div 

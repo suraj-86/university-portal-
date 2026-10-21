@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Check, Circle, Eye, EyeOff } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
+import useTheme from '../../hooks/useTheme';
+import { Sun, Moon } from 'lucide-react';
 
 const ROLE_LABEL = { admin: 'Administrator', teacher: 'Teacher', student: 'Student', parent: 'Parent' };
 const MIN_PASSWORD = 8;
@@ -52,6 +54,7 @@ const Rule = ({ ok, children }) => (
     </li>
 );
 
+// One Settings page for every role: login username and password.
 const AccountSettings = () => {
     const { user, updateUser } = useAuth();
     const [username, setUsername] = useState(user?.username || '');
@@ -93,6 +96,7 @@ const AccountSettings = () => {
         } finally { setPassBusy(false); }
     };
 
+    const { theme, setTheme } = useTheme();
     const initial = (user?.full_name || user?.username || '?').trim().charAt(0).toUpperCase();
 
     return (
@@ -111,6 +115,17 @@ const AccountSettings = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <Section id="appearance" title="Appearance" hint="Choose how the portal looks on this device.">
+                    <div role="radiogroup" aria-label="Theme" className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+                        {[['light', 'Light', <Sun key="s" size={16} aria-hidden="true" />], ['dark', 'Dark', <Moon key="m" size={16} aria-hidden="true" />]].map(([key, label, icon]) => (
+                            <button key={key} type="button" role="radio" aria-checked={theme === key} onClick={() => setTheme(key)}
+                                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${theme === key ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-600 dark:text-slate-300'}`}>
+                                {icon}{label}
+                            </button>
+                        ))}
+                    </div>
+                </Section>
+
                 <Section id="username" title="Login username" hint="The name you type to sign in. Your name on the portal does not change.">
                     <Notice msg={userMsg} />
                     <form onSubmit={saveUsername} className="space-y-4">

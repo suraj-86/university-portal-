@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, Menu, MessageSquare } from 'lucide-react';
+import { Menu, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.jsx';
 import api from '../services/api';
 import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
+import { getPageTitle } from './navConfig';
 
-const Navbar = ({ onToggle }) => {
+const Navbar = ({ onToggle, sidebarOpen = false, role = 'student' }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [counts, setCounts] = useState({ notices: 0, announcements: 0, messages: 0, notifications: 0 });
   useEffect(() => {
@@ -23,6 +24,13 @@ const Navbar = ({ onToggle }) => {
     window.addEventListener('inbox:refresh', load);
     return () => { cancelled = true; clearInterval(timer); window.removeEventListener('inbox:refresh', load); };
   }, [user]);
+  const [summary, setSummary] = useState('');
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let cancelled = false;
+    api.get('/me/summary').then((res) => { if (!cancelled) setSummary(res.data?.line || ''); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id]);
   const bellCount = counts.notifications || 0;
   const badge = (n) => (n > 99 ? '99+' : n);
 
@@ -32,33 +40,22 @@ const Navbar = ({ onToggle }) => {
   const userRole = rawRole.charAt(0).toUpperCase() + rawRole.slice(1);
   const userInitial = userName.charAt(0).toUpperCase();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
+  const pageTitle = getPageTitle(role, location.pathname);
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 z-50 flex items-center justify-between px-4 sm:px-6 shadow-sm transition-all">
+    <header className={`fixed top-0 right-0 h-16 bg-gradient-to-r from-cyan-100/90 via-sky-100/90 to-blue-100/90 dark:from-[#0a2230]/95 dark:via-slate-900/95 dark:to-slate-900/95 backdrop-blur border-b border-cyan-200/70 dark:border-slate-800 z-50 flex items-center justify-between px-4 sm:px-6 transition-all duration-300 ${sidebarOpen ? 'left-0 lg:left-64' : 'left-0'}`}>
       
       <div className="flex items-center gap-3 sm:gap-6">
         
         <button
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/70 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-white dark:hover:bg-slate-700 focus:outline-none"
           onClick={onToggle}
           aria-label="Toggle sidebar"
         >
           <Menu size={20} />
         </button>
         
-        <div className="hidden sm:block">
-          <p className="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-bold mb-0.5">Welcome</p>
-          <h1 className="text-lg md:text-xl font-bold text-slate-900 dark:text-slate-100 leading-none">{userName}</h1>
-        </div>
-        
-        <div className="sm:hidden flex items-center gap-2">
-            <img src="/bbau-icon.png" alt="BBAU" className="w-8 h-8 rounded-lg shadow-md" />
-            <h1 className="text-slate-900 dark:text-slate-100 font-bold tracking-wide">BBAU Portal</h1>
-        </div>
+        <h1 className="text-lg md:text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight truncate">{pageTitle}</h1>
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
@@ -71,7 +68,7 @@ const Navbar = ({ onToggle }) => {
           <button
             onClick={() => navigate(`/${user.role}/messages`)}
             title="Messages"
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/70 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-white dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400"
           >
             <MessageSquare size={18} />
             {counts.messages > 0 && (
@@ -80,13 +77,13 @@ const Navbar = ({ onToggle }) => {
           </button>
         )}
 
-        <div className="hidden md:flex items-center gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800 pl-2 pr-4 py-1.5 border border-slate-100 dark:border-slate-700/60">
+        <div className="hidden md:flex items-center gap-3 rounded-2xl bg-white/70 dark:bg-slate-800 pl-2 pr-4 py-1.5 border border-white/80 dark:border-slate-700/60">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
             {userInitial}
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">{userName}</p>
-            <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{userRole} Portal</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">Hello, {userName}</p>
+            <p className="max-w-[220px] truncate text-[10px] font-semibold text-slate-500 dark:text-slate-400" title={summary}>{summary || `${userRole} Portal`}</p>
           </div>
         </div>
 
@@ -94,13 +91,6 @@ const Navbar = ({ onToggle }) => {
           {userInitial}
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="hidden md:inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-slate-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 dark:hover:bg-slate-700 border border-transparent dark:border-slate-700"
-        >
-          <LogOut size={16} />
-          Logout
-        </button>
       </div>
     </header>
   );

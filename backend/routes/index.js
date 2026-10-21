@@ -19,7 +19,8 @@ const modules = [
     require('./notifications'),
     require('./reports'),
     require('./teacherInsights'),
-    require('./studentInsights')
+    require('./studentInsights'),
+    require('./me')
 ];
 
 module.exports = (app, ctx) => {

@@ -4,8 +4,8 @@ import {
     LineChart, Line, Legend, PieChart, Pie
 } from 'recharts';
 
-const INDIGO = '#4f46e5';
-const INDIGO_SOFT = '#a5b4fc';
+const INDIGO = '#2563eb';
+const INDIGO_SOFT = '#93c5fd';
 const AMBER = '#f59e0b';
 const SLATE = '#94a3b8';
 const ROSE = '#e11d48';
