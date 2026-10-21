@@ -3,9 +3,40 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  --color-slate-50: #eef4fc;
+  --color-slate-100: #e4edf9;
+  --color-slate-200: #d4e1f2;
+  --color-slate-300: #bccde6;
+  --color-slate-900: #0f1b3d;
+  --color-slate-950: #0a1226;
+  --color-indigo-50: #eff6ff;
+  --color-indigo-100: #dbeafe;
+  --color-indigo-200: #bfdbfe;
+  --color-indigo-300: #93c5fd;
+  --color-indigo-400: #60a5fa;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-600: #2563eb;
+  --color-indigo-700: #1d4ed8;
+  --color-indigo-800: #1e40af;
+  --color-indigo-900: #1e3a8a;
+  --color-indigo-950: #172554;
+}
+.dark {
+  --color-slate-100: #e8eefb;
+  --color-slate-200: #cfdaf0;
+  --color-slate-300: #aebbd8;
+  --color-slate-400: #8191b4;
+  --color-slate-500: #6b7ca3;
+  --color-slate-700: #22365f;
+  --color-slate-800: #16264a;
+  --color-slate-900: #0f1a33;
+  --color-slate-950: #08101f;
+}
+
+:root {
   color-scheme: light;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background-color: #f8fafc;
+  background-color: #eef4fc;
 }
 
 html {
@@ -15,8 +46,13 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 25%), linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 25%), linear-gradient(180deg, #f3f8ff 0%, #dde9f8 100%);
   color: #0f172a;
+}
+
+html.dark body {
+  background: #08101f;
+  color: #e8eefb;
 }
 
 * {
@@ -36,6 +72,6 @@ body {
   width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* Tailwind slate-300 */
+  background-color: #bccde6;
   border-radius: 10px;
 }

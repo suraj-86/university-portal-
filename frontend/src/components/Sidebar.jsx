@@ -1,164 +1,68 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard, Users2, BookOpen, CalendarCheck, BarChart3,
-  ClipboardList, FileText, Award, User, DollarSign, Bell, Settings, Sun, Moon, Calendar, CalendarDays, Clock3, Megaphone, MessageSquare, Building2, LifeBuoy, Contact, History, ShieldCheck, FileSpreadsheet
-} from 'lucide-react';
-
-const menuConfig = {
-  admin: [
-    { name: 'Dashboard', path: '/admin-dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'Students', path: '/admin/students', icon: <User size={20} /> },
-    { name: 'Teachers', path: '/admin/teachers', icon: <Users2 size={20} /> },
-    { name: 'Courses', path: '/admin/courses', icon: <BookOpen size={20} /> },
-    { name: 'Subjects', path: '/admin/subjects', icon: <FileText size={20} /> },
-    { name: 'Fees', path: '/admin/fees', icon: <DollarSign size={20} /> },
-    { name: 'Payments', path: '/admin/payments', icon: <BarChart3 size={20} /> },
-    { name: 'Reports', path: '/admin/reports', icon: <FileSpreadsheet size={20} /> },
-    { name: 'Notices', path: '/admin/notices', icon: <Bell size={20} /> },
-    { name: 'Announcements', path: '/admin/announcements', icon: <Megaphone size={20} /> },
-    { name: 'Parents', path: '/admin/parents', icon: <Users2 size={20} /> },
-    { name: 'Timetable', path: '/admin/timetable', icon: <Clock3 size={20} /> },
-    { name: 'Hostel', path: '/admin/hostel', icon: <Building2 size={20} /> },
-    { name: 'University Contacts', path: '/admin/contacts', icon: <Contact size={20} /> },
-    { name: 'Academic Calendar', path: '/admin/calendar', icon: <CalendarDays size={20} /> },
-    { name: 'Holidays', path: '/admin/holidays', icon: <Calendar size={20} /> },
-    { name: 'Admins', path: '/admin/admins', icon: <ShieldCheck size={20} /> },
-    { name: 'Audit Log', path: '/admin/audit', icon: <History size={20} /> },
-    { name: 'Settings', path: '/admin/settings', icon: <Settings size={20} /> }
-  ],
-  teacher: [
-    { name: 'Dashboard', path: '/teacher-dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'My Subjects', path: '/teacher/subjects', icon: <BookOpen size={20} /> },
-    { name: 'Attendance', path: '/teacher/attendance', icon: <CalendarCheck size={20} /> },
-    { name: 'Marks Entry', path: '/teacher/marks', icon: <ClipboardList size={20} /> },
-    { name: 'Reports', path: '/teacher/reports', icon: <FileSpreadsheet size={20} /> },
-    { name: 'Notices', path: '/teacher/notices', icon: <Bell size={20} /> },
-    { name: 'Announcements', path: '/teacher/announcements', icon: <Megaphone size={20} /> },
-    { name: 'Messages', path: '/teacher/messages', icon: <MessageSquare size={20} /> },
-    { name: 'Student & Parent Contacts', path: '/teacher/contacts', icon: <Contact size={20} /> },
-    { name: 'Timetable', path: '/teacher/timetable', icon: <Clock3 size={20} /> },
-    { name: 'Academic Calendar', path: '/teacher/calendar', icon: <CalendarDays size={20} /> },
-    { name: 'Holidays', path: '/teacher/holidays', icon: <Calendar size={20} /> },
-    { name: 'Help & Contacts', path: '/teacher/help', icon: <LifeBuoy size={20} /> },
-    { name: 'Settings', path: '/teacher/settings', icon: <Settings size={20} /> }
-  ],
-  student: [
-    { name: 'Dashboard', path: '/student-dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'Profile', path: '/student/profile', icon: <User size={20} /> },
-    { name: 'My Subjects', path: '/student/subjects', icon: <BookOpen size={20} /> },
-    { name: 'Attendance', path: '/student/attendance', icon: <CalendarCheck size={20} /> },
-    { name: 'Results', path: '/student/results', icon: <Award size={20} /> },
-    { name: 'Report Card', path: '/student/report-card', icon: <ClipboardList size={20} /> },
-    { name: 'Statements', path: '/student/reports', icon: <FileSpreadsheet size={20} /> },
-
-    { name: 'Hostel', path: '/student/hostel', icon: <Building2 size={20} /> },
-
-    { name: 'Fees', path: '/student/fees', icon: <DollarSign size={20} /> },
-    { name: 'Notices', path: '/student/notices', icon: <Bell size={20} /> },
-    { name: 'Announcements', path: '/student/announcements', icon: <Megaphone size={20} /> },
-    { name: 'Messages', path: '/student/messages', icon: <MessageSquare size={20} /> },
-    { name: 'Timetable', path: '/student/timetable', icon: <Clock3 size={20} /> },
-    { name: 'Academic Calendar', path: '/student/calendar', icon: <CalendarDays size={20} /> },
-    { name: 'Holidays', path: '/student/holidays', icon: <Calendar size={20} /> },
-    { name: 'Help & Contacts', path: '/student/help', icon: <LifeBuoy size={20} /> },
-    { name: 'Settings', path: '/student/settings', icon: <Settings size={20} /> }
-  ],
-  parent: [
-    { name: 'Dashboard', path: '/parent-dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'Ward Profile', path: '/parent/profile', icon: <User size={20} /> },
-    { name: 'Fees & Payments', path: '/parent/fees', icon: <DollarSign size={20} /> },  
-    { name: 'Attendance', path: '/parent/attendance', icon: <CalendarCheck size={20} /> },
-    { name: 'Academic Results', path: '/parent/results', icon: <Award size={20} /> },
-    { name: 'Report Card', path: '/parent/report-card', icon: <ClipboardList size={20} /> },
-    { name: 'Statements', path: '/parent/reports', icon: <FileSpreadsheet size={20} /> },
-
-    { name: 'Hostel', path: '/parent/hostel', icon: <Building2 size={20} /> },
-
-    { name: 'Campus Notices', path: '/parent/notices', icon: <Bell size={20} /> },
-    { name: 'Announcements', path: '/parent/announcements', icon: <Megaphone size={20} /> },
-    { name: 'Messages', path: '/parent/messages', icon: <MessageSquare size={20} /> },
-    { name: 'Timetable', path: '/parent/timetable', icon: <Clock3 size={20} /> },
-    { name: 'Academic Calendar', path: '/parent/calendar', icon: <CalendarDays size={20} /> },
-    { name: 'Holidays', path: '/parent/holidays', icon: <Calendar size={20} /> },
-    { name: 'Help & Contacts', path: '/parent/help', icon: <LifeBuoy size={20} /> },
-    { name: 'Settings', path: '/parent/settings', icon: <Settings size={20} /> }
-    
-  ],
-};
+import React from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
+import useAuth from '../hooks/useAuth';
+import { menuConfig } from './navConfig';
 
 const Sidebar = ({ role = 'student', isOpen, onClose }) => {
   const menu = menuConfig[role] || menuConfig.student;
+  const navigate = useNavigate();
+  const { logout } = useAuth();
 
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem('theme') === 'dark';
-  });
-
-  const toggleTheme = () => {
-    const root = document.documentElement;
-    if (isDarkMode) {
-      root.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-      setIsDarkMode(false);
-    } else {
-      root.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-      setIsDarkMode(true);
-    }
+  const handleLogout = () => {
+    logout();
+    navigate('/');
   };
 
   return (
     <aside
-      className={`fixed top-16 bottom-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 shadow-lg lg:shadow-none transform transition-transform duration-300 ease-in-out ${
+      aria-label="Main navigation"
+      className={`fixed inset-y-0 left-0 z-[60] w-64 flex flex-col bg-gradient-to-b from-cyan-100 via-sky-100 to-teal-50 dark:from-[#0a2230] dark:via-[#0b2a3a] dark:to-[#08161f] border-r border-cyan-200/70 dark:border-cyan-900/40 shadow-xl lg:shadow-none transform transition-transform duration-300 ease-in-out ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
-      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto custom-scrollbar">
-        <p className="px-3 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-          Main Menu
-        </p>
-        
-        {menu.map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.path}
-            onClick={onClose}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all duration-200 group ${
-                isActive
-                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span
-                  className={`transition-transform duration-300 ${
-                    isActive
-                      ? 'scale-110 text-blue-600 dark:text-blue-400'
-                      : 'group-hover:scale-110 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300'
-                  }`}
-                >
-                  {item.icon}
-                </span>
-                <span>{item.name}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </nav>
+      <div className="flex flex-col items-center text-center px-4 pt-5 pb-4 text-cyan-950 dark:text-cyan-50">
+        <img src="/bbau-icon.png" alt="" className="w-14 h-14 rounded-2xl bg-white p-1 shadow-md ring-1 ring-cyan-200" />
+        <p className="mt-3 text-[13px] font-black tracking-wide leading-snug">BABASAHEB BHIMRAO AMBEDKAR UNIVERSITY</p>
+        <p className="text-[10px] font-semibold text-cyan-800 dark:text-cyan-200 leading-tight">(A Central University)</p>
+        <p className="mt-1.5 text-[11px] font-bold tracking-wider text-cyan-800 dark:text-cyan-100 leading-tight border-t border-cyan-300/60 dark:border-white/20 pt-1.5 w-full">SATELLITE CAMPUS AMETHI</p>
+      </div>
 
-      <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-        <button
-          onClick={toggleTheme}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-all group"
-        >
-          <span className="text-slate-400 dark:text-slate-500 group-hover:scale-110 transition-transform">
-            {isDarkMode ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} />}
-          </span>
-          <span>{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
-        </button>
+      <div className="flex-1 min-h-0 flex flex-col mx-3 mb-3 rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur shadow-md ring-1 ring-cyan-100 dark:ring-cyan-900/40">
+        <nav className="flex-1 py-3 px-2.5 space-y-1 overflow-y-auto custom-scrollbar">
+          {menu.map((item) => (
+            <NavLink
+              key={item.name}
+              to={item.path}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors duration-200 ${
+                  isActive
+                    ? 'bg-cyan-700 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-cyan-50 dark:hover:bg-slate-800'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span className={isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'}>{item.icon}</span>
+                  <span>{item.name}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+          >
+            <LogOut size={20} aria-hidden="true" />
+            <span>Logout</span>
+          </button>
+        </div>
       </div>
     </aside>
   );

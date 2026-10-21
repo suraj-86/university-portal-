@@ -5,6 +5,7 @@ import api from '../services/api';
 import useAuth from '../hooks/useAuth.jsx';
 import { typeMeta, timeAgo } from '../utils/notificationUi';
 
+// Bell with an unread badge and a dropdown of the latest notifications.
 const NotificationBell = ({ unread }) => {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -53,6 +54,7 @@ const NotificationBell = ({ unread }) => {
             setItems((list) => (list || []).map((n) => ({ ...n, read: true })));
             refreshBadge();
         } catch {
+            /* the badge keeps its old count; try again later */
         }
     };
 
@@ -67,7 +69,7 @@ const NotificationBell = ({ unread }) => {
                 aria-expanded={open}
                 aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
                 title="Notifications"
-                className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400"
+                className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/70 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition hover:bg-white dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400"
             >
                 <Bell size={18} />
                 {unread > 0 && (
