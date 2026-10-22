@@ -1,498 +1,90 @@
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Text } from '@/components/AppText';
+import { Redirect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
-import api from '../services/api';
-import { setItem } from '../services/storage';
+import { useAppTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { Button, Field, Notice, T } from '@/components/ui';
+import { errorMessage } from '@/services/api';
+import { BRAND } from '@/constants/theme';
 
-export default function HomeScreen() {
-  const router = useRouter();
+const logo = require('@/assets/images/bbau-icon.png');
 
+export default function Login() {
+  const { c } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const { user, ready, login, logout } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [slow, setSlow] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [user, setUser] = useState<any>(null);
-
-  const handleLogin = async () => {
-    if (!username.trim() || !password) {
-      Alert.alert(
-        'Login required',
-        'Please enter username and password.'
-      );
-      return;
+  if (!ready) {
+    return <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.primary} /></View>;
+  }
+  if (user) {
+    if (user.role === 'admin') {
+      // Admin is web-only; sign the stored session out instead of looping.
+    } else if (user.must_change_password) {
+      return <Redirect href="/change-password" />;
+    } else {
+      return <Redirect href={`/${user.role}` as any} />;
     }
+  }
 
+  const submit = async () => {
+    if (busy) return;
+    if (!username.trim() || !password) { setError('Enter your username and password.'); return; }
+    setError('');
+    setBusy(true);
+    const timer = setTimeout(() => setSlow(true), 6000);
     try {
-      setLoading(true);
-
-      const response = await api.post(
-        '/login',
-        {
-          username: username.trim(),
-          password,
-        },
-        {
-          headers: {
-            'X-Client': 'mobile',
-          },
-        }
-      );
-
-      const { token, user } = response.data;
-
-      if (!token) {
-        throw new Error(
-          'Login succeeded but no JWT token was returned.'
-        );
-      }
-
-      await setItem('authToken', token);
-      await setItem('authUser', JSON.stringify(user));
-
-      console.log('LOGIN SUCCESS:', response.data);
-      console.log('TOKEN STORED');
-
-      const role = String(user?.role || '').toLowerCase();
-
-if (role === 'student') {
-  router.replace('/student');
-  return;
-}
-
-if (role === 'parent') {
-  router.replace('/parent');
-  return;
-}
-
-if (role === 'teacher') {
-  router.replace('/teacher');
-  return;
-}
-
-      Alert.alert(
-        'Mobile access unavailable',
-        'The administrator portal is available on desktop only.'
-      );
-    } catch (error: any) {
-      console.log(
-        'LOGIN ERROR:',
-        error.response?.data || error.message
-      );
-
-      const message =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        'Invalid username or password.';
-
-      Alert.alert('Login failed', message);
+      const u = await login(username, password);
+      if (u.role === 'admin') { await logout(); setError('The administrator portal is available on the website only.'); }
+    } catch (e: any) {
+      setError(e?.response?.status === 401 ? 'Invalid username or password.' : errorMessage(e, 'Could not sign in.'));
     } finally {
-      setLoading(false);
+      clearTimeout(timer);
+      setSlow(false);
+      setBusy(false);
     }
   };
 
-  if (loggedIn) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.successCard}>
-          <View style={styles.logoSmall}>
-            <Text style={styles.logoText}>U</Text>
-          </View>
-
-          <Text style={styles.brandSmall}>
-            UNIVERSITY PORTAL
-          </Text>
-
-          <View style={styles.successIcon}>
-            <Text style={styles.successIconText}>✓</Text>
-          </View>
-
-          <Text style={styles.successTitle}>
-            Welcome back
-          </Text>
-
-          <Text style={styles.successText}>
-            Login successful
-          </Text>
-
-          {user && (
-            <>
-              <Text style={styles.userName}>
-                {user.full_name || user.username}
-              </Text>
-
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleText}>
-                  {user.role}
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.backgroundGlow} />
-
-      <View style={styles.loginCard}>
-
-        {/* Brand */}
-        <View style={styles.brandSection}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>U</Text>
-          </View>
-
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.header }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        <View style={{ paddingTop: insets.top + 36, paddingBottom: 30, alignItems: 'center', paddingHorizontal: 24 }}>
+          <Image source={logo} style={{ width: 84, height: 84, borderRadius: 22, backgroundColor: '#fff' }} />
+          <Text style={{ marginTop: 16, color: c.headerText, fontSize: 17, fontWeight: '700', textAlign: 'center', letterSpacing: 0.4 }}>BABASAHEB BHIMRAO{'\n'}AMBEDKAR UNIVERSITY</Text>
+          <Text style={{ marginTop: 4, color: c.accent, fontSize: 12, fontWeight: '700' }}>{BRAND.sub}</Text>
+          <Text style={{ marginTop: 8, color: c.accent, fontSize: 12, fontWeight: '700', letterSpacing: 2 }}>{BRAND.campus}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: c.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: insets.bottom + 24, gap: 16 }}>
           <View>
-            <Text style={styles.universityName}>
-              Babasaheb Bhimrao
-            </Text>
-
-            <Text style={styles.universityName}>
-              Ambedkar University
-            </Text>
+            <T v="label" style={{ color: c.primary }}>Welcome back</T>
+            <T v="title">Sign in to continue</T>
+            <T v="muted" style={{ marginTop: 2 }}>Use the credentials provided by your university.</T>
           </View>
+          {error ? <Notice tone="danger">{error}</Notice> : null}
+          <Field label="Username" value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} autoComplete="username" placeholder="e.g. AC999/99 or FAC999" editable={!busy} returnKeyType="next" />
+          <View style={{ gap: 6 }}>
+            <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry={!show} autoCapitalize="none" autoComplete="password" placeholder="••••••••" editable={!busy} returnKeyType="go" onSubmitEditing={submit} />
+            <Pressable onPress={() => setShow((s) => !s)} style={{ alignSelf: 'flex-end', flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={16} color={c.muted} />
+              <Text style={{ color: c.muted, fontSize: 12, fontWeight: '700' }}>{show ? 'Hide' : 'Show'} password</Text>
+            </Pressable>
+          </View>
+          <Button label={busy ? 'Signing in…' : 'Sign In'} onPress={submit} loading={busy} />
+          {slow ? <Notice tone="info">The server may be waking from sleep. This can take up to a minute the first time. Please keep the app open.</Notice> : null}
+          <T v="small" style={{ textAlign: 'center' }}>Forgot your password? Please contact the university office to have it reset.</T>
+          <T v="small" style={{ textAlign: 'center', color: c.faint }}>Authorized university users only</T>
         </View>
-
-        <Text style={styles.portalLabel}>
-          UNIVERSITY PORTAL
-        </Text>
-
-        <Text style={styles.title}>
-          Welcome back.
-        </Text>
-
-        <Text style={styles.subtitle}>
-          Sign in to access your university services.
-        </Text>
-
-        {/* Username */}
-        <View style={styles.field}>
-          <Text style={styles.label}>
-            USERNAME
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your username"
-            placeholderTextColor="#7f8aa3"
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
-        </View>
-
-        {/* Password */}
-        <View style={styles.field}>
-          <Text style={styles.label}>
-            PASSWORD
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your password"
-            placeholderTextColor="#7f8aa3"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
-        </View>
-
-        {/* Login */}
-        <TouchableOpacity
-          style={[
-            styles.loginButton,
-            loading && styles.loginButtonDisabled,
-          ]}
-          onPress={handleLogin}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.loginButtonText}>
-              Sign In
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <Text style={styles.secureText}>
-          Authorized university users only
-        </Text>
-
-        <View style={styles.securityRow}>
-          <View style={styles.securityDot} />
-
-          <Text style={styles.securityText}>
-            Secure institutional access
-          </Text>
-        </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050817',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    overflow: 'hidden',
-  },
-
-  backgroundGlow: {
-    position: 'absolute',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: '#123b9c',
-    opacity: 0.12,
-    top: -130,
-    left: -120,
-  },
-
-  loginCard: {
-    width: '100%',
-    maxWidth: 430,
-    backgroundColor: '#101525',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#202a42',
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-  },
-
-  brandSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 34,
-  },
-
-  logo: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: '#1764ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-
-  logoSmall: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#1764ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 14,
-  },
-
-  logoText: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-
-  universityName: {
-    color: '#f4f7ff',
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 17,
-  },
-
-  brandSmall: {
-    color: '#4d9cff',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 28,
-  },
-
-  portalLabel: {
-    color: '#4d9cff',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 2.5,
-    marginBottom: 8,
-  },
-
-  title: {
-    color: '#ffffff',
-    fontSize: 32,
-    fontWeight: '800',
-    lineHeight: 38,
-    marginBottom: 8,
-  },
-
-  subtitle: {
-    color: '#8995ad',
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 28,
-  },
-
-  field: {
-    marginBottom: 18,
-  },
-
-  label: {
-    color: '#aab5cc',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    marginBottom: 8,
-  },
-
-  input: {
-    height: 54,
-    backgroundColor: '#edf3ff',
-    borderRadius: 11,
-    paddingHorizontal: 16,
-    color: '#101525',
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#d8e3f8',
-  },
-
-  loginButton: {
-    height: 54,
-    backgroundColor: '#1764ff',
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    elevation: 5,
-  },
-
-  loginButtonDisabled: {
-    opacity: 0.65,
-  },
-
-  loginButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  secureText: {
-    color: '#66728b',
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 16,
-  },
-
-  securityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 28,
-  },
-
-  securityDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#18d7a0',
-    marginRight: 8,
-  },
-
-  securityText: {
-    color: '#66728b',
-    fontSize: 10,
-  },
-
-  successCard: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: '#101525',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#202a42',
-    padding: 30,
-    alignItems: 'center',
-  },
-
-  successIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#123d31',
-    borderWidth: 1,
-    borderColor: '#18d7a0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-
-  successIconText: {
-    color: '#18d7a0',
-    fontSize: 26,
-    fontWeight: '800',
-  },
-
-  successTitle: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-
-  successText: {
-    color: '#8d9ab2',
-    fontSize: 14,
-    marginBottom: 22,
-  },
-
-  userName: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-
-  roleBadge: {
-    backgroundColor: '#182b52',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-
-  roleText: {
-    color: '#70a7ff',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-});

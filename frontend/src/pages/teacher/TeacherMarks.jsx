@@ -313,7 +313,8 @@ const TeacherMarks = () => {
     const openHistory = async (classId, type, name, label) => {
         try {
             const res = await api.get(`/marks/history?subject_id=${classId}&exam_type=${encodeURIComponent(type)}&assessment_name=${encodeURIComponent(name || '')}`);
-            setHistoryRows(res.data);
+            const rows = Array.isArray(res.data) ? res.data : [];
+            setHistoryRows(rows);
             setHistoryTitle(label);
             setHistoryOpen(true);
         } catch (error) {
@@ -698,6 +699,14 @@ const TeacherMarks = () => {
                     </div>
                 </div>
             )}
+
+            <Modal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} title="Change history" subtitle={historyTitle}>
+                <div className="mt-2 max-h-[500px] overflow-y-auto">
+                    {historyRows.length === 0
+                        ? <div className="text-center py-10 text-slate-400 dark:text-slate-500 font-bold">No changes have been recorded yet.</div>
+                        : <Table columns={historyColumns} data={historyRows} pageSize={100} />}
+                </div>
+            </Modal>
 
             {isViewModalOpen && (
                 <Modal 
