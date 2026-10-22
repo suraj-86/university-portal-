@@ -1,14 +1,9 @@
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
 const { str } = require('../lib/validate');
+const { generatePassword, hashPassword, passwordProblem } = require('../lib/password');
 
 const MAX_ROWS = 300;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[0-9+()\-\s]{6,20}$/;
-const PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-
-const generatePassword = () =>
-    Array.from({ length: 10 }, () => PASSWORD_ALPHABET[crypto.randomInt(PASSWORD_ALPHABET.length)]).join('');
 
 const validateRow = (raw, coursesByCode) => {
     const b = raw || {};
@@ -41,7 +36,7 @@ const validateRow = (raw, coursesByCode) => {
     if (roll && roll.length > 50) return { error: 'Roll number is too long (max 50).' };
     if (email && (email.length > 150 || !EMAIL_RE.test(email))) return { error: 'Email address is not valid.' };
     if (phone && !PHONE_RE.test(phone)) return { error: 'Phone number is not valid.' };
-    if (password && (password.length < 6 || password.length > 72)) return { error: 'Password must be 6 to 72 characters.' };
+    if (password && passwordProblem(password)) return { error: passwordProblem(password) };
 
     return { value: { enrollment, name, courseId: course.id, courseCode: course.course_code, semester, roll, email, phone, password } };
 };
@@ -118,7 +113,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
             const credentials = [];
             await Promise.all(create.map(async (it) => {
                 const plain = it.password || generatePassword();
-                it.hash = await bcrypt.hash(plain, 10);
+                it.hash = await hashPassword(plain, 10);
                 if (!it.password) credentials.push({ row: it.row, enrollment_number: it.enrollment, name: it.name, password: plain });
             }));
 

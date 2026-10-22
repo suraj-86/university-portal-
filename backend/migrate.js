@@ -2,6 +2,7 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2');
+const { sslOptions } = require('./lib/ssl');
 
 const dir = path.join(__dirname, 'migrations');
 const conn = mysql.createConnection({
@@ -10,7 +11,7 @@ const conn = mysql.createConnection({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT,
-    ssl: { rejectUnauthorized: false },
+    ssl: sslOptions(),
     multipleStatements: true
 });
 

@@ -1,46 +1,21 @@
 require('dotenv').config();
 const express = require('express');
-const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const { createAudit } = require('./audit');
 const { singleAttachment } = require('./lib/upload');
+const { createRateLimiter } = require('./lib/rateLimit');
+const { securityHeaders, originGuard, allowedOrigins } = require('./lib/security');
+const { publicError } = require('./lib/http');
+const { hashPassword, passwordProblem, DUMMY_HASH } = require('./lib/password');
 
 const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    next();
-});
-
-const createRateLimiter = ({ windowMs, max, keyFn, message }) => {
-    const hits = new Map();
-    setInterval(() => {
-        const now = Date.now();
-        for (const [k, v] of hits) if (v.reset <= now) hits.delete(k);
-    }, windowMs).unref();
-    return (req, res, next) => {
-        const key = keyFn(req);
-        const now = Date.now();
-        let entry = hits.get(key);
-        if (!entry || entry.reset <= now) {
-            entry = { count: 0, reset: now + windowMs };
-            hits.set(key, entry);
-        }
-        entry.count += 1;
-        if (entry.count > max) {
-            res.setHeader('Retry-After', Math.ceil((entry.reset - now) / 1000));
-            return res.status(429).json({ success: false, message, error: message });
-        }
-        next();
-    };
-};
+app.use(securityHeaders);
 
 const loginLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000,
@@ -49,20 +24,34 @@ const loginLimiter = createRateLimiter({
     message: 'Too many login attempts. Please try again in 15 minutes.'
 });
 
+const loginIpLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    keyFn: (req) => req.ip,
+    message: 'Too many login attempts. Please try again in 15 minutes.'
+});
+
+const passwordChangeLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyFn: (req) => `pw|${req.ip}|${req.params.id}`,
+    message: 'Too many password attempts. Please try again in 15 minutes.'
+});
+
 app.use(cors({
-origin: [
-        'https://university-portal-flax-tau.vercel.app', 
-        'http://localhost:5174',
-        'http://localhost:5173',
-        'http://localhost:8081'
-    ],
+    origin: allowedOrigins(),
     credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
+app.use(originGuard());
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+if (JWT_SECRET && JWT_SECRET.length < 32) {
+    console.warn("⚠️  JWT_SECRET is shorter than 32 characters. Use a long random value.");
+}
 
 if (!JWT_SECRET) {
     console.error(
@@ -71,55 +60,8 @@ if (!JWT_SECRET) {
     process.exit(1);
 }
 
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-
-const uploadDir = path.join(__dirname, "uploads");
-
-fs.mkdirSync(uploadDir, {
-    recursive: true
-});
-
-const storage = multer.diskStorage({
-    destination(req, file, cb) {
-        cb(null, uploadDir);
-    },
-
-    filename(req, file, cb) {
-        const extension = path.extname(file.originalname).toLowerCase();
-        const uniqueName =
-            `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
-
-        cb(null, uniqueName);
-    }
-});
-
-const ALLOWED_UPLOAD_EXTENSIONS = new Set(['.pdf', '.doc', '.docx']);
-const ALLOWED_UPLOAD_MIMES = new Set([
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-]);
-
-const upload = multer({
-    storage,
-    limits: {
-        fileSize: 5 * 1024 * 1024
-    },
-    fileFilter(req, file, cb) {
-        const extension = path.extname(file.originalname).toLowerCase();
-
-        if (
-            !ALLOWED_UPLOAD_EXTENSIONS.has(extension) ||
-            !ALLOWED_UPLOAD_MIMES.has(file.mimetype)
-        ) {
-            return cb(new Error('Only PDF, DOC, and DOCX files up to 5 MB are allowed.'));
-        }
-
-        cb(null, true);
-    }
-});
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -260,7 +202,7 @@ const withTransaction = (res, workFn) => {
     });
 };
 
-app.post("/api/login", loginLimiter, async (req, res) => {
+app.post("/api/login", loginIpLimiter, loginLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
 
@@ -304,6 +246,7 @@ app.post("/api/login", loginLimiter, async (req, res) => {
             }
 
             if (!results.length) {
+                await bcrypt.compare(String(password), DUMMY_HASH);
                 return res.status(401).json({
                     success: false,
                     message: "Invalid username or password."
@@ -313,7 +256,7 @@ app.post("/api/login", loginLimiter, async (req, res) => {
             const user = results[0];
 
             const passwordMatched = await bcrypt.compare(
-                password,
+                String(password),
                 user.password
             );
 
@@ -338,6 +281,7 @@ app.post("/api/login", loginLimiter, async (req, res) => {
                 },
                 JWT_SECRET,
                 {
+                    algorithm: "HS256",
                     expiresIn: "8h"
                 }
             );
@@ -408,6 +352,7 @@ app.post("/api/logout", (req, res) => {
 app.put(
     "/api/users/:id/change-password",
     verifyRole(["admin", "teacher", "student", "parent"]),
+    passwordChangeLimiter,
     async (req, res) => {
         try {
             const userId = Number(req.params.id);
@@ -428,11 +373,9 @@ app.put(
                 });
             }
 
-            if (newPassword.length < 8) {
-                return res.status(400).json({
-                    success: false,
-                    error: "New password must be at least 8 characters long."
-                });
+            const weak = passwordProblem(newPassword);
+            if (weak) {
+                return res.status(400).json({ success: false, error: weak });
             }
 
             db.query(
@@ -456,7 +399,7 @@ app.put(
                     }
 
                     const passwordMatched = await bcrypt.compare(
-                        currentPassword,
+                        String(currentPassword),
                         results[0].password
                     );
 
@@ -468,7 +411,7 @@ app.put(
                     }
 
                     const samePassword = await bcrypt.compare(
-                        newPassword,
+                        String(newPassword),
                         results[0].password
                     );
 
@@ -479,7 +422,7 @@ app.put(
                         });
                     }
 
-                    const hashedPassword = await bcrypt.hash(newPassword, 10);
+                    const hashedPassword = await hashPassword(newPassword);
 
                     db.query(
                         "UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?",
@@ -651,7 +594,9 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
             error: "Please fill all required fields."
         });
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const weakPassword = passwordProblem(password);
+    if (weakPassword) return res.status(400).json({ error: weakPassword });
+    const hashedPassword = await hashPassword(password);
 
     withTransaction(res, (db) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'student')";
@@ -678,7 +623,7 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 
     return db.rollback(() =>
         res.status(500).json({
-            error: err.sqlMessage || err.message
+            error: publicError(err)
         })
     );
 }
@@ -695,6 +640,11 @@ app.post('/api/students', verifyRole(['admin']), async (req, res) => {
 app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
     const { name, email, enrollment_number, roll_number, semester, course_id, password } = req.body;
 
+    if (password && String(password).trim() !== '') {
+        const weakPassword = passwordProblem(password);
+        if (weakPassword) return res.status(400).json({ error: weakPassword });
+    }
+
     if (!name || !enrollment_number || !course_id) {
         return res.status(400).json({
             error: "Please fill all required fields."
@@ -708,7 +658,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
             async (err, result) => {
                 if (err) {
                     return db.rollback(() =>
-                        res.status(500).json({ error: err.message })
+                        res.status(500).json({ error: publicError(err) })
                     );
                 }
 
@@ -740,7 +690,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
                     async (err) => {
                         if (err) {
                             return db.rollback(() =>
-                                res.status(500).json({ error: err.message })
+                                res.status(500).json({ error: publicError(err) })
                             );
                         }
 
@@ -748,7 +698,7 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
                         let params = [enrollment_number, userId];
 
                         if (password && password.trim() !== "") {
-                            const hashedPassword = await bcrypt.hash(password, 10);
+                            const hashedPassword = await hashPassword(password);
 
                             userSql = `
                                 UPDATE users
@@ -762,14 +712,14 @@ app.put('/api/students/:id', verifyRole(['admin']), (req, res) => {
                         db.query(userSql, params, (err) => {
                             if (err) {
                                 return db.rollback(() =>
-                                    res.status(500).json({ error: err.message })
+                                    res.status(500).json({ error: publicError(err) })
                                 );
                             }
 
                             db.commit((err) => {
                                 if (err) {
                                     return db.rollback(() =>
-                                        res.status(500).json({ error: err.message })
+                                        res.status(500).json({ error: publicError(err) })
                                     );
                                 }
 
@@ -804,7 +754,7 @@ app.delete('/api/students/:id', verifyRole(['admin']), (req, res) => {
 app.get('/api/teachers', verifyRole(['admin']), (req, res) => {
     const sql = "SELECT * FROM teachers";
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         return res.json(data);
     });
 });
@@ -823,7 +773,9 @@ if (
         error: "Please fill all required fields."
     });
 }
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const weakPassword = passwordProblem(password);
+    if (weakPassword) return res.status(400).json({ error: weakPassword });
+    const hashedPassword = await hashPassword(password);
 
     withTransaction(res, (db) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'teacher')";
@@ -842,7 +794,7 @@ if (err) {
 
     return db.rollback(() =>
         res.status(500).json({
-            error: err.sqlMessage || err.message
+            error: publicError(err)
         })
     );
 }
@@ -856,6 +808,10 @@ if (err) {
 });
 
 app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
+    if (req.body.password && String(req.body.password).trim() !== '') {
+        const weakPassword = passwordProblem(req.body.password);
+        if (weakPassword) return res.status(400).json({ error: weakPassword });
+    }
     const {
         full_name,
         email,
@@ -887,7 +843,7 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
                 async (err, result) => {
                     if (err) {
                         return db.rollback(() =>
-                            res.status(500).json({ error: err.message })
+                            res.status(500).json({ error: publicError(err) })
                         );
                     }
 
@@ -927,7 +883,7 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
                         async (err) => {
                             if (err) {
                                 return db.rollback(() =>
-                                    res.status(500).json({ error: err.message })
+                                    res.status(500).json({ error: publicError(err) })
                                 );
                             }
 
@@ -935,7 +891,7 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
                             let params = [employee_id, userId];
 
                             if (password && password.trim() !== "") {
-                                const hashedPassword = await bcrypt.hash(password, 10);
+                                const hashedPassword = await hashPassword(password);
 
                                 userSql = `
                                     UPDATE users
@@ -949,14 +905,14 @@ app.put('/api/teachers/:id', verifyRole(['admin']), async (req, res) => {
                             db.query(userSql, params, (err) => {
                                 if (err) {
                                     return db.rollback(() =>
-                                        res.status(500).json({ error: err.message })
+                                        res.status(500).json({ error: publicError(err) })
                                     );
                                 }
 
                                 db.commit((err) => {
                                     if (err) {
                                         return db.rollback(() =>
-                                            res.status(500).json({ error: err.message })
+                                            res.status(500).json({ error: publicError(err) })
                                         );
                                     }
 
@@ -986,7 +942,7 @@ app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
         db.query(getUserSql, [req.params.id], (err, result) => {
             if (err) {
                 return db.rollback(() =>
-                    res.status(500).json({ error: err.message })
+                    res.status(500).json({ error: publicError(err) })
                 );
             }
 
@@ -1004,7 +960,7 @@ app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
                 (err) => {
                     if (err) {
                         return db.rollback(() =>
-                            res.status(500).json({ error: err.message })
+                            res.status(500).json({ error: publicError(err) })
                         );
                     }
 
@@ -1014,14 +970,14 @@ app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
                         (err) => {
                             if (err) {
                                 return db.rollback(() =>
-                                    res.status(500).json({ error: err.message })
+                                    res.status(500).json({ error: publicError(err) })
                                 );
                             }
 
                             db.commit((err) => {
                                 if (err) {
                                     return db.rollback(() =>
-                                        res.status(500).json({ error: err.message })
+                                        res.status(500).json({ error: publicError(err) })
                                     );
                                 }
 
@@ -1040,7 +996,7 @@ app.delete('/api/teachers/:id', verifyRole(['admin']), (req, res) => {
 app.get('/api/courses', verifyRole(['admin', 'teacher', 'student', 'parent']), (req, res) => {
     const sql = "SELECT * FROM courses";
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         return res.json(data);
     });
 });
@@ -1061,7 +1017,7 @@ app.post('/api/courses', verifyRole(['admin']), (req, res) => {
     const sql = "INSERT INTO courses (course_code, course_name, department, duration_years, total_semesters) VALUES (?, ?, ?, ?, ?)";
     
     db.query(sql, [course_code, course_name, department, duration_years, total_semesters], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json({ success: true, message: "Course added successfully" });
     });
 });
@@ -1071,7 +1027,7 @@ app.put('/api/courses/:id', verifyRole(['admin']), (req, res) => {
     const sql = "UPDATE courses SET course_code=?, course_name=?, department=?, duration_years=?, total_semesters=? WHERE id=?";
     
     db.query(sql, [course_code, course_name, department, duration_years, total_semesters, req.params.id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json({ success: true });
     });
 });
@@ -1079,7 +1035,7 @@ app.put('/api/courses/:id', verifyRole(['admin']), (req, res) => {
 app.delete('/api/courses/:id', verifyRole(['admin']), (req, res) => {
     const sql = "DELETE FROM courses WHERE id = ?";
     db.query(sql, [req.params.id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json({ success: true });
     });
 });
@@ -1094,7 +1050,7 @@ app.get('/api/subjects', verifyRole(['admin', 'teacher']), (req, res) => {
         LEFT JOIN teachers ON teacher_assignments.teacher_id = teachers.teacher_id
     `;
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json(data);
     });
 });
@@ -1120,7 +1076,7 @@ app.post('/api/subjects', verifyRole(['admin']), (req, res) => {
     const sql = "INSERT INTO subjects (course_id, semester, subject_code, subject_name, subject_type, credits) VALUES (?, ?, ?, ?, ?, ?)";
 
     db.query(sql, [course_id, semester, subject_code, subject_name, subject_type, creditsNum], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json({ success: true, id: result.insertId });
     });
 });
@@ -1155,47 +1111,10 @@ app.put('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
 app.delete('/api/subjects/:id', verifyRole(['admin']), (req, res) => {
     const sql = "DELETE FROM subjects WHERE id = ?";
     db.query(sql, [req.params.id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json({ success: true });
     });
 });
-
-const getParentWard = (parentUserId, studentId, callback) => {
-    const sql = `
-        SELECT
-            s.student_id,
-            s.user_id,
-            s.full_name,
-            s.roll_number,
-            s.enrollment_number,
-            s.semester,
-            s.course_id,
-            c.course_name
-        FROM students s
-        JOIN courses c
-            ON s.course_id = c.id
-        JOIN parent_student_map psm
-            ON psm.student_id = s.student_id
-        JOIN parents p
-            ON p.parent_id = psm.parent_id
-        WHERE p.user_id = ?
-          AND s.student_id = ?
-        LIMIT 1
-    `;
-
-    db.query(sql, [parentUserId, studentId], (err, rows) => {
-        if (err) {
-            console.error("Parent ward lookup error:", err);
-            return callback(err, null);
-        }
-
-        if (rows.length === 0) {
-            return callback(null, null);
-        }
-
-        callback(null, rows[0]);
-    });
-};
 
 app.get('/api/parents', verifyRole(['admin']), (req, res) => {
     const sql = `
@@ -1215,7 +1134,7 @@ app.get('/api/parents', verifyRole(['admin']), (req, res) => {
         GROUP BY p.parent_id
     `;
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json(data);
     });
 });
@@ -1239,7 +1158,9 @@ if (!Array.isArray(student_ids) || student_ids.length === 0) {
         error: "Please select at least one student."
     });
 }
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const weakPassword = passwordProblem(password);
+    if (weakPassword) return res.status(400).json({ error: weakPassword });
+    const hashedPassword = await hashPassword(password);
 
     withTransaction(res, (db) => {
         const userSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'parent')";
@@ -1288,14 +1209,14 @@ if (!Array.isArray(student_ids) || student_ids.length === 0) {
     
     withTransaction(res, (db) => {
         db.query("UPDATE parents SET full_name = ?, phone = ?, email = ? WHERE parent_id = ?", [full_name, phone, email, parentId], (err) => {
-            if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+            if (err) return db.rollback(() => res.status(500).json({ error: publicError(err) }));
             
             db.query("DELETE FROM parent_student_map WHERE parent_id = ?", [parentId], (err) => {
-                if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+                if (err) return db.rollback(() => res.status(500).json({ error: publicError(err) }));
                 
                 const values = student_ids.map(sId => [parentId, sId]);
                 db.query("INSERT INTO parent_student_map (parent_id, student_id) VALUES ?", [values], (err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+                    if (err) return db.rollback(() => res.status(500).json({ error: publicError(err) }));
                     
                     db.commit((err) => {
                         if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
@@ -1316,7 +1237,7 @@ app.delete('/api/parents/:id', verifyRole(['admin']), (req, res) => {
         const userId = results[0].user_id;
         
         db.query("DELETE FROM users WHERE id = ?", [userId], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
+            if (err) return res.status(500).json({ error: publicError(err) });
             audit(req, { action: 'PARENT_DELETE', entity: 'users', entityId: userId });
             res.json({ success: true, message: "Parent account deleted" });
         });
@@ -1347,7 +1268,7 @@ app.get('/api/notices', verifyRole(['admin']), (req, res) => {
         if (err) {
             console.error(err);
             return res.status(500).json({
-                error: err.message
+                error: publicError(err)
             });
         }
 
@@ -1416,7 +1337,7 @@ app.post('/api/notices', verifyRole(['admin', 'teacher']), singleAttachment, (re
                 if (err) {
                     console.error(err);
                     return res.status(500).json({
-                        error: err.message
+                        error: publicError(err)
                     });
                 }
 
@@ -1535,7 +1456,7 @@ app.put('/api/notices/:id', verifyRole(['admin', 'teacher']), singleAttachment, 
                 if (err) {
                     console.error(err);
                     return res.status(500).json({
-                        error: err.message
+                        error: publicError(err)
                     });
                 }
 
@@ -1638,7 +1559,7 @@ app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
         if (err) {
             console.error(err);
             return res.status(500).json({
-                error: err.message
+                error: publicError(err)
             });
         }
 
@@ -1669,7 +1590,7 @@ app.delete('/api/notices/:id', verifyRole(['admin', 'teacher']), (req, res) => {
                 if (deleteErr) {
                     console.error(deleteErr);
                     return res.status(500).json({
-                        error: deleteErr.message
+                        error: publicError(deleteErr)
                     });
                 }
 
@@ -1714,14 +1635,14 @@ if (err) {
     console.error(err);
 
     return res.status(500).json({
-        error: err.message
+        error: publicError(err)
     });
 }        
         db.query(activitySql, (err, activityData) => {
             if (err) {
                 console.error(err);
                 return res.status(500).json({
-                    error: err.message
+                    error: publicError(err)
                 });
             }
 
@@ -1928,7 +1849,7 @@ app.get('/api/marks/details', verifyRole(['teacher']), (req, res) => {
     console.error(err);
 
     return res.status(500).json({
-        error: err.message
+        error: publicError(err)
     });
 }
         res.json(data);
@@ -2106,7 +2027,7 @@ app.get('/api/student/:id/notices', verifyRole(['student', 'parent', 'admin']), 
         if (err) {
             console.error("Notice fetch error:", err);
             return res.status(500).json({
-                error: err.sqlMessage || err.message
+                error: publicError(err)
             });
         }
         res.json(data || []);
@@ -2377,7 +2298,7 @@ app.get('/api/student/:id/attendance-logs', verifyRole(['student', 'parent', 'ad
         WHERE st.user_id = ? AND s.semester = ?
         ORDER BY dc.class_date DESC`;
     db.query(sql, [userId, semester], (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json(data);
     });
 });
@@ -2401,7 +2322,7 @@ app.get('/api/student/:id/subjects', verifyRole(['student', 'parent', 'admin']),
     `;
 
     db.query(sql, [userId, semester], (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         
         const totalCredits = data.reduce((sum, sub) => sum + (sub.credits || 0), 0);
         
@@ -2427,7 +2348,7 @@ app.get('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
     `;
     
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.sqlMessage || err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         if (data.length === 0) return res.status(404).json({ message: "Student not found" });
 
         const dbStudent = data[0];
@@ -2481,7 +2402,7 @@ app.get('/api/admin/fees', verifyRole(['admin']), (req, res) => {
     console.error(err);
 
     return res.status(500).json({
-        error: err.message
+        error: publicError(err)
     });
 }
         res.json(data);
@@ -2497,7 +2418,7 @@ app.get('/api/student/:id/fees', verifyRole(['student', 'parent', 'admin']), ver
         ORDER BY f.due_date ASC
     `;
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.sqlMessage || err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json(data || []);
     });
 });
@@ -2513,438 +2434,9 @@ app.get('/api/student/:id/payments', verifyRole(['student', 'parent', 'admin']),
         ORDER BY p.payment_date DESC
     `;
     db.query(sql, [userId], (err, data) => {
-        if (err) return res.status(500).json({ error: err.sqlMessage || err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json(data || []);
     });
-});
-
-app.post('/api/payments', verifyRole(['student', 'parent', 'admin']), (req, res) => {
-    const { fee_id, amount_paid, payment_method, transaction_reference, processed_by } = req.body;
-    if (
-    !fee_id ||
-    !amount_paid ||
-    !payment_method
-) {
-    return res.status(400).json({
-        error: "Please fill all required fields."
-    });
-}
-
-    const payAmount = Number(amount_paid);
-    if (!Number.isFinite(payAmount) || payAmount <= 0) {
-        return res.status(400).json({ error: "Payment amount must be greater than zero." });
-    }
-
-    const authorizeFeeSql = `
-        SELECT s.user_id, f.total_fee, f.paid_amount
-        FROM fees f
-        JOIN students s ON f.student_id = s.student_id
-        WHERE f.id = ?
-    `;
-
-    db.query(authorizeFeeSql, [fee_id], (authErr, feeOwnerRows) => {
-        if (authErr) {
-            console.error(authErr);
-            return res.status(500).json({ error: "Failed to verify fee ownership." });
-        }
-
-        if (feeOwnerRows.length === 0) {
-            return res.status(404).json({ error: "Fee record not found." });
-        }
-
-        const feeOwnerUserId = feeOwnerRows[0].user_id;
-        const remaining = Number(feeOwnerRows[0].total_fee) - Number(feeOwnerRows[0].paid_amount);
-
-        if (payAmount > remaining + 0.001) {
-            return res.status(400).json({ error: `Amount exceeds the outstanding balance (${remaining}).` });
-        }
-
-        const proceed = () => processPayment(req, res, fee_id, amount_paid, payment_method, transaction_reference, processed_by);
-
-        if (req.user.role === 'admin') {
-            return proceed();
-        }
-
-        if (req.user.role === 'student') {
-            if (req.user.id !== feeOwnerUserId) {
-                return res.status(403).json({ error: "You are not authorized to pay this fee." });
-            }
-            return proceed();
-        }
-
-        if (req.user.role === 'parent') {
-            const parentCheckSql = `
-                SELECT 1
-                FROM parent_student_map psm
-                JOIN parents p ON psm.parent_id = p.parent_id
-                JOIN students s ON psm.student_id = s.student_id
-                WHERE p.user_id = ? AND s.user_id = ?
-                LIMIT 1
-            `;
-
-            return db.query(parentCheckSql, [req.user.id, feeOwnerUserId], (linkErr, linkRows) => {
-                if (linkErr) {
-                    console.error(linkErr);
-                    return res.status(500).json({ error: "Failed to verify fee ownership." });
-                }
-
-                if (linkRows.length === 0) {
-                    return res.status(403).json({ error: "This fee does not belong to your linked child." });
-                }
-
-                return proceed();
-            });
-        }
-
-        return res.status(403).json({ error: "You are not authorized to pay this fee." });
-    });
-});
-
-function processPayment(req, res, fee_id, amount_paid, payment_method, transaction_reference, processed_by) {
-    withTransaction(res, (db) => {
-        const insertPaymentSql = `
-            INSERT INTO payments (fee_id, amount_paid, payment_method, transaction_reference, processed_by, payment_date)
-            VALUES (?, ?, ?, ?, ?, NOW())
-        `;
-
-        db.query(insertPaymentSql, [fee_id, amount_paid, payment_method, transaction_reference, processed_by || null], (err) => {
-            if (err) return db.rollback(() => res.status(500).json({ error: "Payment registration error. Rolled back." }));
-
-            db.query(`SELECT total_fee, paid_amount FROM fees WHERE id = ?`, [fee_id], (err, feeRows) => {
-                if (err || feeRows.length === 0) return db.rollback(() => res.status(500).json({ error: "Fee lookup failed." }));
-
-                const totalFee = parseFloat(feeRows[0].total_fee);
-const newPaid = Math.min(
-    parseFloat(feeRows[0].paid_amount) +
-    parseFloat(amount_paid),
-    totalFee
-);
-                const newStatus = newPaid >= parseFloat(feeRows[0].total_fee) ? 'Paid' : 'Partial';
-
-                db.query(`UPDATE fees SET paid_amount = ?, status = ? WHERE id = ?`, [newPaid, newStatus, fee_id], (err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: "Fee update error. Ledger entry rolled back." }));
-                    db.commit((err) => {
-                        if (err) return db.rollback(() => res.status(500).json({ error: "Commit failed" }));
-                        audit(req, { action: 'PAYMENT_CREATE', entity: 'fees', entityId: fee_id, newValue: { amount_paid, payment_method, transaction_reference } });
-                        notifier.run(async () => {
-                            const fee = await queryAsync('SELECT student_id, fee_type FROM fees WHERE id = ?', [fee_id]);
-                            if (!fee.length) return;
-                            const family = (await notifier.familyByStudent([fee[0].student_id])).get(fee[0].student_id) || [];
-                            await notifier.send(family, {
-                                type: 'payment', section: 'fees', refId: fee_id, title: 'Payment received',
-                                body: `₹${Number(amount_paid).toLocaleString('en-IN')} received towards ${fee[0].fee_type}.`
-                            });
-                        });
-                        res.json({ success: true, message: "Payment processed successfully!" });
-                    });
-                });
-            });
-        });
-    });
-}
-
-
-function createPaymentReceiptPdf(receipt) {
-    const clean = (value) =>
-        String(value ?? 'N/A')
-            .replace(/\\/g, '\\\\')
-            .replace(/\(/g, '\\(')
-            .replace(/\)/g, '\\)')
-            .replace(/[^\x20-\x7E]/g, '?');
-
-    const formatDate = (value) => {
-        if (!value) return 'N/A';
-
-        const date = new Date(value);
-
-        if (Number.isNaN(date.getTime())) {
-            return String(value);
-        }
-
-        return date.toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
-    };
-
-    const amount = Number(receipt.amount_paid || 0).toLocaleString('en-IN');
-
-
-    const text = (font, size, x, y, value) =>
-        `BT\n/${font} ${size} Tf\n1 0 0 1 ${x} ${y} Tm\n(${clean(value)}) Tj\nET\n`;
-
-    const line = (x1, y1, x2, y2) =>
-        `${x1} ${y1} m\n${x2} ${y2} l\nS\n`;
-
-    let content = '';
-
-
-    content += text('F2', 22, 50, 785, 'University Portal');
-    content += text('F1', 12, 50, 765, 'Payment Receipt');
-
-    content += line(50, 748, 545, 748);
-
-
-    content += text(
-        'F1',
-        10,
-        50,
-        720,
-        `Receipt ID: ${receipt.id}`
-    );
-
-    content += text(
-        'F1',
-        10,
-        50,
-        700,
-        `Transaction Reference: ${receipt.transaction_reference}`
-    );
-
-    content += text(
-        'F1',
-        10,
-        50,
-        680,
-        `Payment Date: ${formatDate(receipt.payment_date)}`
-    );
-
-
-    content += text('F2', 13, 50, 640, 'Student Details');
-
-    content += line(50, 628, 545, 628);
-
-    content += text(
-        'F1',
-        11,
-        50,
-        605,
-        `Student Name: ${receipt.student_name}`
-    );
-
-    content += text(
-        'F1',
-        11,
-        50,
-        580,
-        `Roll No: ${receipt.roll_number || 'Not Assigned'}`
-    );
-
-    content += text(
-        'F1',
-        11,
-        50,
-        555,
-        `Course: ${receipt.course_name}`
-    );
-
-    content += text(
-        'F1',
-        11,
-        50,
-        530,
-        `Semester: ${receipt.semester}`
-    );
-
-
-    content += text('F2', 13, 50, 490, 'Payment Details');
-
-    content += line(50, 478, 545, 478);
-
-    content += text(
-        'F1',
-        11,
-        50,
-        450,
-        `Fee Type: ${receipt.fee_type}`
-    );
-
-    content += text(
-        'F1',
-        11,
-        50,
-        425,
-        `Payment Method: ${receipt.payment_method}`
-    );
-
-    content += text(
-        'F2',
-        14,
-        50,
-        385,
-        `Amount Paid: INR ${amount}`
-    );
-
-    content += text(
-        'F2',
-        11,
-        50,
-        355,
-        'Status: Payment Successful'
-    );
-
-
-    content += line(50, 325, 545, 325);
-
-    content += text(
-        'F1',
-        9,
-        50,
-        300,
-        'This is a system-generated payment receipt.'
-    );
-
-    content += text(
-        'F1',
-        9,
-        50,
-        282,
-        'Please keep this receipt for your records.'
-    );
-
-
-    const objects = [];
-
-    objects.push(
-        '<< /Type /Catalog /Pages 2 0 R >>'
-    );
-
-    objects.push(
-        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>'
-    );
-
-    objects.push(
-        '<< /Type /Page ' +
-        '/Parent 2 0 R ' +
-        '/MediaBox [0 0 595 842] ' +
-        '/Resources << ' +
-            '/Font << ' +
-                '/F1 4 0 R ' +
-                '/F2 5 0 R ' +
-            '>> ' +
-        '>> ' +
-        '/Contents 6 0 R >>'
-    );
-
-    objects.push(
-        '<< /Type /Font ' +
-        '/Subtype /Type1 ' +
-        '/BaseFont /Helvetica >>'
-    );
-
-    objects.push(
-        '<< /Type /Font ' +
-        '/Subtype /Type1 ' +
-        '/BaseFont /Helvetica-Bold >>'
-    );
-
-    objects.push(
-        `<< /Length ${Buffer.byteLength(content, 'utf8')} >>\n` +
-        `stream\n${content}endstream`
-    );
-
-
-    let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
-
-    const offsets = [0];
-
-    objects.forEach((object, index) => {
-        offsets.push(
-            Buffer.byteLength(pdf, 'binary')
-        );
-
-        pdf += `${index + 1} 0 obj\n`;
-        pdf += `${object}\n`;
-        pdf += 'endobj\n';
-    });
-
-    const xrefOffset = Buffer.byteLength(pdf, 'binary');
-
-    pdf += `xref\n`;
-    pdf += `0 ${objects.length + 1}\n`;
-    pdf += `0000000000 65535 f \n`;
-
-    for (let i = 1; i <= objects.length; i++) {
-        pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-    }
-
-    pdf += `trailer\n`;
-    pdf += `<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
-    pdf += `startxref\n`;
-    pdf += `${xrefOffset}\n`;
-    pdf += `%%EOF`;
-
-    return Buffer.from(pdf, 'binary');
-}
-
-
-app.get('/api/payments/:id/receipt', verifyRole(['student', 'parent', 'admin']), async (req, res) => {
-    const paymentId = Number(req.params.id);
-
-    if (!Number.isInteger(paymentId) || paymentId <= 0) {
-        return res.status(400).json({ error: "Invalid payment identifier." });
-    }
-
-    const sql = `
-        SELECT
-            p.id,
-            p.transaction_reference,
-            p.payment_date,
-            p.amount_paid,
-            p.payment_method,
-            f.fee_type,
-            s.user_id AS student_user_id,
-            s.full_name AS student_name,
-            s.roll_number,
-            s.semester,
-            c.course_name
-        FROM payments p
-        JOIN fees f ON p.fee_id = f.id
-        JOIN students s ON f.student_id = s.student_id
-        JOIN courses c ON s.course_id = c.id
-        WHERE p.id = ?
-        LIMIT 1
-    `;
-
-    try {
-        const rows = await queryAsync(sql, [paymentId]);
-        if (rows.length === 0) {
-            return res.status(404).json({ error: "Payment not found." });
-        }
-
-        const payment = rows[0];
-
-        if (req.user.role === 'student' && Number(req.user.id) !== Number(payment.student_user_id)) {
-            return res.status(403).json({ error: "You are not authorized to access this receipt." });
-        }
-
-        if (req.user.role === 'parent') {
-            const parentRows = await queryAsync(`
-                SELECT 1
-                FROM parent_student_map psm
-                JOIN parents p ON p.parent_id = psm.parent_id
-                JOIN students s ON s.student_id = psm.student_id
-                WHERE p.user_id = ? AND s.user_id = ?
-                LIMIT 1
-            `, [req.user.id, payment.student_user_id]);
-
-            if (parentRows.length === 0) {
-                return res.status(403).json({ error: "You are not authorized to access this receipt." });
-            }
-        }
-
-        const pdf = createPaymentReceiptPdf(payment);
-        const safeReference = String(payment.transaction_reference || payment.id).replace(/[^a-zA-Z0-9_-]/g, '_');
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="payment-receipt-${safeReference}.pdf"`);
-        res.setHeader('Content-Length', pdf.length);
-        return res.send(pdf);
-    } catch (error) {
-        console.error("Payment receipt error:", error);
-        return res.status(500).json({ error: "Failed to generate payment receipt." });
-    }
 });
 
 app.get('/api/admin/payments', verifyRole(['admin']), (req, res) => {
@@ -2956,7 +2448,7 @@ app.get('/api/admin/payments', verifyRole(['admin']), (req, res) => {
         ORDER BY p.payment_date DESC
     `;
     db.query(sql, (err, data) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json(data);
     });
 });
@@ -2981,7 +2473,7 @@ app.post('/api/fees', verifyRole(['admin']), (req, res) => {
     db.query(sql, [student_id, semester, fee_type, total_fee, due_date], (err, result) => {
         if (err) {
             if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "This fee type already exists for this student & semester." });
-            return res.status(500).json({ error: err.message });
+            return res.status(500).json({ error: publicError(err) });
         }
         const feeId = result.insertId;
         notifier.run(async () => {
@@ -3019,7 +2511,7 @@ app.post('/api/fees/bulk-assign', verifyRole(['admin']), (req, res) => {
     db.query(studentsSql, [course_id, semester], (err, students) => {
         if (err) {
             console.error(err);
-            return res.status(500).json({ error: err.message });
+            return res.status(500).json({ error: publicError(err) });
         }
 
         if (students.length === 0) {
@@ -3049,7 +2541,7 @@ app.post('/api/fees/bulk-assign', verifyRole(['admin']), (req, res) => {
         db.query(insertSql, [values], (err) => {
             if (err) {
                 console.error(err);
-                return res.status(500).json({ error: err.message });
+                return res.status(500).json({ error: publicError(err) });
             }
 
             notifier.run(async () => {
@@ -3081,14 +2573,14 @@ app.put('/api/fees/:id', verifyRole(['admin']), (req, res) => {
 }
     const sql = `UPDATE fees SET total_fee = ?, due_date = ?, fee_type = ? WHERE id = ?`;
     db.query(sql, [total_fee, due_date, fee_type, req.params.id], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         res.json({ success: true });
     });
 });
 
 app.delete('/api/fees/:id', verifyRole(['admin']), (req, res) => {
     db.query(`DELETE FROM fees WHERE id = ?`, [req.params.id], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: publicError(err) });
         audit(req, { action: 'FEE_DELETE', entity: 'fees', entityId: req.params.id });
         res.json({ success: true });
     });
@@ -3099,7 +2591,7 @@ app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
     
     const { 
         contact, blood_group, address, city, state, pin_code, 
-        father_name, emergency_contact, guardian_relation, profile_picture
+        father_name, emergency_contact, guardian_relation
     } = req.body;
     if (!contact) {
     return res.status(400).json({
@@ -3124,7 +2616,9 @@ app.put('/api/student/:id/profile', verifyRole(['student', 'parent', 'admin']), 
 
     const params = [
         contact, blood_group, address, city, state, pin_code, 
-        father_name, emergency_contact, guardian_relation, profile_picture, userId
+        father_name, emergency_contact, guardian_relation,
+        null,
+        userId
     ];
 
     db.query(sql, params, (err, result) => {

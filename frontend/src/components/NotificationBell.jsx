@@ -5,7 +5,6 @@ import api from '../services/api';
 import useAuth from '../hooks/useAuth.jsx';
 import { typeMeta, timeAgo } from '../utils/notificationUi';
 
-// Bell with an unread badge and a dropdown of the latest notifications.
 const NotificationBell = ({ unread }) => {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -54,7 +53,6 @@ const NotificationBell = ({ unread }) => {
             setItems((list) => (list || []).map((n) => ({ ...n, read: true })));
             refreshBadge();
         } catch {
-            /* the badge keeps its old count; try again later */
         }
     };
 

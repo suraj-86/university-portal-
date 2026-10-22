@@ -223,7 +223,7 @@ const TeacherMarks = () => {
             }
             setRoster(mergedRoster);
             setIsSheetOpen(true);
-        } catch (error) {
+        } catch {
             toast.error("Network Error while opening sheet.");
         }
     };
@@ -317,7 +317,7 @@ const TeacherMarks = () => {
             setHistoryRows(rows);
             setHistoryTitle(label);
             setHistoryOpen(true);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load the change history.");
         }
     };
@@ -357,7 +357,7 @@ const TeacherMarks = () => {
             setViewOnlyRoster(res.data);
             setSelectedLedgerRecord(record);
             setIsViewModalOpen(true);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load records.");
         }
     };

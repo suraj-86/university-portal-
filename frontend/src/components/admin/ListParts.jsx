@@ -6,7 +6,6 @@ export const secondaryBtn = 'inline-flex items-center gap-2 whitespace-nowrap ro
 export const selectCls = 'rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-800';
 export const modalSelectCls = 'w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500';
 
-// Title, one quiet line (live counts), and the page actions.
 export const ListHeader = ({ title, line, actions }) => (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -17,8 +16,6 @@ export const ListHeader = ({ title, line, actions }) => (
     </header>
 );
 
-// Search box, dropdown filters, and "Showing x of y" with Clear filters.
-// filters: [{ id, label, value, onChange, options: [{ value, label }], allLabel }]
 export const FilterBar = ({ search, onSearch, placeholder, filters = [], shown, total, noun, onClear }) => {
     const active = !!search || filters.some((f) => f.value !== '');
     return (

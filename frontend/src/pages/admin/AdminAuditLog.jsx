@@ -75,7 +75,7 @@ const AdminAuditLog = () => {
             try {
                 const res = await api.get('/admin/audit/filters');
                 if (!cancelled) setOptions(res.data);
-            } catch { }
+            } catch { /* best effort */ }
         };
         load();
         return () => { cancelled = true; };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Users, User, UploadCloud, BellRing } from 'lucide-react';
+import { Plus, Banknote, Edit2, Trash2, Users, User, UploadCloud, BellRing } from 'lucide-react';
 import api from '../../services/api';
 import Modal from '../../components/Modal';
 import Input from '../../components/FormInput';
@@ -35,6 +35,9 @@ const AdminFees = () => {
     const [courseFilter, setCourseFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
     
+    const [payFee, setPayFee] = useState(null);
+    const [pay, setPay] = useState({ amount: '', method: 'Cash', reference: '' });
+    const [paying, setPaying] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingFeeId, setEditingFeeId] = useState(null);
     const [assignMode, setAssignMode] = useState('single');
@@ -143,6 +146,24 @@ const AdminFees = () => {
             toast.error("Error: " + errorMsg);
             console.error("Submit error:", error);
         }
+    };
+
+    const openPayModal = (record) => {
+        setPayFee(record);
+        setPay({ amount: String(Math.max(0, Number(record.total_fee) - Number(record.paid_amount)) || ''), method: 'Cash', reference: '' });
+    };
+
+    const recordPayment = async (e) => {
+        e.preventDefault();
+        setPaying(true);
+        try {
+            await api.post('/payments', { fee_id: payFee.id, amount_paid: Number(pay.amount), payment_method: pay.method, transaction_reference: pay.reference.trim() || null });
+            toast.success('Payment recorded.');
+            setPayFee(null);
+            fetchAdminFees();
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Could not record the payment.');
+        } finally { setPaying(false); }
     };
 
     const confirm = useConfirm();
@@ -267,6 +288,11 @@ const AdminFees = () => {
                                     </td>
                                     <td className="p-4 text-right">
                                         <div className="flex justify-end gap-2">
+                                            {record.status !== 'Paid' && (
+                                                <button onClick={() => openPayModal(record)} title="Record payment" aria-label="Record payment" className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition-colors">
+                                                    <Banknote size={16} />
+                                                </button>
+                                            )}
                                             <button onClick={() => openEditModal(record)} className="p-2 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/50 rounded-lg transition-colors">
                                                 <Edit2 size={16} />
                                             </button>
@@ -357,6 +383,31 @@ const AdminFees = () => {
                         {editingFeeId ? 'Save Changes' : assignMode === 'bulk' ? 'Assign to Course' : 'Assign Fee'}
                     </button>
                 </form>
+            </Modal>
+
+            <Modal isOpen={!!payFee} onClose={() => setPayFee(null)} title="Record payment">
+                {payFee && (
+                    <form onSubmit={recordPayment} className="space-y-5">
+                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            {payFee.fee_type} fee, balance {formatCurrency(Number(payFee.total_fee) - Number(payFee.paid_amount))}.
+                        </p>
+                        <label className="block">
+                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Amount received</span>
+                            <input type="number" min="1" step="0.01" required value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-slate-100" />
+                        </label>
+                        <label className="block">
+                            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Method</span>
+                            <select value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })} className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-slate-100">
+                                {['Cash', 'Bank Transfer', 'Online'].map((m) => <option key={m}>{m}</option>)}
+                            </select>
+                        </label>
+                        <Input label="Reference (optional)" value={pay.reference} maxLength={100} onChange={(e) => setPay({ ...pay, reference: e.target.value })} />
+                        <div className="flex justify-end gap-3">
+                            <button type="button" onClick={() => setPayFee(null)} className="px-5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300">Cancel</button>
+                            <button type="submit" disabled={paying || !(Number(pay.amount) > 0)} className="px-5 py-2.5 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-bold disabled:opacity-50">{paying ? 'Saving…' : 'Record payment'}</button>
+                        </div>
+                    </form>
+                )}
             </Modal>
 
             <Modal isOpen={remindOpen} onClose={() => setRemindOpen(false)} title="Send fee reminders">

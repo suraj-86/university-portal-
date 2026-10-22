@@ -39,7 +39,7 @@ const Holidays = () => {
         try {
             const res = await api.get(`/holidays?year=${year}`);
             setItems(Array.isArray(res.data) ? res.data : []);
-        } catch (e) {
+        } catch {
             toast.error('Could not load holidays.');
         } finally {
             setLoading(false);

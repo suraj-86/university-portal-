@@ -58,7 +58,7 @@ const AcademicCalendar = () => {
         try {
             const res = await api.get(`/academic-events?year=${year}`);
             setItems(Array.isArray(res.data) ? res.data : []);
-        } catch (e) {
+        } catch {
             toast.error('Could not load the academic calendar.');
         } finally {
             setLoading(false);

@@ -20,7 +20,9 @@ const modules = [
     require('./reports'),
     require('./teacherInsights'),
     require('./studentInsights'),
-    require('./me')
+    require('./me'),
+    require('./settings'),
+    require('./payments')
 ];
 
 module.exports = (app, ctx) => {

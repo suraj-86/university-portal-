@@ -31,6 +31,8 @@ const Section = ({ title, hint, action, children }) => (
     </section>
 );
 
+// Student profile page body. `data` is the /student/:id/profile response.
+// canEdit + onSave(payload) -> Promise: show the Edit button (students only; parents view their ward).
 const ProfileView = ({ data, title, subtitle, canEdit = false, onSave, switcher = null }) => {
     const { personal, academic, guardians } = data;
     const [open, setOpen] = useState(false);

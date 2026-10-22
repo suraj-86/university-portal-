@@ -46,6 +46,7 @@ const Table = ({ report, limit, compact }) => (
     </table>
 );
 
+// Shows one generated report with summary, preview table and the CSV / Excel / print actions.
 const ReportView = ({ report }) => {
     const exportXlsx = async () => {
         try { await downloadXlsx(report); } catch { toast.error('Could not create the Excel file.'); }

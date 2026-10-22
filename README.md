@@ -69,6 +69,15 @@ Future UI refinements and additional mobile capabilities are planned for **V2**.
 
 The backend remains the central authentication and authorization layer for both web and mobile clients.
 
+### Security settings
+
+- Tokens are HS256 only. Use a `JWT_SECRET` of at least 32 characters.
+- Passwords must be 8 to 72 bytes. New hashes use bcrypt cost 12.
+- Browser requests from an origin that is not allowed are rejected on writes. Allowed origins are the live site, local dev ports, and any extra comma-separated `ALLOWED_ORIGINS`. The mobile app sends no `Origin` and is unaffected.
+- `DB_SSL_CA` (optional): the database CA certificate, pasted as one line with `\n` for line breaks. When set, the server checks the database certificate. When unset, it connects encrypted but unchecked and prints a warning.
+- Online fee payment is an admin switch (Settings, "Online fee payment (demo)"), off by default. While off, only admins record payments (Fees, "Record payment"). It is stored in `app_settings` (migration 015, run `npm run migrate`).
+- Error responses never include raw database messages.
+
 ---
 
 # 👨‍💼 Admin Portal

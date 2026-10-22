@@ -10,7 +10,7 @@ export default function useTheme() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
   const setTheme = useCallback((t) => {
-    try { localStorage.setItem('theme', t); } catch { /* storage blocked */ }
+    try { localStorage.setItem('theme', t); } catch { }
     setThemeState(t);
   }, []);
   return { theme, setTheme };

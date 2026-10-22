@@ -1,6 +1,5 @@
-const bcrypt = require('bcrypt');
 const { str, isPositiveInt } = require('../lib/validate');
-const { generatePassword } = require('../lib/password');
+const { generatePassword, hashPassword, passwordProblem } = require('../lib/password');
 
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,50}$/;
 const KINDS = {
@@ -36,7 +35,7 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         }
 
         const password = generatePassword();
-        const hash = await bcrypt.hash(password, 10);
+        const hash = await hashPassword(password);
         await queryAsync('UPDATE users SET password = ?, must_change_password = 1 WHERE id = ?', [hash, target.id]);
 
         audit(req, { action: 'PASSWORD_RESET', entity: 'users', entityId: target.id, newValue: { username: target.username, role: target.role } });
@@ -64,12 +63,12 @@ module.exports = (app, { queryAsync, transaction, verifyRole, audit }) => {
         if (!USERNAME_RE.test(username)) {
             return res.status(400).json({ error: 'Username must be 3 to 50 characters: letters, numbers, dot, dash or underscore.' });
         }
-        if (given && (given.length < 8 || given.length > 72)) {
-            return res.status(400).json({ error: 'Password must be 8 to 72 characters.' });
+        if (given && passwordProblem(given)) {
+            return res.status(400).json({ error: passwordProblem(given) });
         }
         const generated = !given;
         const password = given || generatePassword();
-        const hash = await bcrypt.hash(password, 10);
+        const hash = await hashPassword(password);
         try {
             const r = await queryAsync(
                 "INSERT INTO users (username, password, role, must_change_password) VALUES (?, ?, 'admin', 1)", [username, hash]);

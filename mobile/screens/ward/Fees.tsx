@@ -20,7 +20,7 @@ const METHODS = [
 
 function FeesBody({ studentUserId, parent, subject, top }: { studentUserId: number; parent: boolean; subject: string; top: React.ReactNode }) {
   const { c } = useAppTheme();
-  const load = useLoad([`/student/${studentUserId}/fees`, `/student/${studentUserId}/payments`]);
+  const load = useLoad([`/student/${studentUserId}/fees`, `/student/${studentUserId}/payments`, '/settings/public']);
   const [payOpen, setPayOpen] = useState(false);
   const [feeId, setFeeId] = useState<string>('');
   const [amount, setAmount] = useState('');
@@ -47,7 +47,8 @@ function FeesBody({ studentUserId, parent, subject, top }: { studentUserId: numb
     <Screen onRefresh={load.refresh} refreshing={load.refreshing}>
       {top}
       <Gate load={load} cards={3}>
-        {([feesRaw, paymentsRaw]) => {
+        {([feesRaw, paymentsRaw, settings]) => {
+          const onlinePayments = !!settings?.onlinePayments;
           const fees: Fee[] = Array.isArray(feesRaw) ? feesRaw : [];
           const payments: Payment[] = Array.isArray(paymentsRaw) ? paymentsRaw : [];
           const total = fees.reduce((s, f) => s + Number(f.total_fee), 0);
@@ -69,10 +70,13 @@ function FeesBody({ studentUserId, parent, subject, top }: { studentUserId: numb
                 <View style={{ height: 10 }} />
                 <ProgressBar value={pct} tone="success" />
                 <T v="small" style={{ marginTop: 6 }}>{money(paid)} paid of {money(total)} · {pct}% cleared</T>
-                {!parent && pending.length > 0 && (
+                {!parent && pending.length > 0 && onlinePayments && (
                   <View style={{ marginTop: 14 }}>
                     <Button label="Pay dues" icon="card-outline" onPress={() => setPayOpen(true)} />
                   </View>
+                )}
+                {!onlinePayments && pending.length > 0 && (
+                  <T v="small" style={{ marginTop: 14 }}>Online payment is switched off. Please pay at the accounts office.</T>
                 )}
               </Card>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CreditCard, Download, CheckCircle2, Clock, Landmark, FileText, ArrowRight, Banknote, ShieldCheck, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
+import usePublicSettings from '../../hooks/usePublicSettings';
 import toast from 'react-hot-toast';
 
 const StudentFees = () => {
@@ -9,6 +10,7 @@ const StudentFees = () => {
     const userId = user?.id;
     
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const { onlinePayments, loaded: settingsLoaded } = usePublicSettings();
     const [dbFees, setDbFees] = useState([]);
     const [dbPayments, setDbPayments] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -122,13 +124,18 @@ useEffect(() => {
                     <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Fee Management</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Review your statement and clear pending dues.</p>
                 </div>
-                {pendingFees.length > 0 && (
+                {pendingFees.length > 0 && onlinePayments && (
                     <button 
                         onClick={() => setIsPaymentModalOpen(true)}
                         className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-colors shadow-sm flex items-center gap-2"
                     >
                         <CreditCard size={18} /> Pay Dues
                     </button>
+                )}
+                {pendingFees.length > 0 && settingsLoaded && !onlinePayments && (
+                    <p className="max-w-xs text-sm font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl px-4 py-2.5">
+                        Online payment is switched off. Please pay at the accounts office.
+                    </p>
                 )}
             </header>
 

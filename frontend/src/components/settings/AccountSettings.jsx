@@ -3,6 +3,7 @@ import { Check, Circle, Eye, EyeOff } from 'lucide-react';
 import api from '../../services/api';
 import useAuth from '../../hooks/useAuth';
 import useTheme from '../../hooks/useTheme';
+import usePublicSettings from '../../hooks/usePublicSettings';
 import { Sun, Moon } from 'lucide-react';
 
 const ROLE_LABEL = { admin: 'Administrator', teacher: 'Teacher', student: 'Student', parent: 'Parent' };
@@ -54,7 +55,6 @@ const Rule = ({ ok, children }) => (
     </li>
 );
 
-// One Settings page for every role: login username and password.
 const AccountSettings = () => {
     const { user, updateUser } = useAuth();
     const [username, setUsername] = useState(user?.username || '');
@@ -97,6 +97,20 @@ const AccountSettings = () => {
     };
 
     const { theme, setTheme } = useTheme();
+    const { onlinePayments, loaded: settingsLoaded } = usePublicSettings();
+    const [payOverride, setPayOverride] = useState(null);
+    const [payMsg, setPayMsg] = useState({ text: '', type: '' });
+    const payOn = payOverride ?? onlinePayments;
+    const togglePayments = async () => {
+        setPayMsg({ text: '', type: '' });
+        try {
+            await api.put('/admin/settings/online-payments', { enabled: !payOn });
+            setPayOverride(!payOn);
+            setPayMsg({ text: !payOn ? 'Students and parents can now pay online.' : 'Online payment is off. Only you can record payments.', type: 'success' });
+        } catch (err) {
+            setPayMsg({ text: err.response?.data?.error || 'Could not change the setting.', type: 'error' });
+        }
+    };
     const initial = (user?.full_name || user?.username || '?').trim().charAt(0).toUpperCase();
 
     return (
@@ -115,6 +129,19 @@ const AccountSettings = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {user?.role === 'admin' && (
+                    <Section id="payments" title="Online fee payment (demo)" hint="When off, students and parents are told to pay at the accounts office and only admins record payments.">
+                        <Notice msg={payMsg} />
+                        <div className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Let students and parents pay online</span>
+                            <button type="button" role="switch" aria-checked={payOn} disabled={!settingsLoaded} onClick={togglePayments}
+                                className={`relative w-12 h-7 rounded-full transition-colors disabled:opacity-50 ${payOn ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                                <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform ${payOn ? 'translate-x-5' : ''}`} />
+                                <span className="sr-only">{payOn ? 'On' : 'Off'}</span>
+                            </button>
+                        </div>
+                    </Section>
+                )}
                 <Section id="appearance" title="Appearance" hint="Choose how the portal looks on this device.">
                     <div role="radiogroup" aria-label="Theme" className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
                         {[['light', 'Light', <Sun key="s" size={16} aria-hidden="true" />], ['dark', 'Dark', <Moon key="m" size={16} aria-hidden="true" />]].map(([key, label, icon]) => (

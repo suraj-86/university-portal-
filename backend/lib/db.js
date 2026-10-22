@@ -1,4 +1,5 @@
 const mysql = require('mysql2');
+const { sslOptions } = require('./ssl');
 
 const db = mysql.createPool({
     host: process.env.DB_HOST,
@@ -6,11 +7,7 @@ const db = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT,
-    ssl: {
-        rejectUnauthorized: false
-    },
-    // Read and write every date/time as UTC, so the result is the same on a laptop in any time zone
-    // as on the server. Without this, a machine in India shows fresh items as "5 hr ago".
+    ssl: sslOptions(),
     timezone: 'Z',
     waitForConnections: true,
     connectionLimit: 10,

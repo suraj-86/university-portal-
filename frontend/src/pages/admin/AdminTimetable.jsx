@@ -42,7 +42,7 @@ const AdminTimetable = () => {
                 const [c, s] = await Promise.all([api.get('/courses'), api.get('/subjects')]);
                 setCourses(c.data || []);
                 setAllSubjects(s.data || []);
-            } catch (e) {
+            } catch {
                 toast.error('Could not load courses and subjects.');
             }
         })();
@@ -65,7 +65,7 @@ const AdminTimetable = () => {
         try {
             const res = await api.get(`/timetable?course_id=${courseId}&semester=${semester}`);
             setSlots(res.data || []);
-        } catch (e) {
+        } catch {
             toast.error('Could not load the timetable.');
         } finally {
             setLoading(false);

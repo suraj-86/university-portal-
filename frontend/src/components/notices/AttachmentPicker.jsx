@@ -3,7 +3,6 @@ import { Paperclip, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { validateAttachment, fileDisplayName } from '../../utils/format';
 
-// File chooser for notices. `existingUrl` is shown when editing a notice that already has a file.
 const AttachmentPicker = ({ file, onFile, existingUrl, onRemoveExisting }) => {
     const choose = (e) => {
         const picked = e.target.files?.[0] || null;

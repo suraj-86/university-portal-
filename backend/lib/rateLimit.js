@@ -15,7 +15,7 @@ const createRateLimiter = ({ windowMs, max, keyFn, message }) => {
         entry.count += 1;
         if (entry.count > max) {
             res.setHeader('Retry-After', Math.ceil((entry.reset - now) / 1000));
-            return res.status(429).json({ error: message });
+            return res.status(429).json({ success: false, message, error: message });
         }
         next();
     };

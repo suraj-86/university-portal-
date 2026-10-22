@@ -20,12 +20,7 @@ const AUDIENCE = [
     { id: 'both', label: 'Students and parents' }
 ];
 
-/**
- * Compose form shared by teachers and admin.
- * role = 'teacher': "Entire class" or "Specific students / parents"
- * role = 'admin':   "Broadcast" or "Specific students / parents"
- * classes (teacher): assigned subjects [{ id, subject_name, subject_code, course_name, semester }]
- */
+
 const ComposeNotice = ({ role, classes = [], onSent }) => {
     const firstMode = role === 'admin' ? 'broadcast' : 'class';
     const [mode, setMode] = useState(firstMode);

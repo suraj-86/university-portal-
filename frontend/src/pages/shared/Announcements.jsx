@@ -67,7 +67,7 @@ const Announcements = () => {
     const markRead = async (ids) => {
         if (isAdmin || !ids.length) return;
         setItems((cur) => cur.map((a) => (ids.includes(a.id) ? { ...a, is_read: true } : a)));
-        try { await api.post('/announcements/read', { ids }); refreshInbox(); } catch (e) { }
+        try { await api.post('/announcements/read', { ids }); refreshInbox(); } catch { /* best effort */ }
     };
 
     const toggle = (a) => {

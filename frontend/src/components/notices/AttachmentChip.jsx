@@ -3,7 +3,6 @@ import { FileText, Download } from 'lucide-react';
 import { getFileUrl } from '../../services/api';
 import { fileDisplayName } from '../../utils/format';
 
-// Compact attachment link: icon, readable name, download arrow
 const AttachmentChip = ({ url, className = '' }) => {
     if (!url) return null;
     return (

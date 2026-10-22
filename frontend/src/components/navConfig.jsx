@@ -86,6 +86,7 @@ export const menuConfig = {
   ],
 };
 
+// Name of the page for the top bar, from the sidebar entry that matches the address.
 export const getPageTitle = (role, pathname) => {
   const items = menuConfig[role] || [];
   const hit = items.filter((i) => pathname === i.path || pathname.startsWith(`${i.path}/`)).sort((x, y) => y.path.length - x.path.length)[0];

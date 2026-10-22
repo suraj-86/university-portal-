@@ -13,6 +13,8 @@ import { plural, money, weekLabel } from '../../utils/dashboardUi';
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
+// The dashboard body shared by the student page and the parent page (which shows one ward at a time).
+// studentUserId: the student's USER id. base: '/student' or '/parent'. subject: 'You' for students, the ward's first name for parents.
 const WardDashboard = ({ studentUserId, base, parent = false, greetingName, subject = 'You', switcher = null }) => {
     const [state, setState] = useState({ key: null, insights: null, card: null, notices: [], counts: {}, error: false });
     const [reloadKey, setReloadKey] = useState(0);
@@ -23,6 +25,7 @@ const WardDashboard = ({ studentUserId, base, parent = false, greetingName, subj
     useEffect(() => {
         if (!studentUserId) return undefined;
         let cancelled = false;
+        // Report card, notices and unread counts are nice to have; the dashboard works without them.
         Promise.all([
             api.get(`/student/${studentUserId}/insights`),
             api.get(`/student/${studentUserId}/report-card`).then((r) => r.data).catch(() => null),

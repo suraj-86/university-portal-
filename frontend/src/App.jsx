@@ -65,7 +65,7 @@ import Announcements from './pages/shared/Announcements';
 import Messages from './pages/shared/Messages';
 
 function App() {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
+  const [isDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
   });
 

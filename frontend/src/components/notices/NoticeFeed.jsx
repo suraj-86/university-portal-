@@ -95,7 +95,8 @@ const NoticeFeed = ({ title = 'Notices', subtitle, endpoint = '/notices/feed', p
         try {
             await api.post('/notices/read', { ids });
             refreshInbox();
-        } catch (e) {
+        } catch {
+            /* the badge will correct itself on the next refresh */
         }
     };
 

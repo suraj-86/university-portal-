@@ -157,7 +157,7 @@ const Messages = () => {
         try {
             const res = await api.get('/messages/threads');
             setThreads(Array.isArray(res.data) ? res.data : []);
-        } catch (e) { }
+        } catch { /* best effort */ }
         finally { setLoadingThreads(false); }
     }, []);
 

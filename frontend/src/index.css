@@ -2,6 +2,7 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Blue theme: recolours every slate/indigo class across the app from one place. */
 :root {
   --color-slate-50: #eef4fc;
   --color-slate-100: #e4edf9;

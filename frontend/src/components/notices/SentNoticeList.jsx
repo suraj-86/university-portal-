@@ -31,7 +31,7 @@ const SentCard = ({ notice, showAuthor, onEdit, onDelete }) => {
             try {
                 const res = await api.get(`/notices/${notice.id}/readers`);
                 setReaders(res.data.recipients || []);
-            } catch (e) {
+            } catch {
                 setReaders([]);
                 toast.error('Could not load the recipient list.');
             }
@@ -155,6 +155,7 @@ const EditModal = ({ notice, onClose, onSaved }) => {
     );
 };
 
+/** Notices a teacher/admin has sent, with read counts, edit and delete. */
 const SentNoticeList = ({ notices, onChanged, showAuthor = false, emptyText = 'Nothing sent yet.' }) => {
     const [editing, setEditing] = useState(null);
 
